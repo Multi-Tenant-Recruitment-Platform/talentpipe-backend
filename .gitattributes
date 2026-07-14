@@ -1,2 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# POSIX shell scripts must keep LF even on Windows checkouts, or bash rejects them
+mvnw text eol=lf
+*.sh text eol=lf
+
+# Windows batch scripts must keep CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
