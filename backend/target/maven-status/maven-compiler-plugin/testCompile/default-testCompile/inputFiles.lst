@@ -1,0 +1,6 @@
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\auth\service\AuthServiceTest.java
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AbstractIntegrationTest.java
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AuthFlowIntegrationTest.java
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\TenantContextLeakIntegrationTest.java
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\security\JwtTokenProviderTest.java
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\security\PasswordEncoderTest.java
