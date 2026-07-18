@@ -84,10 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (subdomain: string, email: string, password: string) => {
       // Tenant identity travels in the header, never the body (ADR-1).
+      // Candidates authenticate globally, so no tenant header is sent.
       const { data } = await api.post<AuthResponse>(
         '/auth/login',
         { email, password },
-        { headers: { 'X-Tenant-Subdomain': subdomain } },
+        subdomain ? { headers: { 'X-Tenant-Subdomain': subdomain } } : undefined,
       );
       applyAuth(data);
       return data.user;

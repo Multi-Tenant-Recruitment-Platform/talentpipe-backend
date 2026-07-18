@@ -1,6 +1,6 @@
 /**
  * TypeScript mirrors of the backend API contracts (DTOs).
- * Keep in sync with backend/src/main/java/com/talentpipe/**/dto.
+ * Keep in sync with the backend DTOs (backend/src/main/java/com/talentpipe/.../dto).
  */
 
 export interface TenantResponse {
@@ -47,6 +47,16 @@ export interface RegisterRequest {
 export interface RegisterResponse {
   tenant: TenantResponse;
   admin: UserResponse;
+}
+
+/** Public candidate self-registration (no tenant). */
+export interface CandidateRegisterRequest {
+  fullName: string;
+  identityCardNumber: string;
+  address: string;
+  contactNumber: string;
+  email: string;
+  password: string;
 }
 
 /** Uniform pagination envelope returned by every list endpoint. */

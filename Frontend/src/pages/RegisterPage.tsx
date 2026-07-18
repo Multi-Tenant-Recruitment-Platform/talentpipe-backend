@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { AuthShell } from '../components/AuthShell';
 
 /** Company onboarding (PB-001): tenant + first COMPANY_ADMIN, then off to login. */
 export function RegisterPage() {
@@ -28,7 +29,9 @@ export function RegisterPage() {
         admin: { firstName, lastName, email, password },
       });
       // Registration issues no tokens: continue at login, subdomain prefilled.
-      navigate('/login', { state: { subdomain: subdomain.trim().toLowerCase(), registered: true } });
+      navigate('/login', {
+        state: { subdomain: subdomain.trim().toLowerCase(), registered: 'company', mode: 'company' },
+      });
     } catch (err: unknown) {
       setError(apiErrorMessage(err, 'Registration failed. Please try again.'));
     } finally {
@@ -41,13 +44,13 @@ export function RegisterPage() {
     'focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500';
 
   return (
-    <section className="mx-auto max-w-lg">
-      <h1 className="text-3xl font-bold tracking-tight">Register your company</h1>
+    <AuthShell>
+      <h1 className="text-2xl font-bold tracking-tight">Register your company</h1>
       <p className="mt-2 text-sm text-slate-600">
         Creates your company workspace and its first administrator account.
       </p>
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 space-y-5 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-5">
         {error && (
           <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
@@ -133,6 +136,7 @@ export function RegisterPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={inputClass}
+            autoComplete="email"
           />
         </div>
 
@@ -149,6 +153,7 @@ export function RegisterPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={inputClass}
+            autoComplete="new-password"
           />
           <p className="mt-1 text-xs text-slate-500">At least 8 characters.</p>
         </div>
@@ -156,11 +161,18 @@ export function RegisterPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-60"
+          className="w-full rounded-md bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {submitting ? 'Creating workspace…' : 'Create company account'}
         </button>
       </form>
-    </section>
+
+      <p className="mt-6 text-center text-sm text-slate-600">
+        Already have an account?{' '}
+        <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-500">
+          Log in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
