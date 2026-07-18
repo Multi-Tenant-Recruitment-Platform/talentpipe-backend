@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# TalentPipe local infrastructure — Week 1: PostgreSQL only.
+#
+# Image: pgvector/pgvector:pg15 = official PostgreSQL 15 with the pgvector
+# extension pre-installed (required because V1__extensions.sql runs
+# `CREATE EXTENSION vector`; the vanilla postgres:15 image does not ship it).
+#
+# Usage:  cp .env.example .env   (adjust if needed)
+#         docker compose up -d
+# ---------------------------------------------------------------------------
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: talentpipe-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-talentpipe}
+      POSTGRES_USER: ${POSTGRES_USER:-talentpipe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-talentpipe}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - talentpipe_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-talentpipe} -d ${POSTGRES_DB:-talentpipe}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  talentpipe_pgdata:

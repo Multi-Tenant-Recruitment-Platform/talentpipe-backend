@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------------------
+# TalentPipe monorepo .gitignore (Java / Maven + Node / Vite + env files)
+# ---------------------------------------------------------------------------
+
+### Environment / secrets — never commit real credentials ###
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+
+### Java / Maven ###
+backend/target/
+*.class
+*.jar
+!backend/.mvn/wrapper/maven-wrapper.jar
+*.war
+hs_err_pid*
+replay_pid*
+
+### Node / Vite ###
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### IDE / editor ###
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.settings/
+.classpath
+.project
+*.swp
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Local archives / exports — never belong in source control ###
+*.zip
+*.tar.gz
+
+### Logs ###
+logs/
+*.log
+# QA evidence logs are part of the audit trail and MUST be committable
+!qa/test-runs/evidence/*.log

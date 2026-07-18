@@ -1,0 +1,30 @@
+{
+  "groups": [
+    {
+      "name": "talentpipe.security.jwt",
+      "type": "com.talentpipe.security.JwtProperties",
+      "sourceType": "com.talentpipe.security.JwtProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "talentpipe.security.jwt.access-token-ttl",
+      "type": "java.time.Duration",
+      "description": "access token lifetime (15 minutes per architecture doc)",
+      "sourceType": "com.talentpipe.security.JwtProperties"
+    },
+    {
+      "name": "talentpipe.security.jwt.refresh-token-ttl",
+      "type": "java.time.Duration",
+      "description": "refresh token lifetime (7 days per architecture doc)",
+      "sourceType": "com.talentpipe.security.JwtProperties"
+    },
+    {
+      "name": "talentpipe.security.jwt.secret",
+      "type": "java.lang.String",
+      "description": "HS256 signing secret sourced from the {@code JWT_SECRET} environment variable — no default on purpose, the app fails fast without it. Minimum 32 bytes (256 bits), enforced by {@link JwtTokenProvider}.",
+      "sourceType": "com.talentpipe.security.JwtProperties"
+    }
+  ],
+  "hints": []
+}
