@@ -26,5 +26,38 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: talentpipe-backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/talentpipe
+      DB_USERNAME: ${POSTGRES_USER:-talentpipe}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-talentpipe}
+      SERVER_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-at-least-32-bytes-long-change-me}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../Frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+    container_name: talentpipe-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_started
+
 volumes:
   talentpipe_pgdata:
