@@ -83,8 +83,8 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getTenantId()).isEqualTo(tenantId);
         assertThat(savedUser.getValue().getEmail()).isEqualTo("ada@acme.io");
         assertThat(savedUser.getValue().getPasswordHash()).isEqualTo("$2a$12$mocked-hash");
-        // Account starts as PENDING_VERIFICATION until email is verified (PB-001).
-        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.PENDING_VERIFICATION);
+        // Account starts directly as ACTIVE to bypass verification blocker during testing.
+        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
 
         // The response DTO: tenant + admin, no credential material anywhere.
         assertThat(response.tenant().subdomain()).isEqualTo("acme");

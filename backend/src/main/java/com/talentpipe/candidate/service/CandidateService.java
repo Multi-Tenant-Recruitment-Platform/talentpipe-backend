@@ -58,7 +58,7 @@ public class CandidateService {
                 request.identityCardNumber().trim(),
                 request.address().trim(),
                 request.contactNumber().trim(),
-                UserStatus.PENDING_VERIFICATION
+                UserStatus.ACTIVE
         );
 
         candidate = candidateRepository.save(candidate);

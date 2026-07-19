@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
  * SMTP implementation is also on the classpath (e.g. in a future sprint)
  * without requiring any code changes to callers.</p>
  */
-@Primary
 @Service
 public class ConsoleEmailService implements EmailService {
 

@@ -2,6 +2,7 @@ D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\ai\pac
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\analytics\package-info.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\controller\AuthController.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\dto\AuthResponse.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\dto\ForgotPasswordRequest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\dto\LoginRequest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\dto\PasswordResetConfirmRequest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\dto\PasswordResetRequestDto.java
@@ -49,6 +50,7 @@ D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\job\dt
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\notification\ConsoleEmailService.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\notification\EmailService.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\notification\package-info.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\notification\ResendEmailService.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\pipeline\package-info.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\security\BearerTokens.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\security\JwtAuthenticationFilter.java

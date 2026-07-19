@@ -51,14 +51,15 @@ class PasswordResetServiceTest {
     @Mock private PasswordResetTokenRepository tokenRepository;
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
+    @Mock private com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
     @Mock private TenantService tenantService;
     @Mock private EmailService emailService;
 
-    private static final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4); // low cost for tests
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 
     private PasswordResetService service() {
         return new PasswordResetService(
-                tokenRepository, userRepository, refreshTokenRepository,
+                tokenRepository, userRepository, refreshTokenRepository, candidateRepository,
                 tenantService, passwordEncoder, emailService, "http://localhost:5173");
     }
 

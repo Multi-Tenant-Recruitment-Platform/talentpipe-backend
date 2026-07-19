@@ -53,6 +53,9 @@ talentpipe:
     # Base URL of the frontend SPA. Used to build links in emails (verification,
     # password reset). Override per environment via APP_BASE_URL.
     base-url: ${APP_BASE_URL:http://localhost:5173}
+  resend:
+    api-key: ${RESEND_API_KEY:re_P7LBeJ1E_9WPE3QWVsHQD3hGDaPU5YVkS}
+    from: ${RESEND_FROM_EMAIL:onboarding@resend.dev}
 
 logging:
   level:

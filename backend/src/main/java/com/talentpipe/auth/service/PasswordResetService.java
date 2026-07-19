@@ -49,6 +49,7 @@ public class PasswordResetService {
     private final PasswordResetTokenRepository tokenRepository;
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
     private final TenantService tenantService;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
@@ -58,6 +59,7 @@ public class PasswordResetService {
             PasswordResetTokenRepository tokenRepository,
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
+            com.talentpipe.candidate.repository.CandidateRepository candidateRepository,
             TenantService tenantService,
             PasswordEncoder passwordEncoder,
             EmailService emailService,
@@ -65,6 +67,7 @@ public class PasswordResetService {
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.candidateRepository = candidateRepository;
         this.tenantService = tenantService;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
@@ -110,8 +113,53 @@ public class PasswordResetService {
     }
 
     /**
-     * Validates the token and replaces the user's password with a bcrypt hash
-     * of {@code newPassword}. All active refresh tokens for the user are then
+     * Global password reset request (PB-008) when no subdomain is provided.
+     * Searches candidates first, then searches tenant users.
+     */
+    @Transactional
+    public void forgotPassword(String email) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+
+        // 1. Try candidate first
+        var candidateOpt = candidateRepository.findByEmail(normalizedEmail);
+        if (candidateOpt.isPresent()) {
+            var candidate = candidateOpt.get();
+            tokenRepository.deleteAllByUserId(candidate.getId());
+
+            String rawToken = generateSecureToken();
+            Instant expiresAt = Instant.now().plus(TOKEN_TTL);
+            tokenRepository.save(new PasswordResetToken(candidate.getId(), sha256(rawToken), expiresAt));
+
+            String resetLink = appBaseUrl + "/reset-password?token=" + rawToken;
+            emailService.sendPasswordResetEmail(candidate.getEmail(), resetLink);
+
+            log.info("Password reset token issued for candidate {} (expires {})", candidate.getId(), expiresAt);
+            return;
+        }
+
+        // 2. Try tenant users matching the email
+        var users = userRepository.findAllByEmail(normalizedEmail);
+        if (!users.isEmpty()) {
+            // For testing and simple global reset, send to the first matched user account.
+            var user = users.get(0);
+            tokenRepository.deleteAllByUserId(user.getId());
+
+            String rawToken = generateSecureToken();
+            Instant expiresAt = Instant.now().plus(TOKEN_TTL);
+            tokenRepository.save(new PasswordResetToken(user.getId(), sha256(rawToken), expiresAt));
+
+            String resetLink = appBaseUrl + "/reset-password?token=" + rawToken;
+            emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
+
+            log.info("Password reset token issued for user {} via global request (expires {})", user.getId(), expiresAt);
+            return;
+        }
+
+        log.debug("Global password reset requested for unknown email '{}' — no-op", normalizedEmail);
+    }
+
+    /**
+     * Validates the token and updates the user or candidate password. All active sessions are
      * revoked, invalidating every existing session.
      *
      * @param rawToken    plain token from the reset link
@@ -133,6 +181,17 @@ public class PasswordResetService {
 
         token.markUsed(now);
 
+        // 1. Try to find candidate
+        var candidateOpt = candidateRepository.findById(token.getUserId());
+        if (candidateOpt.isPresent()) {
+            var candidate = candidateOpt.get();
+            candidate.setPasswordHash(passwordEncoder.encode(newPassword));
+            refreshTokenRepository.revokeAllActiveForUser(candidate.getId(), now);
+            log.info("Password reset confirmed for candidate {} — all active sessions revoked", candidate.getId());
+            return;
+        }
+
+        // 2. Try to find user
         User user = userRepository.findById(token.getUserId())
                 .orElseThrow(() -> new InvalidTokenException("User no longer exists"));
 

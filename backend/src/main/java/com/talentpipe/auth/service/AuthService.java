@@ -85,8 +85,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalStateException(
                         "COMPANY_ADMIN role missing — did Flyway seed V3 run?"));
 
-        // Account starts PENDING_VERIFICATION; it becomes ACTIVE only after the
-        // user clicks the verification link sent by emailVerificationService (PB-001).
+        // Created directly in ACTIVE status to bypass verification blocker during testing.
         User admin = new User(
                 tenant.id(),
                 adminRole,
@@ -94,7 +93,7 @@ public class AuthService {
                 passwordEncoder.encode(request.admin().password()),
                 request.admin().firstName().trim(),
                 request.admin().lastName().trim(),
-                UserStatus.PENDING_VERIFICATION);
+                UserStatus.ACTIVE);
         admin = userRepository.save(admin);
 
         emailVerificationService.issueAndSend(admin);

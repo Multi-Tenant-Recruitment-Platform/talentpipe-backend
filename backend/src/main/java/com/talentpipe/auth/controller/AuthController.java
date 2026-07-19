@@ -116,6 +116,13 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(
+            @Valid @RequestBody com.talentpipe.auth.dto.ForgotPasswordRequest request) {
+        passwordResetService.forgotPassword(request.email());
+        return ResponseEntity.ok().build();
+    }
+
     /**
      * Confirms a password reset: validates the token (must not be expired or
      * used), updates the password hash, and revokes all active refresh tokens.

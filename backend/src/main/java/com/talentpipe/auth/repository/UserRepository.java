@@ -16,4 +16,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByTenantIdAndEmail(UUID tenantId, String email);
 
     boolean existsByTenantIdAndEmail(UUID tenantId, String email);
+
+    /** Global email lookup used during global forgot-password reset requests. */
+    java.util.List<User> findAllByEmail(String email);
 }
