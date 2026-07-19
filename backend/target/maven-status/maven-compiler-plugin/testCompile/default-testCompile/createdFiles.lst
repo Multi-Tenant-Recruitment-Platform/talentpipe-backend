@@ -12,5 +12,6 @@ com\talentpipe\integration\AbstractIntegrationTest.class
 com\talentpipe\integration\EmailVerificationFlowIntegrationTest.class
 com\talentpipe\integration\TestEmailConfig.class
 com\talentpipe\integration\PasswordResetFlowIntegrationTest.class
+com\talentpipe\integration\CandidateRegistrationFlowIntegrationTest.class
 com\talentpipe\integration\AuthFlowIntegrationTest.class
 com\talentpipe\integration\TenantContextLeakIntegrationTest$ContextProbeFilter.class

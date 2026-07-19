@@ -62,9 +62,9 @@ public class AuthController {
         return authService.register(request);
     }
 
-    /** Login (PB-007). Tenant comes from the header, credentials from the body. */
+    /** Login (PB-007). Tenant comes from the header (optional), credentials from the body. */
     @PostMapping("/login")
-    public AuthResponse login(@RequestHeader(TENANT_SUBDOMAIN_HEADER) String tenantSubdomain,
+    public AuthResponse login(@RequestHeader(value = TENANT_SUBDOMAIN_HEADER, required = false) String tenantSubdomain,
                               @Valid @RequestBody LoginRequest request) {
         return authService.login(tenantSubdomain, request);
     }

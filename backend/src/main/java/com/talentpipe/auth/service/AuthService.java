@@ -45,6 +45,7 @@ public class AuthService {
     private final TenantService tenantService;
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationService emailVerificationService;
+    private final com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
@@ -54,6 +55,7 @@ public class AuthService {
                        TenantService tenantService,
                        RefreshTokenService refreshTokenService,
                        EmailVerificationService emailVerificationService,
+                       com.talentpipe.candidate.repository.CandidateRepository candidateRepository,
                        JwtTokenProvider jwtTokenProvider,
                        PasswordEncoder passwordEncoder,
                        UserMapper userMapper) {
@@ -62,6 +64,7 @@ public class AuthService {
         this.tenantService = tenantService;
         this.refreshTokenService = refreshTokenService;
         this.emailVerificationService = emailVerificationService;
+        this.candidateRepository = candidateRepository;
         this.jwtTokenProvider = jwtTokenProvider;
         this.passwordEncoder = passwordEncoder;
         this.userMapper = userMapper;
@@ -111,11 +114,45 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse login(String subdomain, LoginRequest request) {
+        String normalizedEmail = normalizeEmail(request.email());
+
+        // Global login (candidates or super admins) — no subdomain header.
+        if (subdomain == null || subdomain.isBlank()) {
+            // 1. Try candidate first
+            var candidateOpt = candidateRepository.findByEmail(normalizedEmail);
+            if (candidateOpt.isPresent()) {
+                var candidate = candidateOpt.get();
+                if (!passwordEncoder.matches(request.password(), candidate.getPasswordHash())) {
+                    throw invalidCredentials();
+                }
+                if (candidate.getStatus() != UserStatus.ACTIVE) {
+                    throw invalidCredentials();
+                }
+                return issueTokens(candidate);
+            }
+
+            // 2. Try platform SUPER_ADMIN (users with tenant_id IS NULL)
+            var userOpt = userRepository.findByTenantIdAndEmail(null, normalizedEmail);
+            if (userOpt.isPresent()) {
+                var user = userOpt.get();
+                if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+                    throw invalidCredentials();
+                }
+                if (user.getStatus() != UserStatus.ACTIVE) {
+                    throw invalidCredentials();
+                }
+                return issueTokens(user, null);
+            }
+
+            throw invalidCredentials();
+        }
+
+        // Company / Tenant Login
         TenantResponse tenant = tenantService.findBySubdomain(subdomain)
                 .orElseThrow(AuthService::invalidCredentials);
 
         User user = userRepository
-                .findByTenantIdAndEmail(tenant.id(), normalizeEmail(request.email()))
+                .findByTenantIdAndEmail(tenant.id(), normalizedEmail)
                 .orElseThrow(AuthService::invalidCredentials);
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
@@ -159,9 +196,15 @@ public class AuthService {
     /** Current authenticated user's profile, loaded fresh from the database. */
     @Transactional(readOnly = true)
     public UserResponse getCurrentUser(UUID userId) {
-        User user = userRepository.findById(userId)
+        var userOpt = userRepository.findById(userId);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            return userMapper.toResponse(user, resolveTenantName(user.getTenantId()));
+        }
+
+        var candidate = candidateRepository.findById(userId)
                 .orElseThrow(() -> new InvalidTokenException("Token owner no longer exists"));
-        return userMapper.toResponse(user, resolveTenantName(user.getTenantId()));
+        return mapCandidateToUserResponse(candidate);
     }
 
     // ------------------------------------------------------------------ util
@@ -175,6 +218,38 @@ public class AuthService {
                 refreshToken,
                 jwtTokenProvider.getAccessTokenTtl().toSeconds(),
                 userMapper.toResponse(user, tenantName));
+    }
+
+    private AuthResponse issueTokens(com.talentpipe.candidate.entity.Candidate candidate) {
+        String accessToken = jwtTokenProvider.issueAccessToken(
+                candidate.getId(), null, RoleName.CANDIDATE.name(), candidate.getEmail());
+        String refreshToken = refreshTokenService.issue(candidate.getId());
+        return new AuthResponse(
+                accessToken,
+                refreshToken,
+                jwtTokenProvider.getAccessTokenTtl().toSeconds(),
+                mapCandidateToUserResponse(candidate));
+    }
+
+    private UserResponse mapCandidateToUserResponse(com.talentpipe.candidate.entity.Candidate candidate) {
+        String fullName = candidate.getFullName();
+        String firstName = fullName;
+        String lastName = "";
+        int lastSpaceIdx = fullName.lastIndexOf(' ');
+        if (lastSpaceIdx > 0) {
+            firstName = fullName.substring(0, lastSpaceIdx).trim();
+            lastName = fullName.substring(lastSpaceIdx).trim();
+        }
+        return new UserResponse(
+                candidate.getId(),
+                null,
+                null,
+                RoleName.CANDIDATE.name(),
+                candidate.getEmail(),
+                firstName,
+                lastName,
+                candidate.getStatus().name(),
+                candidate.getCreatedAt());
     }
 
     private String resolveTenantName(UUID tenantId) {

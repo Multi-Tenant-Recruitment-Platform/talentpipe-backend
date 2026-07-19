@@ -27,7 +27,14 @@ D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\s
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\EmailVerificationService.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\PasswordResetService.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\RefreshTokenService.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\controller\PublicCandidateController.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\dto\CandidateRegisterRequest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\entity\Candidate.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\entity\CandidateVerificationToken.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\package-info.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\repository\CandidateRepository.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\repository\CandidateVerificationTokenRepository.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\service\CandidateService.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\common\dto\PageResponse.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\common\entity\BaseEntity.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\common\exception\BusinessRuleException.java

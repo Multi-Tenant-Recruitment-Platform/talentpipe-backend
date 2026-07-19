@@ -3,6 +3,7 @@ D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\auth\s
 D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\auth\service\PasswordResetServiceTest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AbstractIntegrationTest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AuthFlowIntegrationTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\CandidateRegistrationFlowIntegrationTest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\EmailVerificationFlowIntegrationTest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\PasswordResetFlowIntegrationTest.java
 D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\TenantContextLeakIntegrationTest.java

@@ -49,11 +49,15 @@ class EmailVerificationServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private com.talentpipe.candidate.repository.CandidateVerificationTokenRepository candidateTokenRepository;
+    @Mock
+    private com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
+    @Mock
     private EmailService emailService;
 
     private EmailVerificationService service() {
         return new EmailVerificationService(
-                tokenRepository, userRepository, emailService, "http://localhost:5173");
+                tokenRepository, userRepository, candidateTokenRepository, candidateRepository, emailService, "http://localhost:5173");
     }
 
     private static User pendingUser() {

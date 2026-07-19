@@ -38,16 +38,22 @@ public class EmailVerificationService {
 
     private final EmailVerificationTokenRepository tokenRepository;
     private final UserRepository userRepository;
+    private final com.talentpipe.candidate.repository.CandidateVerificationTokenRepository candidateTokenRepository;
+    private final com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
     private final EmailService emailService;
     private final String appBaseUrl;
 
     public EmailVerificationService(
             EmailVerificationTokenRepository tokenRepository,
             UserRepository userRepository,
+            com.talentpipe.candidate.repository.CandidateVerificationTokenRepository candidateTokenRepository,
+            com.talentpipe.candidate.repository.CandidateRepository candidateRepository,
             EmailService emailService,
             @Value("${talentpipe.app.base-url:http://localhost:5173}") String appBaseUrl) {
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
+        this.candidateTokenRepository = candidateTokenRepository;
+        this.candidateRepository = candidateRepository;
         this.emailService = emailService;
         this.appBaseUrl = appBaseUrl;
     }
@@ -75,36 +81,76 @@ public class EmailVerificationService {
         log.info("Issued email verification token for user {} (expires {})", user.getId(), expiresAt);
     }
 
+    /** Candidate version of verification token issuance. */
+    @Transactional
+    public void issueAndSend(com.talentpipe.candidate.entity.Candidate candidate) {
+        candidateTokenRepository.deleteAllByCandidateId(candidate.getId());
+
+        String rawToken = generateSecureToken();
+        Instant expiresAt = Instant.now().plus(TOKEN_TTL);
+        candidateTokenRepository.save(new com.talentpipe.candidate.entity.CandidateVerificationToken(
+                candidate.getId(), sha256(rawToken), expiresAt));
+
+        String verificationLink = appBaseUrl + "/verify-email?token=" + rawToken;
+        emailService.sendVerificationEmail(candidate.getEmail(), verificationLink);
+
+        log.info("Issued email verification token for candidate {} (expires {})", candidate.getId(), expiresAt);
+    }
+
     /**
-     * Validates a raw token and, if valid, activates the user account.
+     * Validates a raw token and, if valid, activates the user or candidate account.
      *
      * @param rawToken the plain token value from the email link
      * @throws InvalidTokenException if the token is unknown, expired, or already used (401)
      */
     @Transactional
     public void verify(String rawToken) {
-        EmailVerificationToken token = tokenRepository.findByTokenHash(sha256(rawToken))
-                .orElseThrow(() -> new InvalidTokenException("Unknown or invalid verification token"));
+        String tokenHash = sha256(rawToken);
 
-        Instant now = Instant.now();
-        if (token.isExpired(now)) {
+        // 1. Try to find user token
+        var userTokenOpt = tokenRepository.findByTokenHash(tokenHash);
+        if (userTokenOpt.isPresent()) {
+            EmailVerificationToken token = userTokenOpt.get();
+            validateToken(token.isExpired(Instant.now()), token.isUsed());
+            token.markUsed(Instant.now());
+
+            User user = userRepository.findById(token.getUserId())
+                    .orElseThrow(() -> new InvalidTokenException("User no longer exists"));
+
+            if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
+                user.setStatus(UserStatus.ACTIVE);
+                log.info("Email verified — user {} activated (tenantId={})", user.getId(), user.getTenantId());
+            }
+            return;
+        }
+
+        // 2. Try to find candidate token
+        var candidateTokenOpt = candidateTokenRepository.findByTokenHash(tokenHash);
+        if (candidateTokenOpt.isPresent()) {
+            var token = candidateTokenOpt.get();
+            validateToken(token.isExpired(Instant.now()), token.isUsed());
+            token.markUsed(Instant.now());
+
+            com.talentpipe.candidate.entity.Candidate candidate = candidateRepository.findById(token.getCandidateId())
+                    .orElseThrow(() -> new InvalidTokenException("Candidate no longer exists"));
+
+            if (candidate.getStatus() == UserStatus.PENDING_VERIFICATION) {
+                candidate.setStatus(UserStatus.ACTIVE);
+                log.info("Email verified — candidate {} activated", candidate.getId());
+            }
+            return;
+        }
+
+        throw new InvalidTokenException("Unknown or invalid verification token");
+    }
+
+    private void validateToken(boolean expired, boolean used) {
+        if (expired) {
             throw new InvalidTokenException("Verification token has expired");
         }
-        if (token.isUsed()) {
+        if (used) {
             throw new InvalidTokenException("Verification token has already been used");
         }
-
-        token.markUsed(now);
-
-        User user = userRepository.findById(token.getUserId())
-                .orElseThrow(() -> new InvalidTokenException("User no longer exists"));
-
-        if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
-            user.setStatus(UserStatus.ACTIVE);
-            log.info("Email verified — user {} activated (tenantId={})", user.getId(), user.getTenantId());
-        }
-        // If status is already ACTIVE (re-verify edge case), we still mark the
-        // token used but do not change the status — idempotent and safe.
     }
 
     // ------------------------------------------------------------------ util
