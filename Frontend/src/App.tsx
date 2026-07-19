@@ -2,8 +2,12 @@ import { Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { DashboardLayout } from './layouts/DashboardLayout';
 import { CandidateRegisterPage } from './pages/CandidateRegisterPage';
-import { DashboardPage } from './pages/DashboardPage';
+import { CompanySettingsPage } from './pages/dashboard/CompanySettingsPage';
+import { OverviewPage } from './pages/dashboard/OverviewPage';
+import { PipelinePage } from './pages/dashboard/PipelinePage';
+import { TeamPage } from './pages/dashboard/TeamPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { JobsPage } from './pages/JobsPage';
 import { LandingPage } from './pages/LandingPage';
@@ -14,6 +18,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
+        {/* Public + auth pages share the marketing chrome. */}
         <Route element={<Layout />}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/jobs" element={<JobsPage />} />
@@ -21,14 +26,21 @@ export default function App() {
           <Route path="/register-candidate" element={<CandidateRegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
+        </Route>
+
+        {/* Company admin dashboard gets its own full-screen chrome. */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<OverviewPage />} />
+          <Route path="team" element={<TeamPage />} />
+          <Route path="pipeline" element={<PipelinePage />} />
+          <Route path="settings" element={<CompanySettingsPage />} />
         </Route>
       </Routes>
     </AuthProvider>
