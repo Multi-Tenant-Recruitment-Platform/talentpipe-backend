@@ -1,6 +1,11 @@
-C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\auth\service\AuthServiceTest.java
-C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AbstractIntegrationTest.java
-C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AuthFlowIntegrationTest.java
-C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\TenantContextLeakIntegrationTest.java
-C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\security\JwtTokenProviderTest.java
-C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\security\PasswordEncoderTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\auth\service\AuthServiceTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\auth\service\EmailVerificationServiceTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\auth\service\PasswordResetServiceTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AbstractIntegrationTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\AuthFlowIntegrationTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\EmailVerificationFlowIntegrationTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\PasswordResetFlowIntegrationTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\TenantContextLeakIntegrationTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\integration\TestEmailConfig.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\security\JwtTokenProviderTest.java
+D:\Multi-Tenant-Recruitment-Platform\backend\src\test\java\com\talentpipe\security\PasswordEncoderTest.java

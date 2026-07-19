@@ -2,11 +2,14 @@ package com.talentpipe.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.talentpipe.integration.TestEmailConfig.CapturingEmailService;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -15,14 +18,23 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 /**
- * End-to-end API tests against a real Postgres: register → login → /auth/me,
- * plus the specified failure paths (wrong password → 401, duplicate
- * subdomain → 409) and the public job board (200 without auth).
+ * End-to-end API tests against a real Postgres: register → verify email →
+ * login → /auth/me, plus the specified failure paths (wrong password → 401,
+ * duplicate subdomain → 409) and the public job board (200 without auth).
  */
+@Import(TestEmailConfig.class)
 class AuthFlowIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private TestRestTemplate rest;
+
+    @Autowired
+    private CapturingEmailService emailCapture;
+
+    @BeforeEach
+    void clearEmailCapture() {
+        emailCapture.clear();
+    }
 
     // ------------------------------------------------------------- helpers
 
@@ -79,9 +91,16 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         assertThat(registered.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(registered.getBody()).contains("\"subdomain\":\"" + subdomain + "\"");
         assertThat(registered.getBody()).contains("\"role\":\"COMPANY_ADMIN\"");
+        assertThat(registered.getBody()).contains("PENDING_VERIFICATION");
         assertThat(registered.getBody()).doesNotContain(password);
         assertThat(registered.getBody()).doesNotContainIgnoringCase("password");
         assertThat(registered.getBody()).doesNotContain("$2a$", "$2b$");
+
+        // Verify email so account becomes ACTIVE.
+        String verificationLink = emailCapture.lastVerificationLink();
+        String rawToken = verificationLink.substring(verificationLink.indexOf("token=") + 6);
+        rest.postForEntity("/api/v1/auth/verify-email",
+                jsonEntity(Map.of("token", rawToken), null), String.class);
 
         // Login: tokens + user, tenant resolved from the header.
         Map<String, Object> auth = login(subdomain, email, password);
@@ -102,6 +121,10 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
     void login_wrongPassword_returns401Envelope() {
         String subdomain = uniqueSubdomain();
         register(subdomain, "ada@acme.io", "s3cret-password");
+        // Verify so the account is ACTIVE before testing wrong-password path.
+        String link = emailCapture.lastVerificationLink();
+        rest.postForEntity("/api/v1/auth/verify-email",
+                jsonEntity(Map.of("token", link.substring(link.indexOf("token=") + 6)), null), String.class);
 
         ResponseEntity<Map> response = rest.postForEntity("/api/v1/auth/login",
                 jsonEntity(Map.of("email", "ada@acme.io", "password", "wrong-password"), subdomain),
@@ -130,6 +153,11 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
     void refreshRotation_oldTokenDies_newTokenWorks() {
         String subdomain = uniqueSubdomain();
         register(subdomain, "ada@acme.io", "s3cret-password");
+        // Verify account so login succeeds.
+        String vLink = emailCapture.lastVerificationLink();
+        rest.postForEntity("/api/v1/auth/verify-email",
+                jsonEntity(Map.of("token", vLink.substring(vLink.indexOf("token=") + 6)), null), String.class);
+
         Map<String, Object> auth = login(subdomain, "ada@acme.io", "s3cret-password");
         String originalRefreshToken = (String) auth.get("refreshToken");
 

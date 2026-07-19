@@ -2,11 +2,16 @@ package com.talentpipe.auth.controller;
 
 import com.talentpipe.auth.dto.AuthResponse;
 import com.talentpipe.auth.dto.LoginRequest;
+import com.talentpipe.auth.dto.PasswordResetConfirmRequest;
+import com.talentpipe.auth.dto.PasswordResetRequestDto;
 import com.talentpipe.auth.dto.RefreshTokenRequest;
 import com.talentpipe.auth.dto.RegisterRequest;
 import com.talentpipe.auth.dto.RegisterResponse;
 import com.talentpipe.auth.dto.UserResponse;
+import com.talentpipe.auth.dto.VerifyEmailRequest;
 import com.talentpipe.auth.service.AuthService;
+import com.talentpipe.auth.service.EmailVerificationService;
+import com.talentpipe.auth.service.PasswordResetService;
 import com.talentpipe.security.UserPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,9 +44,15 @@ public class AuthController {
     static final String TENANT_SUBDOMAIN_HEADER = "X-Tenant-Subdomain";
 
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
+    private final PasswordResetService passwordResetService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService,
+                          EmailVerificationService emailVerificationService,
+                          PasswordResetService passwordResetService) {
         this.authService = authService;
+        this.emailVerificationService = emailVerificationService;
+        this.passwordResetService = passwordResetService;
     }
 
     /** Company onboarding (PB-001): creates a tenant plus its first COMPANY_ADMIN. */
@@ -76,5 +87,43 @@ public class AuthController {
     @GetMapping("/me")
     public UserResponse me(@AuthenticationPrincipal UserPrincipal principal) {
         return authService.getCurrentUser(principal.id());
+    }
+
+    // ------------------------------------------------------------------ PB-001
+
+    /**
+     * Verifies a user's email and activates their account (PB-001).
+     * The token is the raw value from the emailed link.
+     */
+    @PostMapping("/verify-email")
+    public ResponseEntity<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        emailVerificationService.verify(request.token());
+        return ResponseEntity.ok().build();
+    }
+
+    // ------------------------------------------------------------------ PB-008
+
+    /**
+     * Initiates a password reset: issues a 30-minute token and logs the reset
+     * link (Sprint 1: console). Always returns 200 — the response is
+     * indistinguishable whether or not the email/subdomain exist, to prevent
+     * user enumeration.
+     */
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<Void> requestPasswordReset(
+            @Valid @RequestBody PasswordResetRequestDto request) {
+        passwordResetService.requestReset(request.email(), request.subdomain());
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Confirms a password reset: validates the token (must not be expired or
+     * used), updates the password hash, and revokes all active refresh tokens.
+     */
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<Void> confirmPasswordReset(
+            @Valid @RequestBody PasswordResetConfirmRequest request) {
+        passwordResetService.confirmReset(request.token(), request.newPassword());
+        return ResponseEntity.ok().build();
     }
 }

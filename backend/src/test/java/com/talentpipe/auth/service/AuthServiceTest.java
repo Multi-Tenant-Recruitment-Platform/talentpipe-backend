@@ -44,13 +44,15 @@ class AuthServiceTest {
     @Mock
     private RefreshTokenService refreshTokenService;
     @Mock
+    private EmailVerificationService emailVerificationService;
+    @Mock
     private JwtTokenProvider jwtTokenProvider;
     @Mock
     private PasswordEncoder passwordEncoder;
 
     private AuthService service(UserMapper mapper) {
         return new AuthService(userRepository, roleRepository, tenantService,
-                refreshTokenService, jwtTokenProvider, passwordEncoder, mapper);
+                refreshTokenService, emailVerificationService, jwtTokenProvider, passwordEncoder, mapper);
     }
 
     private static RegisterRequest acmeRequest() {
@@ -79,7 +81,8 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getTenantId()).isEqualTo(tenantId);
         assertThat(savedUser.getValue().getEmail()).isEqualTo("ada@acme.io");
         assertThat(savedUser.getValue().getPasswordHash()).isEqualTo("$2a$12$mocked-hash");
-        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+        // Account starts as PENDING_VERIFICATION until email is verified (PB-001).
+        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.PENDING_VERIFICATION);
 
         // The response DTO: tenant + admin, no credential material anywhere.
         assertThat(response.tenant().subdomain()).isEqualTo("acme");

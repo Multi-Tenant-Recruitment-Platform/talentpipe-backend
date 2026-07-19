@@ -49,6 +49,10 @@ talentpipe:
     cors:
       # Vite dev server origin; production origins are injected per environment.
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  app:
+    # Base URL of the frontend SPA. Used to build links in emails (verification,
+    # password reset). Override per environment via APP_BASE_URL.
+    base-url: ${APP_BASE_URL:http://localhost:5173}
 
 logging:
   level:

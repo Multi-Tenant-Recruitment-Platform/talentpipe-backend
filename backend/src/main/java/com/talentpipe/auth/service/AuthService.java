@@ -44,6 +44,7 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final TenantService tenantService;
     private final RefreshTokenService refreshTokenService;
+    private final EmailVerificationService emailVerificationService;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
@@ -52,6 +53,7 @@ public class AuthService {
                        RoleRepository roleRepository,
                        TenantService tenantService,
                        RefreshTokenService refreshTokenService,
+                       EmailVerificationService emailVerificationService,
                        JwtTokenProvider jwtTokenProvider,
                        PasswordEncoder passwordEncoder,
                        UserMapper userMapper) {
@@ -59,6 +61,7 @@ public class AuthService {
         this.roleRepository = roleRepository;
         this.tenantService = tenantService;
         this.refreshTokenService = refreshTokenService;
+        this.emailVerificationService = emailVerificationService;
         this.jwtTokenProvider = jwtTokenProvider;
         this.passwordEncoder = passwordEncoder;
         this.userMapper = userMapper;
@@ -79,8 +82,8 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalStateException(
                         "COMPANY_ADMIN role missing — did Flyway seed V3 run?"));
 
-        // TODO(sprint1-w2): create as INVITED and gate activation behind email
-        // verification; ACTIVE-on-register is a Week 1 simplification (PB-001).
+        // Account starts PENDING_VERIFICATION; it becomes ACTIVE only after the
+        // user clicks the verification link sent by emailVerificationService (PB-001).
         User admin = new User(
                 tenant.id(),
                 adminRole,
@@ -88,10 +91,12 @@ public class AuthService {
                 passwordEncoder.encode(request.admin().password()),
                 request.admin().firstName().trim(),
                 request.admin().lastName().trim(),
-                UserStatus.ACTIVE);
+                UserStatus.PENDING_VERIFICATION);
         admin = userRepository.save(admin);
 
-        log.info("Registered tenant '{}' (id={}) with initial admin (userId={})",
+        emailVerificationService.issueAndSend(admin);
+
+        log.info("Registered tenant '{}' (id={}) with initial admin (userId={}) — verification email sent",
                 tenant.subdomain(), tenant.id(), admin.getId());
         return new RegisterResponse(tenant, userMapper.toResponse(admin, tenant.name()));
     }
@@ -114,13 +119,14 @@ public class AuthService {
                 .orElseThrow(AuthService::invalidCredentials);
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            // TODO(sprint1-w2): increment failed_login_count and enforce
-            // locked_until (account lockout / brute-force handling).
+            // TODO(sprint2): increment failed_login_count and enforce locked_until
+            // (account lockout / brute-force handling — columns already exist in schema).
             throw invalidCredentials();
         }
 
         if (user.getStatus() != UserStatus.ACTIVE) {
-            // Disabled/invited accounts must not authenticate; same generic 401.
+            // PENDING_VERIFICATION, DISABLED, and INVITED accounts must not authenticate.
+            // Same generic 401 — never reveal which check failed.
             throw invalidCredentials();
         }
 

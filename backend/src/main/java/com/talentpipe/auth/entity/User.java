@@ -111,6 +111,20 @@ public class User extends BaseEntity {
         return lockedUntil;
     }
 
+    /**
+     * Used by {@link com.talentpipe.auth.service.PasswordResetService} after a
+     * successful password reset. The new value must already be hashed by the
+     * caller (bcrypt cost 12).
+     */
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    /** Used by {@link com.talentpipe.auth.service.EmailVerificationService} to activate an account. */
+    public void setStatus(UserStatus status) {
+        this.status = status;
+    }
+
     /** Deliberately excludes email and passwordHash — safe for logs. */
     @Override
     public String toString() {
