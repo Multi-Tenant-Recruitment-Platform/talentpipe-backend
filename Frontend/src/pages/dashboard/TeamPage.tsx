@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { apiErrorMessage } from '../../api/client';
+import { teamApi } from '../../api/team';
+import type { UserResponse } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { Avatar } from '../../components/dashboard/Avatar';
 import { Badge, type BadgeTone } from '../../components/dashboard/Badge';
@@ -7,68 +10,115 @@ import { Icon } from '../../components/dashboard/Icon';
 import { InviteMemberModal, type InviteFormValues } from '../../components/dashboard/InviteMemberModal';
 import { PageHeader } from '../../components/dashboard/PageHeader';
 import { StatCard } from '../../components/dashboard/StatCard';
-import {
-  pendingInvites as seedInvites,
-  teamMembers,
-  type PendingInvite,
-  type TeamRole,
-} from '../../data/mockDashboard';
 import { formatRole } from '../../utils/format';
 
-const ROLE_BADGE_TONE: Record<TeamRole, BadgeTone> = {
+const ROLE_BADGE_TONE: Record<string, BadgeTone> = {
   COMPANY_ADMIN: 'slate',
   HR_MANAGER: 'indigo',
   INTERVIEWER: 'violet',
 };
 
+/** Renders an ISO timestamp as a short, locale-aware date. */
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 /**
  * Team & invitations: the company admin's control centre for bringing HR
- * managers and interviewers onto the platform, and for seeing who already
- * has access to the workspace.
+ * managers and interviewers onto the platform (PB-003 / PB-004).
  *
- * TODO(sprint1-w2): back every mutation here with the invitations API.
+ * <p>Backed by the real invitations API. The tenant is never sent — the
+ * backend derives it from the access token — so this page cannot address
+ * another company's workspace even if asked to.</p>
  */
 export function TeamPage() {
   const { user } = useAuth();
-  const [invites, setInvites] = useState<PendingInvite[]>(seedInvites);
-  const [resentIds, setResentIds] = useState<Set<string>>(new Set());
-  const [inviteOpen, setInviteOpen] = useState(false);
+
+  const [members, setMembers] = useState<UserResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [resentIds, setResentIds] = useState<Set<string>>(new Set());
 
-  const hrCount = teamMembers.filter((m) => m.role === 'HR_MANAGER').length;
-  const interviewerCount = teamMembers.filter((m) => m.role === 'INTERVIEWER').length;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setMembers(await teamApi.list());
+      setError(null);
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err, 'We could not load your team right now.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function handleInvite(values: InviteFormValues) {
-    // TODO(sprint1-w2): POST /invitations.
-    setInvites((current) => [
-      {
-        id: `inv-${Date.now()}`,
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // The signed-in admin is already in this list; everyone else is a teammate.
+  const others = members.filter((member) => member.id !== user?.id);
+  const activeMembers = others.filter((member) => member.status === 'ACTIVE');
+  const pendingInvites = others.filter((member) => member.status === 'INVITED');
+
+  const hrCount = activeMembers.filter((m) => m.role === 'HR_MANAGER').length;
+  const interviewerCount = activeMembers.filter((m) => m.role === 'INTERVIEWER').length;
+
+  async function handleInvite(values: InviteFormValues) {
+    setError(null);
+    try {
+      await teamApi.invite({
         firstName: values.firstName,
         lastName: values.lastName,
         email: values.email,
         role: values.role,
-        invitedAt: 'Just now',
-        invitedBy: 'You',
-      },
-      ...current,
-    ]);
-    setInviteOpen(false);
-    setNotice(`Invitation sent to ${values.email} as ${formatRole(values.role)}.`);
+      });
+      setInviteOpen(false);
+      setNotice(`Invitation sent to ${values.email} as ${formatRole(values.role)}.`);
+      await load();
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err, 'We could not send that invitation.'));
+    }
   }
 
-  function handleResend(id: string) {
-    // TODO(sprint1-w2): POST /invitations/{id}/resend.
-    setResentIds((current) => new Set(current).add(id));
+  async function handleResend(userId: string) {
+    setBusyId(userId);
+    setError(null);
+    try {
+      await teamApi.resend(userId);
+      setResentIds((current) => new Set(current).add(userId));
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err, 'We could not re-send that invitation.'));
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  function handleRevoke(id: string) {
-    // TODO(sprint1-w2): DELETE /invitations/{id}.
-    setInvites((current) => current.filter((invite) => invite.id !== id));
+  async function handleRevoke(userId: string) {
+    setBusyId(userId);
+    setError(null);
+    try {
+      await teamApi.revoke(userId);
+      await load();
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err, 'We could not revoke that invitation.'));
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
     <>
-      <PageHeader title="Team & invitations" subtitle="Manage who can access your hiring workspace and what they can do.">
+      <PageHeader
+        title="Team & invitations"
+        subtitle="Manage who can access your hiring workspace and what they can do."
+      >
         <button
           type="button"
           onClick={() => setInviteOpen(true)}
@@ -80,24 +130,38 @@ export function TeamPage() {
       </PageHeader>
 
       {notice && (
-        <div role="status" className="mb-6 flex items-start justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div
+          role="status"
+          className="mb-6 flex items-start justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
           <p>{notice}</p>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="rounded p-0.5 text-emerald-400 hover:text-emerald-600">
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+            className="rounded p-0.5 text-emerald-400 hover:text-emerald-600"
+          >
             <Icon name="x-mark" className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
       )}
 
       <div className="grid gap-5 sm:grid-cols-3">
         <StatCard label="HR Managers" value={String(hrCount)} icon="briefcase" tone="indigo" />
         <StatCard label="Interviewers" value={String(interviewerCount)} icon="identification" tone="violet" />
-        <StatCard label="Pending invites" value={String(invites.length)} icon="envelope" tone="amber" />
+        <StatCard label="Pending invites" value={String(pendingInvites.length)} icon="envelope" tone="amber" />
       </div>
 
       {/* Members */}
       <Card
         title="Members"
-        subtitle={`${teamMembers.length + 1} people with workspace access`}
+        subtitle={loading ? 'Loading…' : `${activeMembers.length + (user ? 1 : 0)} people with workspace access`}
         className="mt-6"
         bodyClassName="overflow-x-auto"
       >
@@ -108,7 +172,6 @@ export function TeamPage() {
               <th scope="col" className="px-6 py-3">Role</th>
               <th scope="col" className="px-6 py-3">Status</th>
               <th scope="col" className="px-6 py-3">Joined</th>
-              <th scope="col" className="px-6 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -127,38 +190,40 @@ export function TeamPage() {
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4"><Badge tone={ROLE_BADGE_TONE.COMPANY_ADMIN}>{formatRole(user.role)}</Badge></td>
+                <td className="px-6 py-4">
+                  <Badge tone={ROLE_BADGE_TONE[user.role] ?? 'slate'}>{formatRole(user.role)}</Badge>
+                </td>
                 <td className="px-6 py-4"><Badge tone="emerald">Active</Badge></td>
                 <td className="px-6 py-4 text-sm text-slate-500">Owner</td>
-                <td className="px-6 py-4" />
               </tr>
             )}
-            {teamMembers.map((member) => (
+            {activeMembers.map((member) => (
               <tr key={member.id} className="hover:bg-slate-50/60">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
                     <Avatar firstName={member.firstName} lastName={member.lastName} size="sm" />
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{member.firstName} {member.lastName}</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {member.firstName} {member.lastName}
+                      </p>
                       <p className="text-xs text-slate-500">{member.email}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4"><Badge tone={ROLE_BADGE_TONE[member.role]}>{formatRole(member.role)}</Badge></td>
-                <td className="px-6 py-4"><Badge tone="emerald">Active</Badge></td>
-                <td className="px-6 py-4 text-sm text-slate-500">{member.joinedAt}</td>
-                <td className="px-6 py-4 text-right">
-                  <button
-                    type="button"
-                    className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                    aria-label={`Manage ${member.firstName} ${member.lastName}`}
-                    title="Member management arrives with the admin API"
-                  >
-                    <Icon name="pencil" className="h-4 w-4" />
-                  </button>
+                <td className="px-6 py-4">
+                  <Badge tone={ROLE_BADGE_TONE[member.role] ?? 'slate'}>{formatRole(member.role)}</Badge>
                 </td>
+                <td className="px-6 py-4"><Badge tone="emerald">Active</Badge></td>
+                <td className="px-6 py-4 text-sm text-slate-500">{formatDate(member.createdAt)}</td>
               </tr>
             ))}
+            {!loading && activeMembers.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-sm text-slate-500">
+                  No teammates yet — invite an HR manager or interviewer to get started.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </Card>
@@ -168,9 +233,9 @@ export function TeamPage() {
         title="Pending invitations"
         subtitle="People who haven't accepted yet — invitations expire after 7 days"
         className="mt-6"
-        bodyClassName={invites.length === 0 ? 'p-10 text-center' : 'divide-y divide-slate-100'}
+        bodyClassName={pendingInvites.length === 0 ? 'p-10 text-center' : 'divide-y divide-slate-100'}
       >
-        {invites.length === 0 ? (
+        {pendingInvites.length === 0 ? (
           <div>
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
               <Icon name="check" className="h-6 w-6" />
@@ -179,8 +244,9 @@ export function TeamPage() {
             <p className="mt-1 text-sm text-slate-500">No outstanding invitations right now.</p>
           </div>
         ) : (
-          invites.map((invite) => {
+          pendingInvites.map((invite) => {
             const resent = resentIds.has(invite.id);
+            const busy = busyId === invite.id;
             return (
               <div key={invite.id} className="flex flex-wrap items-center gap-4 px-6 py-4 first:pt-5 last:pb-5">
                 <Avatar firstName={invite.firstName} lastName={invite.lastName} size="sm" />
@@ -189,16 +255,16 @@ export function TeamPage() {
                     {invite.firstName} {invite.lastName}
                   </p>
                   <p className="truncate text-xs text-slate-500">
-                    {invite.email} · invited {invite.invitedAt} by {invite.invitedBy}
+                    {invite.email} · invited {formatDate(invite.createdAt)}
                   </p>
                 </div>
-                <Badge tone={ROLE_BADGE_TONE[invite.role]}>{formatRole(invite.role)}</Badge>
+                <Badge tone={ROLE_BADGE_TONE[invite.role] ?? 'slate'}>{formatRole(invite.role)}</Badge>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => handleResend(invite.id)}
-                    disabled={resent}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
+                    onClick={() => void handleResend(invite.id)}
+                    disabled={resent || busy}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
                       resent
                         ? 'cursor-default bg-emerald-50 text-emerald-700'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -209,8 +275,9 @@ export function TeamPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleRevoke(invite.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    onClick={() => void handleRevoke(invite.id)}
+                    disabled={busy}
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
                   >
                     <Icon name="trash" className="h-3.5 w-3.5" />
                     Revoke
@@ -222,7 +289,11 @@ export function TeamPage() {
         )}
       </Card>
 
-      <InviteMemberModal open={inviteOpen} onClose={() => setInviteOpen(false)} onInvite={handleInvite} />
+      <InviteMemberModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onInvite={(values) => void handleInvite(values)}
+      />
     </>
   );
 }

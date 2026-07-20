@@ -1,9 +1,7 @@
 package com.talentpipe.candidate.service;
 
-import com.talentpipe.auth.dto.UserResponse;
-import com.talentpipe.auth.entity.RoleName;
 import com.talentpipe.auth.entity.UserStatus;
-import com.talentpipe.auth.service.EmailVerificationService;
+import com.talentpipe.candidate.dto.CandidateProfile;
 import com.talentpipe.candidate.dto.CandidateRegisterRequest;
 import com.talentpipe.candidate.entity.Candidate;
 import com.talentpipe.candidate.repository.CandidateRepository;
@@ -16,8 +14,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service managing candidate lifecycle operations (registration, profile, etc.).
- * Coordinates with the notification subsystem to dispatch verification links.
+ * Candidate lifecycle operations (PB-006).
+ *
+ * <p>Candidates are tenant-independent with a globally unique email — a
+ * separate identity from the tenant-scoped {@code users} table, never merged
+ * with it.</p>
  */
 @Service
 public class CandidateService {
@@ -25,72 +26,45 @@ public class CandidateService {
     private static final Logger log = LoggerFactory.getLogger(CandidateService.class);
 
     private final CandidateRepository candidateRepository;
-    private final EmailVerificationService emailVerificationService;
+    private final CandidateVerificationService verificationService;
     private final PasswordEncoder passwordEncoder;
 
     public CandidateService(CandidateRepository candidateRepository,
-                            EmailVerificationService emailVerificationService,
+                            CandidateVerificationService verificationService,
                             PasswordEncoder passwordEncoder) {
         this.candidateRepository = candidateRepository;
-        this.emailVerificationService = emailVerificationService;
+        this.verificationService = verificationService;
         this.passwordEncoder = passwordEncoder;
     }
 
     /**
-     * Public self-registration (PB-006).
-     * Creates a new Candidate account in PENDING_VERIFICATION status and
-     * dispatches an activation email.
+     * Public self-registration. The account starts PENDING_VERIFICATION and
+     * cannot log in until the emailed link is followed.
      *
-     * @throws DuplicateResourceException if the email is already registered by another candidate.
+     * @throws DuplicateResourceException if the email is already registered (409)
      */
     @Transactional
-    public UserResponse register(CandidateRegisterRequest request) {
+    public CandidateProfile register(CandidateRegisterRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
         if (candidateRepository.existsByEmail(email)) {
             throw new DuplicateResourceException("Email '" + email + "' is already registered");
         }
 
-        Candidate candidate = new Candidate(
+        Candidate candidate = candidateRepository.save(new Candidate(
                 email,
                 passwordEncoder.encode(request.password()),
                 request.fullName().trim(),
                 request.identityCardNumber().trim(),
                 request.address().trim(),
                 request.contactNumber().trim(),
-                UserStatus.ACTIVE
-        );
+                UserStatus.PENDING_VERIFICATION));
 
-        candidate = candidateRepository.save(candidate);
+        verificationService.issueAndSend(candidate);
 
-        // Dispatch verification token & email
-        emailVerificationService.issueAndSend(candidate);
+        // Id only — the email address is PII and stays out of the logs.
+        log.info("Registered candidate {} - verification email queued", candidate.getId());
 
-        log.info("Registered candidate (id={}, email={}) — verification link dispatched",
-                candidate.getId(), candidate.getEmail());
-
-        return mapCandidateToUserResponse(candidate);
-    }
-
-    private UserResponse mapCandidateToUserResponse(Candidate candidate) {
-        String fullName = candidate.getFullName();
-        String firstName = fullName;
-        String lastName = "";
-        int lastSpaceIdx = fullName.lastIndexOf(' ');
-        if (lastSpaceIdx > 0) {
-            firstName = fullName.substring(0, lastSpaceIdx).trim();
-            lastName = fullName.substring(lastSpaceIdx).trim();
-        }
-        return new UserResponse(
-                candidate.getId(),
-                null,
-                null,
-                RoleName.CANDIDATE.name(),
-                candidate.getEmail(),
-                firstName,
-                lastName,
-                candidate.getStatus().name(),
-                candidate.getCreatedAt()
-        );
+        return CandidateAuthService.toProfile(candidate);
     }
 }

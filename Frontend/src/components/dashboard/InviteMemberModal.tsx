@@ -33,7 +33,6 @@ const inputClass =
  * Invitation dialog used by the company admin to bring HR managers and
  * interviewers onto the platform. Closes on Escape or backdrop click.
  *
- * TODO(sprint1-w2): submit against the real invitations endpoint.
  */
 export function InviteMemberModal({
   open,

@@ -85,6 +85,24 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.FORBIDDEN, "Access denied", request);
     }
 
+    /**
+     * Correct credentials but unverified email (PB-001). Deliberately 403 with
+     * an actionable message: the caller has already proven credential
+     * ownership, so pointing them at the verification email leaks nothing.
+     */
+    @ExceptionHandler(AccountNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleNotVerified(AccountNotVerifiedException ex,
+                                                           HttpServletRequest request) {
+        return envelope(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
+    /** Brute-force lockout (5 failures → 15 min). Message carries retry timing. */
+    @ExceptionHandler(AccountLockedException.class)
+    public ResponseEntity<ErrorResponse> handleLocked(AccountLockedException ex,
+                                                      HttpServletRequest request) {
+        return envelope(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
     // ------------------------------------------------------------------ 404
 
     /**

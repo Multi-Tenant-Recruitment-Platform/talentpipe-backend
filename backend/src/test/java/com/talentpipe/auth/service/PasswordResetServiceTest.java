@@ -17,15 +17,16 @@ import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.repository.PasswordResetTokenRepository;
 import com.talentpipe.auth.repository.RefreshTokenRepository;
 import com.talentpipe.auth.repository.UserRepository;
+import com.talentpipe.candidate.service.CandidateAuthService;
 import com.talentpipe.common.exception.InvalidTokenException;
-import com.talentpipe.notification.EmailService;
-import com.talentpipe.tenant.dto.TenantResponse;
-import com.talentpipe.tenant.service.TenantService;
+import com.talentpipe.notification.entity.NotificationType;
+import com.talentpipe.notification.event.NotificationRequestedEvent;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -35,14 +36,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link PasswordResetService}:
- * no-op for unknown user/tenant, token issuance, confirmation (password
- * update + session revocation), and all rejection paths.
+ * no-op for unknown emails, token issuance, confirmation (password update +
+ * session revocation), and all rejection paths.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -51,16 +53,15 @@ class PasswordResetServiceTest {
     @Mock private PasswordResetTokenRepository tokenRepository;
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
-    @Mock private com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
-    @Mock private TenantService tenantService;
-    @Mock private EmailService emailService;
+    @Mock private CandidateAuthService candidateAuthService;
+    @Mock private ApplicationEventPublisher events;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 
     private PasswordResetService service() {
         return new PasswordResetService(
-                tokenRepository, userRepository, refreshTokenRepository, candidateRepository,
-                tenantService, passwordEncoder, emailService, "http://localhost:5173");
+                tokenRepository, userRepository, refreshTokenRepository, candidateAuthService,
+                passwordEncoder, events, "http://localhost:5173");
     }
 
     private static User activeUser(UUID tenantId) {
@@ -72,23 +73,17 @@ class PasswordResetServiceTest {
         return user;
     }
 
-    private static TenantResponse tenantResponse(UUID tenantId) {
-        return new TenantResponse(tenantId, "Acme Inc", "acme",
-                null, "STANDARD", "ACTIVE", Instant.now());
-    }
-
-    // ------------------------------------------------------- requestReset
+    // ------------------------------------------------------ forgotPassword
 
     @Test
-    void requestReset_knownUser_issuesTokenAndSendsEmail() {
+    void forgotPassword_knownUser_issuesTokenAndPublishesEmail() {
         UUID tenantId = UUID.randomUUID();
-        when(tenantService.findBySubdomain("acme")).thenReturn(Optional.of(tenantResponse(tenantId)));
         User user = activeUser(tenantId);
-        when(userRepository.findByTenantIdAndEmail(tenantId, "ada@acme.io"))
-                .thenReturn(Optional.of(user));
+        when(candidateAuthService.findByEmail("ada@acme.io")).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmail("ada@acme.io")).thenReturn(List.of(user));
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service().requestReset("ada@acme.io", "acme");
+        service().forgotPassword("ada@acme.io");
 
         verify(tokenRepository).deleteAllByUserId(user.getId());
         ArgumentCaptor<PasswordResetToken> saved = ArgumentCaptor.forClass(PasswordResetToken.class);
@@ -96,47 +91,52 @@ class PasswordResetServiceTest {
         assertThat(saved.getValue().getExpiresAt())
                 .isBetween(Instant.now().plusSeconds(29 * 60), Instant.now().plusSeconds(31 * 60));
 
-        ArgumentCaptor<String> linkCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService).sendPasswordResetEmail(eq("ada@acme.io"), linkCaptor.capture());
-        assertThat(linkCaptor.getValue()).startsWith("http://localhost:5173/reset-password?token=");
+        ArgumentCaptor<NotificationRequestedEvent> event =
+                ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+        verify(events).publishEvent(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(NotificationType.PASSWORD_RESET);
+        assertThat(event.getValue().recipient()).isEqualTo("ada@acme.io");
+        assertThat(event.getValue().link()).startsWith("http://localhost:5173/reset-password?token=");
     }
 
     @Test
-    void requestReset_unknownSubdomain_isNoOp() {
-        when(tenantService.findBySubdomain("unknown")).thenReturn(Optional.empty());
+    void forgotPassword_unknownEmail_isNoOp() {
+        when(candidateAuthService.findByEmail(anyString())).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmail(anyString())).thenReturn(List.of());
 
         // Must NOT throw — no enumeration.
-        service().requestReset("ada@acme.io", "unknown");
+        service().forgotPassword("nobody@acme.io");
 
         verify(tokenRepository, never()).save(any());
-        verify(emailService, never()).sendPasswordResetEmail(anyString(), anyString());
+        verify(events, never()).publishEvent(any(NotificationRequestedEvent.class));
     }
 
     @Test
-    void requestReset_unknownEmail_isNoOp() {
-        UUID tenantId = UUID.randomUUID();
-        when(tenantService.findBySubdomain("acme")).thenReturn(Optional.of(tenantResponse(tenantId)));
-        when(userRepository.findByTenantIdAndEmail(eq(tenantId), anyString()))
-                .thenReturn(Optional.empty());
+    void forgotPassword_normalizesEmail() {
+        when(candidateAuthService.findByEmail(anyString())).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmail(anyString())).thenReturn(List.of());
 
-        // Must NOT throw — no enumeration.
-        service().requestReset("nobody@acme.io", "acme");
+        service().forgotPassword("  ADA@ACME.IO  ");
 
-        verify(tokenRepository, never()).save(any());
-        verify(emailService, never()).sendPasswordResetEmail(anyString(), anyString());
+        // The lookup must use the normalized email.
+        verify(userRepository).findAllByEmail("ada@acme.io");
     }
 
     @Test
-    void requestReset_normalizesEmail() {
-        UUID tenantId = UUID.randomUUID();
-        when(tenantService.findBySubdomain("acme")).thenReturn(Optional.of(tenantResponse(tenantId)));
-        when(userRepository.findByTenantIdAndEmail(tenantId, "ada@acme.io"))
-                .thenReturn(Optional.empty()); // will be a no-op, that's fine
+    void forgotPassword_emailInMultipleTenants_issuesOneTokenPerAccount() {
+        User first = activeUser(UUID.randomUUID());
+        User second = activeUser(UUID.randomUUID());
+        when(candidateAuthService.findByEmail("ada@acme.io")).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmail("ada@acme.io")).thenReturn(List.of(first, second));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service().requestReset("  ADA@ACME.IO  ", "acme");
+        service().forgotPassword("ada@acme.io");
 
-        // The call must use the normalized email.
-        verify(userRepository).findByTenantIdAndEmail(tenantId, "ada@acme.io");
+        // Every matching account gets its own token — none is silently skipped.
+        verify(tokenRepository).deleteAllByUserId(first.getId());
+        verify(tokenRepository).deleteAllByUserId(second.getId());
+        verify(events, org.mockito.Mockito.times(2))
+                .publishEvent(any(NotificationRequestedEvent.class));
     }
 
     // ------------------------------------------------------- confirmReset
@@ -155,7 +155,6 @@ class PasswordResetServiceTest {
                 "$2a$04$oldhash", "Ada", "Lovelace", UserStatus.ACTIVE);
         ReflectionTestUtils.setField(user, "id", userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        // revokeAllActiveForUser returns void; no mock setup needed.
 
         service().confirmReset(rawToken, "new-s3cret-password");
 
@@ -168,6 +167,24 @@ class PasswordResetServiceTest {
 
         // All sessions must be revoked.
         verify(refreshTokenRepository).revokeAllActiveForUser(eq(userId), any());
+    }
+
+    @Test
+    void confirmReset_candidateToken_delegatesToCandidateModule() {
+        UUID candidateId = UUID.randomUUID();
+        String rawToken = "candidate-raw-token";
+        PasswordResetToken stored = new PasswordResetToken(candidateId, sha256(rawToken),
+                Instant.now().plusSeconds(1800));
+        when(tokenRepository.findByTokenHash(sha256(rawToken))).thenReturn(Optional.of(stored));
+        when(userRepository.findById(candidateId)).thenReturn(Optional.empty());
+        when(candidateAuthService.exists(candidateId)).thenReturn(true);
+
+        service().confirmReset(rawToken, "new-s3cret-password");
+
+        // Hashing stays inside the candidate module — the raw password is handed over.
+        verify(candidateAuthService).updatePassword(candidateId, "new-s3cret-password");
+        verify(refreshTokenRepository).revokeAllActiveForUser(eq(candidateId), any());
+        assertThat(stored.isUsed()).isTrue();
     }
 
     @Test

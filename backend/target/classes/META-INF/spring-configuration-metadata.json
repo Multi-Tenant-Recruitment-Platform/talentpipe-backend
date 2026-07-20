@@ -1,12 +1,29 @@
 {
   "groups": [
     {
+      "name": "talentpipe.resend",
+      "type": "com.talentpipe.notification.ResendProperties",
+      "sourceType": "com.talentpipe.notification.ResendProperties"
+    },
+    {
       "name": "talentpipe.security.jwt",
       "type": "com.talentpipe.security.JwtProperties",
       "sourceType": "com.talentpipe.security.JwtProperties"
     }
   ],
   "properties": [
+    {
+      "name": "talentpipe.resend.api-key",
+      "type": "java.lang.String",
+      "description": "Resend API key, from {@code RESEND_API_KEY}. Deliberately has no in-repo default — when blank the application runs in console mode rather than falling back to some shared key.",
+      "sourceType": "com.talentpipe.notification.ResendProperties"
+    },
+    {
+      "name": "talentpipe.resend.from",
+      "type": "java.lang.String",
+      "description": "sender address, from {@code MAIL_FROM}. Resend only delivers to arbitrary recipients when this address belongs to a VERIFIED sending domain; the {@code onboarding@resend.dev} sandbox sender reaches only the Resend account owner's own inbox.",
+      "sourceType": "com.talentpipe.notification.ResendProperties"
+    },
     {
       "name": "talentpipe.security.jwt.access-token-ttl",
       "type": "java.time.Duration",

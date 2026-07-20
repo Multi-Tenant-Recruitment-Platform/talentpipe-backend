@@ -19,7 +19,7 @@ public class PublicJobController {
     /**
      * Lists published jobs across all tenants.
      *
-     * <p>TODO(sprint1-w2): back this with real published jobs once the Job
+     * <p>TODO(sprint2): back this with real published jobs once the Job
      * module lands in a later sprint. Until then it returns a well-formed
      * empty page — deliberately NOT an error, so clients can already build
      * against the final contract.</p>

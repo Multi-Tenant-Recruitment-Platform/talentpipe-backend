@@ -1,7 +1,7 @@
 /**
  * Mock data powering the company admin dashboard.
  *
- * TODO(sprint1-w2): replace every export here with real API calls once the
+ * TODO(sprint2): replace every export here with real API calls once the
  * invitation, tenant-update, job and pipeline endpoints land (see
  * docs/DECISIONS.md). The shapes below intentionally mirror the backend DTO
  * conventions so the swap is a drop-in replacement inside the pages.

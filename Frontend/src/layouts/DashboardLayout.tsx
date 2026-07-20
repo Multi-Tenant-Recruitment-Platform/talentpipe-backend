@@ -14,7 +14,7 @@ const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] 
   { to: '/dashboard/settings', label: 'Company Settings', icon: 'cog' },
 ];
 
-/** Mock notification list — TODO(sprint1-w2): wire to the notification module. */
+/** Mock notification list — TODO(sprint2): wire to the notification module. */
 const NOTIFICATIONS = [
   { id: 'n-1', icon: 'calendar' as IconName, text: 'Interview with Malith Jayasuriya starts in 30 minutes', time: 'Just now' },
   { id: 'n-2', icon: 'user-plus' as IconName, text: 'Kasun Silva accepted your invitation', time: '1 hour ago' },
@@ -159,7 +159,7 @@ export function DashboardLayout() {
           {/* Global search — decorative until the search API lands. */}
           <div className="relative hidden max-w-md flex-1 sm:block">
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            {/* TODO(sprint1-w2): wire to global search once it exists. */}
+            {/* TODO(sprint2): wire to global search once it exists. */}
             <input
               type="search"
               placeholder="Search jobs, candidates, people…"

@@ -1,6 +1,7 @@
 package com.talentpipe.auth.entity;
 
 import com.talentpipe.common.entity.BaseEntity;
+import com.talentpipe.common.util.LockoutPolicy;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -52,11 +53,11 @@ public class User extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private UserStatus status = UserStatus.ACTIVE;
 
-    /** Maintained from Week 2 on (account lockout); column exists now to avoid a migration. */
+    /** Consecutive failed logins; reset to zero on success (brute-force protection). */
     @Column(name = "failed_login_count", nullable = false)
     private short failedLoginCount = 0;
 
-    /** Enforced from Week 2 on (account lockout); column exists now to avoid a migration. */
+    /** Set when the failure threshold is hit; logins are refused until it passes. */
     @Column(name = "locked_until")
     private Instant lockedUntil;
 
@@ -109,6 +110,32 @@ public class User extends BaseEntity {
 
     public Instant getLockedUntil() {
         return lockedUntil;
+    }
+
+    /** True while a lock is in force; a lapsed lock is not a lock. */
+    public boolean isLocked(Instant now) {
+        return lockedUntil != null && lockedUntil.isAfter(now);
+    }
+
+    /**
+     * Records a failed login, engaging the lock once the threshold is reached.
+     *
+     * @return true if this failure locked the account
+     */
+    public boolean registerFailedLogin(Instant now) {
+        failedLoginCount++;
+        if (failedLoginCount >= LockoutPolicy.MAX_FAILED_ATTEMPTS) {
+            lockedUntil = now.plus(LockoutPolicy.LOCK_DURATION);
+            failedLoginCount = 0; // start a fresh count for the next window
+            return true;
+        }
+        return false;
+    }
+
+    /** Clears the failure count and any lapsed lock after a successful login. */
+    public void registerSuccessfulLogin() {
+        failedLoginCount = 0;
+        lockedUntil = null;
     }
 
     /**

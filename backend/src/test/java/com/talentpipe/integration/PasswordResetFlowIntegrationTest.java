@@ -75,9 +75,14 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
                 jsonEntity(Map.of("email", email, "password", password), subdomain), Map.class);
     }
 
+    /**
+     * The reset request is tenant-agnostic: the subdomain is no longer accepted
+     * (tenant identity must never travel in a request body) and every account
+     * using this address receives its own link.
+     */
     private ResponseEntity<String> requestReset(String email, String subdomain) {
-        return rest.postForEntity("/api/v1/auth/password-reset/request",
-                jsonEntity(Map.of("email", email, "subdomain", subdomain), null), String.class);
+        return rest.postForEntity("/api/v1/auth/forgot-password",
+                jsonEntity(Map.of("email", email), null), String.class);
     }
 
     private ResponseEntity<String> confirmReset(String rawToken, String newPassword) {

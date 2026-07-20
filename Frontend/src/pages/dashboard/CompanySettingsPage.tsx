@@ -27,7 +27,7 @@ const inputClass =
  * Company settings: the admin edits the public-facing company profile, and
  * reviews the workspace identity, careers page URL and plan usage.
  *
- * TODO(sprint1-w2): persist via the tenant update endpoint once it lands.
+ * TODO(sprint2): persist via the tenant update endpoint once it lands.
  */
 export function CompanySettingsPage() {
   const { user } = useAuth();
@@ -48,7 +48,7 @@ export function CompanySettingsPage() {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    // TODO(sprint1-w2): PATCH /tenant with the profile payload.
+    // TODO(sprint2): PATCH /tenant with the profile payload.
     setSaved(true);
   }
 

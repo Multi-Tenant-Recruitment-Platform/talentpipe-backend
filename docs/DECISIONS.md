@@ -42,7 +42,7 @@ single line in `AuthController`.
 
 ---
 
-## ADR-2 — Account-lockout columns now, lockout logic in Week 2
+## ADR-2 — Account-lockout columns now, lockout logic in Week 2 *(resolved)*
 
 **Date:** 2026-07-14 · **Status:** Accepted
 
@@ -59,15 +59,151 @@ scheduled for Week 2, but the `users` table ships in Week 1's
 avoids an `ALTER TABLE` migration one week after the table's birth and keeps
 the Week 2 change purely behavioral (service-layer logic + tests).
 
-The enforcement points are already marked in code with
-`// TODO(sprint1-w2):` in `AuthService.login`.
+**Resolved in Week 2:** the logic now lives in `AuthService.authenticateUser`
+and `CandidateAuthService.authenticate`, with the policy constants shared in
+`common/util/LockoutPolicy` (5 attempts → 15 minutes). `V7` added the same two
+columns to `candidates`, since candidates authenticate through a separate path
+and needed identical protection.
+
+The lock is checked **before** the password comparison: a locked account stays
+locked even for the correct password, otherwise the lock means nothing.
+
+---
+
+## ADR-3 — Candidates are a separate identity, not users with a role
+
+**Date:** 2026-07-20 · **Status:** Accepted
+
+### Context
+
+Both company staff and candidates authenticate, and it is tempting to make
+`CANDIDATE` just another row in `users`. The two are structurally different:
+company users are unique per `(tenant_id, email)` and always belong to a tenant;
+candidates are tenant-independent with a globally unique email, and a single
+candidate applies to many companies.
+
+### Decision
+
+Candidates live in their own `candidates` table with a globally unique email,
+and their tokens carry `role=CANDIDATE` and **no** `tenant_id` claim. Login
+distinguishes the two by the presence of the `X-Tenant-Subdomain` header:
+present ⇒ company user, absent ⇒ candidate (then SUPER_ADMIN).
+
+Module boundaries follow the same split. The candidate module owns every
+candidate password comparison and exposes only `CandidateProfile` through
+`CandidateAuthService`; the auth module never sees a `Candidate` entity or its
+hash. Before Week 2 the auth services imported candidate repositories directly —
+that coupling is now removed.
+
+### Consequence
+
+An email can legitimately identify a candidate account *and* company accounts in
+several tenants at once. Forgot-password therefore issues one token per matching
+account rather than guessing which was meant.
+
+---
+
+## ADR-4 — Shared token tables across both identities
+
+**Date:** 2026-07-20 · **Status:** Accepted (with a known trade-off)
+
+### Context
+
+A teammate's `V6` migration dropped the foreign keys on `refresh_tokens`,
+`password_reset_tokens` and `email_verification_tokens` so candidate ids could be
+stored in them, since candidates are not `users` rows.
+
+### Decision
+
+Keep it. Re-normalizing into per-identity token tables is a schema change to
+already-applied migration history, and the sprint has better uses for that time.
+The `owner id` in those tables is resolved against `users` first, then
+`candidates`.
+
+Candidate email verification is the exception — it has its own
+`candidate_verification_tokens` table with a real FK, because it was created that
+way and the FK is worth keeping.
+
+### Trade-off
+
+Weaker referential integrity: an orphaned token row is possible if an account is
+deleted. Accepted for now because tokens are single-use and short-lived; revisit
+when candidate volume justifies it.
+
+---
+
+## ADR-5 — Notifications are tenant-scoped; candidate email is not recorded
+
+**Date:** 2026-07-20 · **Status:** Accepted
+
+### Context
+
+The design doc specifies a `notifications` table that is tenant-scoped and
+references `users(id)`. Candidates have neither a tenant nor a `users` row.
+
+### Decision
+
+`notifications` records outbound email for **company users only** (verification,
+password reset, invitation) with a `PENDING → SENT | FAILED` lifecycle. Candidate
+email is delivered through exactly the same async path but is **not** persisted:
+forcing it into the table would mean either a nullable `tenant_id` (destroying
+the scoping that makes the table safe to query per tenant) or a fake tenant.
+
+SUPER_ADMIN mail is unrecorded for the same reason — no tenant.
+
+### Consequence
+
+Candidate delivery failures are visible in logs (with a correlation id) but not
+queryable per tenant. A `candidate_notifications` table is the obvious follow-up
+if candidate email needs an audit trail; deliberately deferred rather than
+bolted on.
+
+---
+
+## ADR-6 — Email is event-driven and never fails the request
+
+**Date:** 2026-07-20 · **Status:** Accepted
+
+### Context
+
+The first Resend integration called the mail API from the request thread via a
+raw `new Thread()` per email, with no timeouts, no failure record and no pool.
+
+### Decision
+
+Business services never call a transport. They publish a
+`NotificationRequestedEvent`; `NotificationDispatcher` consumes it with
+`@TransactionalEventListener` (AFTER_COMMIT) + `@Async` on a bounded pool.
+
+Two properties come from that pairing:
+
+1. **After commit** — no email is ever sent for a transaction that rolled back,
+   and the token the link points at is guaranteed to exist when it arrives.
+2. **Async** — Resend latency never becomes API latency, and a mail outage marks
+   the attempt FAILED instead of 500-ing registration, reset or invitation.
+
+The transport is chosen at startup by whether `RESEND_API_KEY` is set: real
+sending when it is, console logging when it is not. There is deliberately **no
+default API key** — the previous default was a live key committed to the repo.
+
+### Note
+
+Links (which carry live single-use tokens) are logged **only** in console mode,
+where nothing is being delivered. The Resend path logs recipient and subject only.
 
 ---
 
 ## Standing conventions (not individually numbered)
 
-- **Deferred-work marker:** `// TODO(sprint1-w2): ...` — grep for it at sprint
-  planning.
+- **Deferred-work marker:** `// TODO(sprint2): ...` — grep for it at sprint
+  planning. (The Week 2 markers are all resolved; anything still tagged for a
+  sprint is genuinely outstanding.)
+- **Tokens in links** (verification, reset, invite) are 32 random bytes stored
+  as SHA-256 hashes only, single-use (`used_at`), with server-side expiry:
+  verification 24 h, reset 30 min, invitation 7 days.
+- **Role checks happen twice** for sensitive operations: `@PreAuthorize` on the
+  controller for the role, plus an independent tenant-scope re-check in the
+  service, so a future caller reaching the service another way cannot bypass it.
 - **404 over 403 for cross-tenant access:** a resource that exists but belongs
   to another tenant is indistinguishable from one that doesn't exist.
 - **Refresh tokens are stored hashed (SHA-256) and rotated on every use**; raw

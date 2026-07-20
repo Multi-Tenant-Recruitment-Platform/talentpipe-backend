@@ -51,6 +51,7 @@ public class SecurityConfig {
         // not ALSO auto-register them outside the security chain.
         var jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenProvider, errorWriter);
         var tenantResolvingFilter = new TenantResolvingFilter(jwtTokenProvider);
+        var loginRateLimitFilter = new LoginRateLimitFilter(errorWriter);
 
         http
                 .csrf(csrf -> csrf.disable())
@@ -58,21 +59,28 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Credential and token-bearing flows: the token in the
+                        // link IS the credential, so no session is required.
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/verify-email",
+                                "/api/v1/auth/resend-verification",
                                 "/api/v1/auth/forgot-password",
-                                "/api/v1/auth/password-reset/request",
-                                "/api/v1/auth/password-reset/confirm").permitAll()
+                                "/api/v1/auth/password-reset/confirm",
+                                "/api/v1/auth/accept-invite").permitAll()
                         .requestMatchers("/api/v1/public/**").permitAll()
+                        // Everything else needs a token; role scoping is enforced
+                        // per-controller with @PreAuthorize (PB-002).
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(tenantResolvingFilter, JwtAuthenticationFilter.class);
+                .addFilterBefore(tenantResolvingFilter, JwtAuthenticationFilter.class)
+                // Outermost: throttling happens before any password comparison.
+                .addFilterBefore(loginRateLimitFilter, TenantResolvingFilter.class);
 
         return http.build();
     }

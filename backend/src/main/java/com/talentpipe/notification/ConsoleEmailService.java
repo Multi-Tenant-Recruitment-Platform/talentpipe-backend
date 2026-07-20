@@ -2,44 +2,32 @@ package com.talentpipe.notification;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
-import org.springframework.stereotype.Service;
 
 /**
- * Sprint 1 email implementation: prints email content to the console log.
+ * Development transport: prints the email to the application log instead of
+ * sending it. Active only when no {@code RESEND_API_KEY} is configured, so a
+ * developer can complete verification, reset and invitation flows locally by
+ * copying the link out of the backend log.
  *
- * <p>No SMTP infrastructure is required. The verification and reset links are
- * logged at INFO level (prefixed with {@code [EMAIL-CONSOLE]}) so developers
- * can copy them directly from the backend log during manual testing.</p>
- *
- * <p>Annotated {@code @Primary} so this bean wins automatically when a real
- * SMTP implementation is also on the classpath (e.g. in a future sprint)
- * without requiring any code changes to callers.</p>
+ * <p>This is the ONLY place where a link (and therefore a raw single-use
+ * token) may be logged, and it exists precisely because nothing is being
+ * delivered. The moment a key is configured, {@link ResendEmailService} takes
+ * over and the link never touches the logs.</p>
  */
-@Service
 public class ConsoleEmailService implements EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(ConsoleEmailService.class);
 
     @Override
-    public void sendVerificationEmail(String to, String verificationLink) {
+    public void send(EmailMessage message) {
         log.info("""
-                [EMAIL-CONSOLE] ── Account Verification ────────────────────────────
-                  To      : {}
-                  Subject : Verify your TalentPipe account
-                  Link    : {}
-                ─────────────────────────────────────────────────────────────────────""",
-                to, verificationLink);
-    }
 
-    @Override
-    public void sendPasswordResetEmail(String to, String resetLink) {
-        log.info("""
-                [EMAIL-CONSOLE] ── Password Reset ───────────────────────────────────
+                [EMAIL-CONSOLE] no RESEND_API_KEY configured - nothing was sent
                   To      : {}
-                  Subject : Reset your TalentPipe password
-                  Link    : {}  (expires in 30 minutes)
-                ─────────────────────────────────────────────────────────────────────""",
-                to, resetLink);
+                  Subject : {}
+                  Body    :
+                {}
+                """,
+                message.to(), message.subject(), message.html());
     }
 }

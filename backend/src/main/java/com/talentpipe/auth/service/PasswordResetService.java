@@ -5,40 +5,43 @@ import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.repository.PasswordResetTokenRepository;
 import com.talentpipe.auth.repository.RefreshTokenRepository;
 import com.talentpipe.auth.repository.UserRepository;
+import com.talentpipe.candidate.dto.CandidateProfile;
+import com.talentpipe.candidate.service.CandidateAuthService;
 import com.talentpipe.common.exception.InvalidTokenException;
-import com.talentpipe.notification.EmailService;
-import com.talentpipe.tenant.dto.TenantResponse;
-import com.talentpipe.tenant.service.TenantService;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
+import com.talentpipe.common.util.SecureTokens;
+import com.talentpipe.notification.entity.NotificationType;
+import com.talentpipe.notification.event.NotificationRequestedEvent;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Manages the password reset lifecycle: token request and confirmation.
+ * Password reset (PB-008), covering both identities.
  *
  * <p>Security properties:</p>
  * <ul>
- *   <li>Requests for unknown emails are silently no-ops — no exception is
- *       thrown and no timing difference is detectable (user enumeration is
- *       prevented).</li>
- *   <li>Tokens are 32-byte random values stored only as SHA-256 hashes.</li>
- *   <li>Token TTL is 30 minutes (PB-008 acceptance criterion).</li>
- *   <li>A successful reset immediately revokes all active refresh tokens,
- *       terminating every existing session for the user.</li>
+ *   <li>The request endpoint is a silent no-op for unknown emails and always
+ *       answers 200 — it can never be used to probe for accounts.</li>
+ *   <li>Tokens are 32 random bytes stored only as SHA-256 hashes, single-use,
+ *       with a 30-minute TTL (PB-008 acceptance criterion).</li>
+ *   <li>A successful reset revokes every active refresh token, so sessions
+ *       opened with the old password die immediately.</li>
  * </ul>
+ *
+ * <p>An email may identify accounts in several tenants (users are unique per
+ * tenant, not globally). Every match gets its own token and its own email, so
+ * the recipient picks the account by following the right link — no guessing
+ * which one the platform decided to reset.</p>
  */
 @Service
 public class PasswordResetService {
@@ -49,126 +52,62 @@ public class PasswordResetService {
     private final PasswordResetTokenRepository tokenRepository;
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
-    private final TenantService tenantService;
+    private final CandidateAuthService candidateAuthService;
     private final PasswordEncoder passwordEncoder;
-    private final EmailService emailService;
-    private final String appBaseUrl;
+    private final ApplicationEventPublisher events;
+    private final String frontendBaseUrl;
 
-    public PasswordResetService(
-            PasswordResetTokenRepository tokenRepository,
-            UserRepository userRepository,
-            RefreshTokenRepository refreshTokenRepository,
-            com.talentpipe.candidate.repository.CandidateRepository candidateRepository,
-            TenantService tenantService,
-            PasswordEncoder passwordEncoder,
-            EmailService emailService,
-            @Value("${talentpipe.app.base-url:http://localhost:5173}") String appBaseUrl) {
+    public PasswordResetService(PasswordResetTokenRepository tokenRepository,
+                                UserRepository userRepository,
+                                RefreshTokenRepository refreshTokenRepository,
+                                CandidateAuthService candidateAuthService,
+                                PasswordEncoder passwordEncoder,
+                                ApplicationEventPublisher events,
+                                @Value("${talentpipe.app.base-url}") String frontendBaseUrl) {
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
-        this.candidateRepository = candidateRepository;
-        this.tenantService = tenantService;
+        this.candidateAuthService = candidateAuthService;
         this.passwordEncoder = passwordEncoder;
-        this.emailService = emailService;
-        this.appBaseUrl = appBaseUrl;
+        this.events = events;
+        this.frontendBaseUrl = frontendBaseUrl;
     }
 
     /**
-     * Initiates a password reset for {@code email} within the tenant identified
-     * by {@code subdomain}. Always returns without exception — callers receive
-     * no information about whether the tenant or user exist.
-     */
-    @Transactional
-    public void requestReset(String email, String subdomain) {
-        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
-
-        Optional<TenantResponse> tenantOpt = tenantService.findBySubdomain(subdomain);
-        if (tenantOpt.isEmpty()) {
-            log.debug("Password reset requested for unknown subdomain '{}' — no-op", subdomain);
-            return;
-        }
-
-        Optional<User> userOpt = userRepository.findByTenantIdAndEmail(
-                tenantOpt.get().id(), normalizedEmail);
-        if (userOpt.isEmpty()) {
-            log.debug("Password reset requested for unknown user '{}' in tenant '{}' — no-op",
-                    normalizedEmail, subdomain);
-            return;
-        }
-
-        User user = userOpt.get();
-
-        // Remove any previous outstanding token before issuing a new one.
-        tokenRepository.deleteAllByUserId(user.getId());
-
-        String rawToken = generateSecureToken();
-        Instant expiresAt = Instant.now().plus(TOKEN_TTL);
-        tokenRepository.save(new PasswordResetToken(user.getId(), sha256(rawToken), expiresAt));
-
-        String resetLink = appBaseUrl + "/reset-password?token=" + rawToken;
-        emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
-
-        log.info("Password reset token issued for user {} (expires {})", user.getId(), expiresAt);
-    }
-
-    /**
-     * Global password reset request (PB-008) when no subdomain is provided.
-     * Searches candidates first, then searches tenant users.
+     * Starts a reset for every account using this email — the candidate
+     * account and/or company accounts in any tenant. Returns normally whatever
+     * is found, including nothing at all.
      */
     @Transactional
     public void forgotPassword(String email) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        int issued = 0;
 
-        // 1. Try candidate first
-        var candidateOpt = candidateRepository.findByEmail(normalizedEmail);
-        if (candidateOpt.isPresent()) {
-            var candidate = candidateOpt.get();
-            tokenRepository.deleteAllByUserId(candidate.getId());
-
-            String rawToken = generateSecureToken();
-            Instant expiresAt = Instant.now().plus(TOKEN_TTL);
-            tokenRepository.save(new PasswordResetToken(candidate.getId(), sha256(rawToken), expiresAt));
-
-            String resetLink = appBaseUrl + "/reset-password?token=" + rawToken;
-            emailService.sendPasswordResetEmail(candidate.getEmail(), resetLink);
-
-            log.info("Password reset token issued for candidate {} (expires {})", candidate.getId(), expiresAt);
-            return;
+        Optional<CandidateProfile> candidate = candidateAuthService.findByEmail(normalizedEmail);
+        if (candidate.isPresent()) {
+            issueToken(candidate.get().id(), null, null, normalizedEmail, candidate.get().firstName());
+            issued++;
         }
 
-        // 2. Try tenant users matching the email
-        var users = userRepository.findAllByEmail(normalizedEmail);
-        if (!users.isEmpty()) {
-            // For testing and simple global reset, send to the first matched user account.
-            var user = users.get(0);
-            tokenRepository.deleteAllByUserId(user.getId());
-
-            String rawToken = generateSecureToken();
-            Instant expiresAt = Instant.now().plus(TOKEN_TTL);
-            tokenRepository.save(new PasswordResetToken(user.getId(), sha256(rawToken), expiresAt));
-
-            String resetLink = appBaseUrl + "/reset-password?token=" + rawToken;
-            emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
-
-            log.info("Password reset token issued for user {} via global request (expires {})", user.getId(), expiresAt);
-            return;
+        List<User> users = userRepository.findAllByEmail(normalizedEmail);
+        for (User user : users) {
+            issueToken(user.getId(), user.getTenantId(), user.getId(), user.getEmail(), user.getFirstName());
+            issued++;
         }
 
-        log.debug("Global password reset requested for unknown email '{}' — no-op", normalizedEmail);
+        // Count only — never log which addresses do or do not exist.
+        log.info("Password reset requested: {} token(s) issued", issued);
     }
 
     /**
-     * Validates the token and updates the user or candidate password. All active sessions are
-     * revoked, invalidating every existing session.
+     * Completes a reset: validates the token, sets a new bcrypt hash, and
+     * revokes all refresh tokens for the account.
      *
-     * @param rawToken    plain token from the reset link
-     * @param newPassword plaintext new password (will be bcrypt-hashed)
-     * @throws InvalidTokenException if the token is unknown, expired, or already used (401)
+     * @throws InvalidTokenException if the token is unknown, expired or used (401)
      */
     @Transactional
     public void confirmReset(String rawToken, String newPassword) {
-        PasswordResetToken token = tokenRepository.findByTokenHash(sha256(rawToken))
+        PasswordResetToken token = tokenRepository.findByTokenHash(SecureTokens.sha256(rawToken))
                 .orElseThrow(() -> new InvalidTokenException("Unknown or invalid password reset token"));
 
         Instant now = Instant.now();
@@ -178,45 +117,54 @@ public class PasswordResetService {
         if (token.isUsed()) {
             throw new InvalidTokenException("Password reset token has already been used");
         }
-
         token.markUsed(now);
 
-        // 1. Try to find candidate
-        var candidateOpt = candidateRepository.findById(token.getUserId());
-        if (candidateOpt.isPresent()) {
-            var candidate = candidateOpt.get();
-            candidate.setPasswordHash(passwordEncoder.encode(newPassword));
-            refreshTokenRepository.revokeAllActiveForUser(candidate.getId(), now);
-            log.info("Password reset confirmed for candidate {} — all active sessions revoked", candidate.getId());
+        UUID ownerId = token.getUserId();
+
+        // The owner id is either a candidate or a company user — the two live
+        // in different tables and share this token table (see ADR-4).
+        Optional<User> userOpt = userRepository.findById(ownerId);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            user.setPasswordHash(passwordEncoder.encode(newPassword));
+            // A completed reset proves ownership: clear any brute-force lock.
+            user.registerSuccessfulLogin();
+            refreshTokenRepository.revokeAllActiveForUser(ownerId, now);
+            log.info("Password reset completed for user {} - all sessions revoked", ownerId);
             return;
         }
 
-        // 2. Try to find user
-        User user = userRepository.findById(token.getUserId())
-                .orElseThrow(() -> new InvalidTokenException("User no longer exists"));
+        if (candidateAuthService.exists(ownerId)) {
+            candidateAuthService.updatePassword(ownerId, newPassword);
+            refreshTokenRepository.revokeAllActiveForUser(ownerId, now);
+            log.info("Password reset completed for candidate {} - all sessions revoked", ownerId);
+            return;
+        }
 
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-
-        // Revoke all existing sessions so the old password cannot be used to
-        // keep any session alive after the reset.
-        refreshTokenRepository.revokeAllActiveForUser(user.getId(), now);
-        log.info("Password reset confirmed for user {} — all active sessions revoked", user.getId());
+        throw new InvalidTokenException("Account no longer exists");
     }
 
     // ------------------------------------------------------------------ util
 
-    private static String generateSecureToken() {
-        byte[] bytes = new byte[32];
-        new SecureRandom().nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
+    /**
+     * Issues one reset token and requests its email.
+     *
+     * @param ownerId    the account the token resets (user OR candidate id)
+     * @param tenantId   tenant for the notification record, {@code null} for candidates
+     * @param userId     users-row id for the notification record, {@code null} for candidates
+     */
+    private void issueToken(UUID ownerId, UUID tenantId, UUID userId, String recipient, String firstName) {
+        tokenRepository.deleteAllByUserId(ownerId);
 
-    private static String sha256(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(input.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 unavailable", ex);
-        }
+        String rawToken = SecureTokens.generate();
+        tokenRepository.save(new PasswordResetToken(
+                ownerId, SecureTokens.sha256(rawToken), Instant.now().plus(TOKEN_TTL)));
+
+        String link = frontendBaseUrl + "/reset-password?token=" + rawToken;
+        events.publishEvent(userId == null
+                ? NotificationRequestedEvent.forCandidate(
+                        NotificationType.PASSWORD_RESET, recipient, link, firstName)
+                : NotificationRequestedEvent.forUser(
+                        NotificationType.PASSWORD_RESET, tenantId, userId, recipient, link, firstName));
     }
 }

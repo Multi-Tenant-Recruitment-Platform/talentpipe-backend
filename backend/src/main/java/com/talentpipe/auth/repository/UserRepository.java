@@ -1,6 +1,7 @@
 package com.talentpipe.auth.repository;
 
 import com.talentpipe.auth.entity.User;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,8 +16,19 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     Optional<User> findByTenantIdAndEmail(UUID tenantId, String email);
 
+    /**
+     * SUPER_ADMIN lookup. Platform operators have {@code tenant_id IS NULL},
+     * and SQL equality never matches NULL — passing {@code null} to
+     * {@link #findByTenantIdAndEmail} silently returns nothing, so the null
+     * case needs this dedicated {@code IS NULL} query.
+     */
+    Optional<User> findByTenantIdIsNullAndEmail(String email);
+
     boolean existsByTenantIdAndEmail(UUID tenantId, String email);
 
-    /** Global email lookup used during global forgot-password reset requests. */
-    java.util.List<User> findAllByEmail(String email);
+    /** Global email lookup used by the tenant-agnostic forgot-password flow. */
+    List<User> findAllByEmail(String email);
+
+    /** Team listing for a tenant (PB-003/PB-004), newest members last. */
+    List<User> findAllByTenantIdOrderByCreatedAtAsc(UUID tenantId);
 }

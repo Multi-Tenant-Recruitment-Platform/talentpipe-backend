@@ -59,6 +59,33 @@ export interface CandidateRegisterRequest {
   password: string;
 }
 
+/**
+ * The candidate module's own view of a candidate, returned by registration.
+ * Candidates are tenant-independent, so this carries no tenant fields.
+ */
+export interface CandidateProfile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  createdAt: string;
+}
+
+/** Roles a company admin may invite (PB-003 / PB-004). */
+export type InvitableRole = 'HR_MANAGER' | 'INTERVIEWER';
+
+/**
+ * Invitation payload. Carries no tenant: the invitee always joins the caller's
+ * workspace, which the backend takes from the access token.
+ */
+export interface InviteUserRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: InvitableRole;
+}
+
 /** Uniform pagination envelope returned by every list endpoint. */
 export interface PageResponse<T> {
   content: T[];

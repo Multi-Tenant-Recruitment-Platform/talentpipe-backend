@@ -1,6 +1,7 @@
+import axios from 'axios';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { apiErrorMessage } from '../api/client';
+import { api, apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { AuthShell } from '../components/AuthShell';
 
@@ -14,6 +15,10 @@ interface LoginLocationState {
   mode?: LoginMode;
   /** Prefills the email field (e.g. after candidate registration). */
   email?: string;
+  /** Set by the reset-password page after a successful reset. */
+  passwordReset?: boolean;
+  /** Set by the accept-invite page after activation. */
+  inviteAccepted?: boolean;
   from?: string;
 }
 
@@ -72,26 +77,55 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set when the backend reports the account exists but is unverified (403),
+  // which is the only case where offering a resend is useful — and safe,
+  // because the caller has already proven they know the password.
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   function switchMode(next: LoginMode) {
     setMode(next);
     setError(null);
     setNotice(null);
+    setNeedsVerification(false);
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setNotice(null);
+    setNeedsVerification(false);
     setSubmitting(true);
     try {
       // Candidates have no tenant, so the subdomain (and its header) is empty.
       await login(mode === 'company' ? subdomain.trim().toLowerCase() : '', email, password);
       navigate(state.from ?? '/dashboard', { replace: true });
     } catch (err: unknown) {
-      setError(apiErrorMessage(err, 'Login failed. Please try again.'));
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      const message = apiErrorMessage(err, 'Login failed. Please try again.');
+      setError(message);
+      setNeedsVerification(status === 403 && message.toLowerCase().includes('not verified'));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /** Requests a fresh verification email; always reports the same neutral result. */
+  async function handleResendVerification() {
+    setError(null);
+    try {
+      await api.post(
+        '/auth/resend-verification',
+        { email },
+        mode === 'company'
+          ? { headers: { 'X-Tenant-Subdomain': subdomain.trim().toLowerCase() } }
+          : undefined,
+      );
+    } catch {
+      // Deliberately ignored: the confirmation below must look identical
+      // whether or not the address is registered.
+    } finally {
+      setNeedsVerification(false);
+      setNotice(`If ${email} needs verifying, a new link is on its way.`);
     }
   }
 
@@ -111,8 +145,20 @@ export function LoginPage() {
       {state.registered && (
         <div className="mt-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
           {state.registered === 'candidate'
-            ? 'Account created successfully — log in to continue.'
-            : 'Company registered successfully — log in to continue.'}
+            ? 'Account created. Check your email for the verification link — you can sign in once it is confirmed.'
+            : 'Company registered. Check your email for the verification link — you can sign in once it is confirmed.'}
+        </div>
+      )}
+
+      {state.passwordReset && (
+        <div className="mt-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          Password updated. Sign in with your new password.
+        </div>
+      )}
+
+      {state.inviteAccepted && (
+        <div className="mt-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          Invitation accepted. Sign in with your company subdomain to reach the workspace.
         </div>
       )}
 
@@ -140,7 +186,16 @@ export function LoginPage() {
       <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-5">
         {error && (
           <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {error}
+            <p>{error}</p>
+            {needsVerification && (
+              <button
+                type="button"
+                onClick={() => void handleResendVerification()}
+                className="mt-2 font-semibold text-red-800 underline hover:text-red-900"
+              >
+                Send me a new verification link
+              </button>
+            )}
           </div>
         )}
         {notice && (

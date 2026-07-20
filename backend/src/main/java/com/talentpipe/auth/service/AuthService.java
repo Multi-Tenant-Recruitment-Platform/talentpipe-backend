@@ -12,11 +12,17 @@ import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.mapper.UserMapper;
 import com.talentpipe.auth.repository.RoleRepository;
 import com.talentpipe.auth.repository.UserRepository;
+import com.talentpipe.candidate.dto.CandidateProfile;
+import com.talentpipe.candidate.service.CandidateAuthService;
+import com.talentpipe.common.exception.AccountLockedException;
+import com.talentpipe.common.exception.AccountNotVerifiedException;
 import com.talentpipe.common.exception.InvalidTokenException;
 import com.talentpipe.security.JwtTokenProvider;
 import com.talentpipe.tenant.dto.TenantResponse;
 import com.talentpipe.tenant.service.TenantService;
+import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +35,21 @@ import org.springframework.transaction.annotation.Transactional;
  * Authentication use-cases: company onboarding, login, token refresh, logout
  * and current-user lookup.
  *
- * <p>Cross-module collaboration happens strictly through {@link TenantService}
- * and its DTOs — this module never touches the Tenant entity. Login failures
- * are always the same generic 401 regardless of which step failed (unknown
- * subdomain, unknown user, wrong password, disabled account), so nothing about
- * account existence leaks.</p>
+ * <p>Two distinct identities authenticate here and are never merged:</p>
+ * <ul>
+ *   <li><strong>Company users</strong> — rows in {@code users}, unique per
+ *       (tenant, email), identified by the {@code X-Tenant-Subdomain} header.</li>
+ *   <li><strong>Candidates</strong> — tenant-independent, globally unique
+ *       email, no subdomain. Their credentials are checked inside the candidate
+ *       module via {@link CandidateAuthService}; this service only ever sees a
+ *       {@link CandidateProfile}, never a candidate row or password hash.</li>
+ * </ul>
+ *
+ * <p>Failure semantics: bad credentials are always the same generic 401,
+ * whichever step failed, so account existence never leaks. Two states are
+ * deliberate exceptions and answer 403 with an actionable message —
+ * unverified email and brute-force lockout — because both are only reachable
+ * once the caller has already proven they know the password.</p>
  */
 @Service
 public class AuthService {
@@ -45,7 +61,7 @@ public class AuthService {
     private final TenantService tenantService;
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationService emailVerificationService;
-    private final com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
+    private final CandidateAuthService candidateAuthService;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
@@ -55,7 +71,7 @@ public class AuthService {
                        TenantService tenantService,
                        RefreshTokenService refreshTokenService,
                        EmailVerificationService emailVerificationService,
-                       com.talentpipe.candidate.repository.CandidateRepository candidateRepository,
+                       CandidateAuthService candidateAuthService,
                        JwtTokenProvider jwtTokenProvider,
                        PasswordEncoder passwordEncoder,
                        UserMapper userMapper) {
@@ -64,15 +80,15 @@ public class AuthService {
         this.tenantService = tenantService;
         this.refreshTokenService = refreshTokenService;
         this.emailVerificationService = emailVerificationService;
-        this.candidateRepository = candidateRepository;
+        this.candidateAuthService = candidateAuthService;
         this.jwtTokenProvider = jwtTokenProvider;
         this.passwordEncoder = passwordEncoder;
         this.userMapper = userMapper;
     }
 
     /**
-     * Company onboarding (PB-001): atomically creates the tenant and its
-     * first COMPANY_ADMIN user.
+     * Company onboarding (PB-001): atomically creates the tenant and its first
+     * COMPANY_ADMIN, who must verify their email before they can log in.
      *
      * @throws com.talentpipe.common.exception.DuplicateResourceException
      *         when the subdomain is already taken (409)
@@ -83,107 +99,82 @@ public class AuthService {
 
         Role adminRole = roleRepository.findByName(RoleName.COMPANY_ADMIN)
                 .orElseThrow(() -> new IllegalStateException(
-                        "COMPANY_ADMIN role missing — did Flyway seed V3 run?"));
+                        "COMPANY_ADMIN role missing - did Flyway seed V3 run?"));
 
-        // Created directly in ACTIVE status to bypass verification blocker during testing.
-        User admin = new User(
+        User admin = userRepository.save(new User(
                 tenant.id(),
                 adminRole,
                 normalizeEmail(request.admin().email()),
                 passwordEncoder.encode(request.admin().password()),
                 request.admin().firstName().trim(),
                 request.admin().lastName().trim(),
-                UserStatus.ACTIVE);
-        admin = userRepository.save(admin);
+                UserStatus.PENDING_VERIFICATION));
 
         emailVerificationService.issueAndSend(admin);
 
-        log.info("Registered tenant '{}' (id={}) with initial admin (userId={}) — verification email sent",
+        log.info("Registered tenant '{}' (id={}) with initial admin {} - verification email queued",
                 tenant.subdomain(), tenant.id(), admin.getId());
         return new RegisterResponse(tenant, userMapper.toResponse(admin, tenant.name()));
     }
 
     /**
-     * Login (PB-007). The tenant is resolved from the subdomain supplied by
-     * transport context (X-Tenant-Subdomain header this sprint) — never from
-     * the request body.
+     * Login (PB-007). The tenant comes from transport context (the
+     * {@code X-Tenant-Subdomain} header this sprint) — never from the body.
+     * Without that header the request is a global login: a candidate or a
+     * SUPER_ADMIN.
      *
-     * @throws BadCredentialsException on ANY failure — deliberately
-     *         indistinguishable to the caller (401)
+     * @throws BadCredentialsException     on any credential failure (401)
+     * @throws AccountNotVerifiedException correct credentials, unverified email (403)
+     * @throws AccountLockedException      too many failed attempts (403)
      */
     @Transactional
     public AuthResponse login(String subdomain, LoginRequest request) {
-        String normalizedEmail = normalizeEmail(request.email());
+        String email = normalizeEmail(request.email());
 
-        // Global login (candidates or super admins) — no subdomain header.
         if (subdomain == null || subdomain.isBlank()) {
-            // 1. Try candidate first
-            var candidateOpt = candidateRepository.findByEmail(normalizedEmail);
-            if (candidateOpt.isPresent()) {
-                var candidate = candidateOpt.get();
-                if (!passwordEncoder.matches(request.password(), candidate.getPasswordHash())) {
-                    throw invalidCredentials();
-                }
-                if (candidate.getStatus() != UserStatus.ACTIVE) {
-                    throw invalidCredentials();
-                }
-                return issueTokens(candidate);
-            }
-
-            // 2. Try platform SUPER_ADMIN (users with tenant_id IS NULL)
-            var userOpt = userRepository.findByTenantIdAndEmail(null, normalizedEmail);
-            if (userOpt.isPresent()) {
-                var user = userOpt.get();
-                if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-                    throw invalidCredentials();
-                }
-                if (user.getStatus() != UserStatus.ACTIVE) {
-                    throw invalidCredentials();
-                }
-                return issueTokens(user, null);
-            }
-
-            throw invalidCredentials();
+            return globalLogin(email, request.password());
         }
 
-        // Company / Tenant Login
         TenantResponse tenant = tenantService.findBySubdomain(subdomain)
                 .orElseThrow(AuthService::invalidCredentials);
 
-        User user = userRepository
-                .findByTenantIdAndEmail(tenant.id(), normalizedEmail)
+        User user = userRepository.findByTenantIdAndEmail(tenant.id(), email)
                 .orElseThrow(AuthService::invalidCredentials);
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            // TODO(sprint2): increment failed_login_count and enforce locked_until
-            // (account lockout / brute-force handling — columns already exist in schema).
-            throw invalidCredentials();
-        }
-
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            // PENDING_VERIFICATION, DISABLED, and INVITED accounts must not authenticate.
-            // Same generic 401 — never reveal which check failed.
-            throw invalidCredentials();
-        }
-
+        authenticateUser(user, request.password());
         return issueTokens(user, tenant.name());
     }
 
     /**
-     * Rotates a refresh token: validates it (signature + stored hash +
-     * revocation state), revokes it, and returns a brand-new token pair.
+     * Rotates a refresh token: validates it (signature, stored hash, revocation
+     * state), revokes it, and returns a brand-new pair.
+     *
+     * <p>The owner may be a company user or a candidate — both identities share
+     * the refresh-token table (ADR-4), so both are resolved here. Resolving
+     * only against {@code users} would silently cap candidate sessions at the
+     * access-token lifetime.</p>
      *
      * @throws InvalidTokenException on any validation failure (401)
      */
     @Transactional
     public AuthResponse refresh(String rawRefreshToken) {
-        UUID userId = refreshTokenService.validateAndConsume(rawRefreshToken);
+        UUID ownerId = refreshTokenService.validateAndConsume(rawRefreshToken);
 
-        User user = userRepository.findById(userId)
-                .filter(candidate -> candidate.getStatus() == UserStatus.ACTIVE)
-                .orElseThrow(() -> new InvalidTokenException("Token owner no longer active"));
+        Optional<User> userOpt = userRepository.findById(ownerId);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            if (user.getStatus() != UserStatus.ACTIVE) {
+                throw new InvalidTokenException("Token owner is no longer active");
+            }
+            return issueTokens(user, resolveTenantName(user.getTenantId()));
+        }
 
-        return issueTokens(user, resolveTenantName(user.getTenantId()));
+        CandidateProfile candidate = candidateAuthService.findById(ownerId)
+                .orElseThrow(() -> new InvalidTokenException("Token owner no longer exists"));
+        if (!UserStatus.ACTIVE.name().equals(candidate.status())) {
+            throw new InvalidTokenException("Token owner is no longer active");
+        }
+        return issueTokens(candidate);
     }
 
     /** Revokes the presented refresh token (idempotent, ownership-checked). */
@@ -192,63 +183,112 @@ public class AuthService {
         refreshTokenService.revoke(rawRefreshToken, currentUserId);
     }
 
-    /** Current authenticated user's profile, loaded fresh from the database. */
+    /** The authenticated principal's own profile, loaded fresh from the database. */
     @Transactional(readOnly = true)
-    public UserResponse getCurrentUser(UUID userId) {
-        var userOpt = userRepository.findById(userId);
+    public UserResponse getCurrentUser(UUID principalId) {
+        Optional<User> userOpt = userRepository.findById(principalId);
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             return userMapper.toResponse(user, resolveTenantName(user.getTenantId()));
         }
 
-        var candidate = candidateRepository.findById(userId)
+        return candidateAuthService.findById(principalId)
+                .map(AuthService::toUserResponse)
                 .orElseThrow(() -> new InvalidTokenException("Token owner no longer exists"));
-        return mapCandidateToUserResponse(candidate);
     }
 
-    // ------------------------------------------------------------------ util
+    // ----------------------------------------------------------------- login
+
+    /**
+     * Login without a tenant: candidates first (the common case), then platform
+     * SUPER_ADMINs, whose {@code tenant_id} is NULL.
+     */
+    private AuthResponse globalLogin(String email, String password) {
+        Optional<CandidateProfile> candidate = candidateAuthService.authenticate(email, password);
+        if (candidate.isPresent()) {
+            return issueTokens(candidate.get());
+        }
+
+        User superAdmin = userRepository.findByTenantIdIsNullAndEmail(email)
+                .orElseThrow(AuthService::invalidCredentials);
+
+        authenticateUser(superAdmin, password);
+        return issueTokens(superAdmin, null);
+    }
+
+    /**
+     * Password check plus the account-state gates, in the order that keeps the
+     * lock meaningful: a locked account is refused even with the right password,
+     * and every wrong password counts towards the next lock.
+     */
+    private void authenticateUser(User user, String rawPassword) {
+        Instant now = Instant.now();
+
+        if (user.isLocked(now)) {
+            throw new AccountLockedException(user.getLockedUntil(), now);
+        }
+
+        if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+            if (user.registerFailedLogin(now)) {
+                log.warn("User {} locked after {} failed login attempts",
+                        user.getId(), com.talentpipe.common.util.LockoutPolicy.MAX_FAILED_ATTEMPTS);
+            }
+            throw invalidCredentials();
+        }
+
+        if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
+            throw new AccountNotVerifiedException(
+                    "Your email address is not verified yet. Check your inbox for the "
+                            + "verification link, or request a new one.");
+        }
+        if (user.getStatus() == UserStatus.INVITED) {
+            throw new AccountNotVerifiedException(
+                    "This invitation has not been accepted yet. Use the link in your "
+                            + "invitation email to set a password.");
+        }
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw invalidCredentials(); // DISABLED — stays a generic 401
+        }
+
+        user.registerSuccessfulLogin();
+    }
+
+    // ---------------------------------------------------------------- tokens
 
     private AuthResponse issueTokens(User user, String tenantName) {
         String accessToken = jwtTokenProvider.issueAccessToken(
                 user.getId(), user.getTenantId(), user.getRole().getName().name(), user.getEmail());
-        String refreshToken = refreshTokenService.issue(user.getId());
         return new AuthResponse(
                 accessToken,
-                refreshToken,
+                refreshTokenService.issue(user.getId()),
                 jwtTokenProvider.getAccessTokenTtl().toSeconds(),
                 userMapper.toResponse(user, tenantName));
     }
 
-    private AuthResponse issueTokens(com.talentpipe.candidate.entity.Candidate candidate) {
+    /** Candidate tokens carry role CANDIDATE and no tenant claim. */
+    private AuthResponse issueTokens(CandidateProfile candidate) {
         String accessToken = jwtTokenProvider.issueAccessToken(
-                candidate.getId(), null, RoleName.CANDIDATE.name(), candidate.getEmail());
-        String refreshToken = refreshTokenService.issue(candidate.getId());
+                candidate.id(), null, RoleName.CANDIDATE.name(), candidate.email());
         return new AuthResponse(
                 accessToken,
-                refreshToken,
+                refreshTokenService.issue(candidate.id()),
                 jwtTokenProvider.getAccessTokenTtl().toSeconds(),
-                mapCandidateToUserResponse(candidate));
+                toUserResponse(candidate));
     }
 
-    private UserResponse mapCandidateToUserResponse(com.talentpipe.candidate.entity.Candidate candidate) {
-        String fullName = candidate.getFullName();
-        String firstName = fullName;
-        String lastName = "";
-        int lastSpaceIdx = fullName.lastIndexOf(' ');
-        if (lastSpaceIdx > 0) {
-            firstName = fullName.substring(0, lastSpaceIdx).trim();
-            lastName = fullName.substring(lastSpaceIdx).trim();
-        }
+    // ------------------------------------------------------------------ util
+
+    private static UserResponse toUserResponse(CandidateProfile candidate) {
         return new UserResponse(
-                candidate.getId(),
+                candidate.id(),
                 null,
                 null,
                 RoleName.CANDIDATE.name(),
-                candidate.getEmail(),
-                firstName,
-                lastName,
-                candidate.getStatus().name(),
-                candidate.getCreatedAt());
+                candidate.email(),
+                candidate.firstName(),
+                candidate.lastName(),
+                candidate.status(),
+                candidate.createdAt());
     }
 
     private String resolveTenantName(UUID tenantId) {

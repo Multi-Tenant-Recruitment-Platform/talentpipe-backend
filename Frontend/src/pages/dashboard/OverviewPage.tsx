@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { apiErrorMessage } from '../../api/client';
+import { teamApi } from '../../api/team';
 import { useAuth } from '../../auth/AuthContext';
 import { Avatar } from '../../components/dashboard/Avatar';
 import { Badge } from '../../components/dashboard/Badge';
@@ -47,6 +49,7 @@ export function OverviewPage() {
   const { user } = useAuth();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -54,10 +57,20 @@ export function OverviewPage() {
     day: 'numeric',
   });
 
-  function handleInvite(values: InviteFormValues) {
-    // TODO(sprint1-w2): POST /invitations once the endpoint exists.
-    setInviteOpen(false);
-    setNotice(`Invitation sent to ${values.email} — they'll join as ${values.role === 'HR_MANAGER' ? 'an HR Manager' : 'an Interviewer'} once they accept.`);
+  async function handleInvite(values: InviteFormValues) {
+    setError(null);
+    try {
+      await teamApi.invite({
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        role: values.role,
+      });
+      setInviteOpen(false);
+      setNotice(`Invitation sent to ${values.email} — they'll join as ${values.role === 'HR_MANAGER' ? 'an HR Manager' : 'an Interviewer'} once they accept.`);
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err, 'We could not send that invitation.'));
+    }
   }
 
   const healthMetrics: { icon: IconName; label: string; value: string; hint: string; tone: string }[] = [
@@ -114,6 +127,12 @@ export function OverviewPage() {
           <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="rounded p-0.5 text-indigo-400 hover:text-indigo-600">
             <Icon name="x-mark" className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
       )}
 
@@ -228,7 +247,7 @@ export function OverviewPage() {
         </Card>
       </div>
 
-      <InviteMemberModal open={inviteOpen} onClose={() => setInviteOpen(false)} onInvite={handleInvite} />
+      <InviteMemberModal open={inviteOpen} onClose={() => setInviteOpen(false)} onInvite={(values) => void handleInvite(values)} />
     </>
   );
 }

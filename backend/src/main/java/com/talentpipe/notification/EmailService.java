@@ -1,30 +1,22 @@
 package com.talentpipe.notification;
 
 /**
- * Email dispatch contract for TalentPipe. Implementations are swapped per
- * environment: {@link ConsoleEmailService} logs links to the console during
- * Sprint 1; a real SMTP implementation arrives when mail infrastructure is
- * set up.
+ * Email transport contract. One implementation is active per environment,
+ * selected in {@link EmailConfig} by whether {@code RESEND_API_KEY} is set:
+ * {@link ResendEmailService} when it is, {@link ConsoleEmailService} otherwise.
  *
- * <p>All methods are fire-and-forget: callers do not block on delivery. Any
- * sending failure should be caught and logged by the implementation so a
- * transient mail error never rolls back a business transaction.</p>
+ * <p>Implementations are <strong>synchronous and throwing</strong> — they
+ * report success or failure honestly. Asynchrony and failure recording are the
+ * responsibility of {@link NotificationDispatcher}, which is the only caller.
+ * Business services never invoke a transport directly; they publish a
+ * {@link com.talentpipe.notification.event.NotificationRequestedEvent}.</p>
  */
 public interface EmailService {
 
     /**
-     * Sends an account activation email containing {@code verificationLink}.
+     * Delivers a message, blocking until the transport confirms it.
      *
-     * @param to               recipient email address
-     * @param verificationLink the full URL the user must click to verify their account
+     * @throws EmailDeliveryException if the message was not accepted
      */
-    void sendVerificationEmail(String to, String verificationLink);
-
-    /**
-     * Sends a password reset email containing {@code resetLink}.
-     *
-     * @param to        recipient email address
-     * @param resetLink the full URL (with embedded token) for resetting the password
-     */
-    void sendPasswordResetEmail(String to, String resetLink);
+    void send(EmailMessage message);
 }

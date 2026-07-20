@@ -17,7 +17,8 @@ import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.repository.EmailVerificationTokenRepository;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.common.exception.InvalidTokenException;
-import com.talentpipe.notification.EmailService;
+import com.talentpipe.notification.entity.NotificationType;
+import com.talentpipe.notification.event.NotificationRequestedEvent;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -34,6 +35,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -49,15 +51,19 @@ class EmailVerificationServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private com.talentpipe.candidate.repository.CandidateVerificationTokenRepository candidateTokenRepository;
-    @Mock
-    private com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
-    @Mock
-    private EmailService emailService;
+    private ApplicationEventPublisher events;
 
     private EmailVerificationService service() {
         return new EmailVerificationService(
-                tokenRepository, userRepository, candidateTokenRepository, candidateRepository, emailService, "http://localhost:5173");
+                tokenRepository, userRepository, events, "http://localhost:5173");
+    }
+
+    /** Captures the link from the published notification event. */
+    private String publishedLink() {
+        ArgumentCaptor<NotificationRequestedEvent> event =
+                ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+        verify(events).publishEvent(event.capture());
+        return event.getValue().link();
     }
 
     private static User pendingUser() {
@@ -89,10 +95,13 @@ class EmailVerificationServiceTest {
         assertThat(saved.getValue().getTokenHash()).isNotBlank();
         assertThat(saved.getValue().getExpiresAt()).isAfter(Instant.now());
 
-        // Verify email was dispatched with a link containing the correct base URL.
-        ArgumentCaptor<String> linkCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService).sendVerificationEmail(eq("ada@acme.io"), linkCaptor.capture());
-        assertThat(linkCaptor.getValue()).startsWith("http://localhost:5173/verify-email?token=");
+        // Verify an email was requested with a link containing the correct base URL.
+        ArgumentCaptor<NotificationRequestedEvent> event =
+                ArgumentCaptor.forClass(NotificationRequestedEvent.class);
+        verify(events).publishEvent(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(NotificationType.EMAIL_VERIFICATION);
+        assertThat(event.getValue().recipient()).isEqualTo("ada@acme.io");
+        assertThat(event.getValue().link()).startsWith("http://localhost:5173/verify-email?token=");
     }
 
     @Test
@@ -105,10 +114,9 @@ class EmailVerificationServiceTest {
         // The stored hash must differ from a simple plaintext match.
         ArgumentCaptor<EmailVerificationToken> saved = ArgumentCaptor.forClass(EmailVerificationToken.class);
         verify(tokenRepository).save(saved.capture());
-        ArgumentCaptor<String> link = ArgumentCaptor.forClass(String.class);
-        verify(emailService).sendVerificationEmail(anyString(), link.capture());
+        String link = publishedLink();
 
-        String rawToken = link.getValue().substring(link.getValue().indexOf("token=") + 6);
+        String rawToken = link.substring(link.indexOf("token=") + 6);
         // The stored hash must be the SHA-256 of the raw token, not the raw token itself.
         assertThat(saved.getValue().getTokenHash()).isEqualTo(sha256(rawToken));
         assertThat(saved.getValue().getTokenHash()).isNotEqualTo(rawToken);
@@ -122,9 +130,8 @@ class EmailVerificationServiceTest {
         // Simulate issuing a token to capture the hash.
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         service().issueAndSend(user);
-        ArgumentCaptor<String> linkCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService).sendVerificationEmail(anyString(), linkCaptor.capture());
-        String rawToken = linkCaptor.getValue().substring(linkCaptor.getValue().indexOf("token=") + 6);
+        String link = publishedLink();
+        String rawToken = link.substring(link.indexOf("token=") + 6);
 
         // Build the stored token object.
         EmailVerificationToken stored = new EmailVerificationToken(
@@ -139,11 +146,12 @@ class EmailVerificationServiceTest {
     }
 
     @Test
-    void verify_unknownToken_throwsInvalidToken() {
+    void verify_tokenBelongingToAnotherPopulation_isNotHandled() {
         when(tokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service().verify("unknown-token"))
-                .isInstanceOf(InvalidTokenException.class);
+        // Not a company-user token: reported as unhandled so the caller can try
+        // the candidate flow. The controller turns "nobody handled it" into 401.
+        assertThat(service().verify("unknown-token")).isFalse();
     }
 
     @Test

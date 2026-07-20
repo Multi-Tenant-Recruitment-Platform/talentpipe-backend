@@ -46,7 +46,7 @@ class AuthServiceTest {
     @Mock
     private EmailVerificationService emailVerificationService;
     @Mock
-    private com.talentpipe.candidate.repository.CandidateRepository candidateRepository;
+    private com.talentpipe.candidate.service.CandidateAuthService candidateAuthService;
     @Mock
     private JwtTokenProvider jwtTokenProvider;
     @Mock
@@ -54,7 +54,7 @@ class AuthServiceTest {
 
     private AuthService service(UserMapper mapper) {
         return new AuthService(userRepository, roleRepository, tenantService,
-                refreshTokenService, emailVerificationService, candidateRepository, jwtTokenProvider, passwordEncoder, mapper);
+                refreshTokenService, emailVerificationService, candidateAuthService, jwtTokenProvider, passwordEncoder, mapper);
     }
 
     private static RegisterRequest acmeRequest() {
@@ -83,8 +83,8 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getTenantId()).isEqualTo(tenantId);
         assertThat(savedUser.getValue().getEmail()).isEqualTo("ada@acme.io");
         assertThat(savedUser.getValue().getPasswordHash()).isEqualTo("$2a$12$mocked-hash");
-        // Account starts directly as ACTIVE to bypass verification blocker during testing.
-        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+        // PB-001: the account is unusable until the emailed link is followed.
+        assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.PENDING_VERIFICATION);
 
         // The response DTO: tenant + admin, no credential material anywhere.
         assertThat(response.tenant().subdomain()).isEqualTo("acme");

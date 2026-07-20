@@ -5,7 +5,7 @@ import java.util.UUID;
 /**
  * Public job-board listing item (PB-005, partial).
  *
- * <p>TODO(sprint1-w2): contract placeholder only — fields will grow (location,
+ * <p>TODO(sprint2): contract placeholder only — fields will grow (location,
  * employment type, posted date, …) when the Job module lands in a later
  * sprint. No rows are produced this week.</p>
  */
