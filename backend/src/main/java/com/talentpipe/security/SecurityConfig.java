@@ -46,12 +46,14 @@ public class SecurityConfig {
                                                    JwtTokenProvider jwtTokenProvider,
                                                    SecurityErrorWriter errorWriter,
                                                    RestAuthenticationEntryPoint authenticationEntryPoint,
-                                                   RestAccessDeniedHandler accessDeniedHandler) throws Exception {
+                                                   RestAccessDeniedHandler accessDeniedHandler,
+                                                   @Value("${talentpipe.security.login-rate-limit.max-per-minute:10}")
+                                                   int loginRateLimitPerMinute) throws Exception {
         // Instantiated here (not as @Component) so the servlet container does
         // not ALSO auto-register them outside the security chain.
         var jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenProvider, errorWriter);
         var tenantResolvingFilter = new TenantResolvingFilter(jwtTokenProvider);
-        var loginRateLimitFilter = new LoginRateLimitFilter(errorWriter);
+        var loginRateLimitFilter = new LoginRateLimitFilter(errorWriter, loginRateLimitPerMinute);
 
         http
                 .csrf(csrf -> csrf.disable())

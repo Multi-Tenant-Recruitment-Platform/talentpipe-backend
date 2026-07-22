@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { AuthShell } from '../components/AuthShell';
+import { RegisterTabs } from '../components/RegisterTabs';
 
 /** Company onboarding (PB-001): tenant + first COMPANY_ADMIN, then off to login. */
 export function RegisterPage() {
@@ -45,8 +46,17 @@ export function RegisterPage() {
 
   return (
     <AuthShell>
-      <h1 className="text-2xl font-bold tracking-tight">Register your company</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
       <p className="mt-2 text-sm text-slate-600">
+        Choose how you want to use TalentPipe.
+      </p>
+
+      <div className="mt-6">
+        <RegisterTabs active="company" />
+      </div>
+
+      <h2 className="mt-6 text-lg font-semibold tracking-tight">Register your company</h2>
+      <p className="mt-1 text-sm text-slate-600">
         Creates your company workspace and its first administrator account.
       </p>
 

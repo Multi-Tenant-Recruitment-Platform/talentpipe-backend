@@ -29,9 +29,13 @@ export function Layout() {
             </NavLink>
             {user ? (
               <>
-                <NavLink to="/dashboard" className={navLinkClass}>
-                  Dashboard
-                </NavLink>
+                {/* The dashboard is the company workspace; candidates have no
+                    tenant, so it isn't shown to them. */}
+                {user.role !== 'CANDIDATE' && (
+                  <NavLink to="/dashboard" className={navLinkClass}>
+                    Dashboard
+                  </NavLink>
+                )}
                 <button
                   onClick={() => void handleLogout()}
                   className="ml-2 rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"

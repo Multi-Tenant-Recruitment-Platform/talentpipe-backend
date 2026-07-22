@@ -62,6 +62,7 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationService emailVerificationService;
     private final CandidateAuthService candidateAuthService;
+    private final LoginAttemptService loginAttemptService;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
@@ -72,6 +73,7 @@ public class AuthService {
                        RefreshTokenService refreshTokenService,
                        EmailVerificationService emailVerificationService,
                        CandidateAuthService candidateAuthService,
+                       LoginAttemptService loginAttemptService,
                        JwtTokenProvider jwtTokenProvider,
                        PasswordEncoder passwordEncoder,
                        UserMapper userMapper) {
@@ -81,6 +83,7 @@ public class AuthService {
         this.refreshTokenService = refreshTokenService;
         this.emailVerificationService = emailVerificationService;
         this.candidateAuthService = candidateAuthService;
+        this.loginAttemptService = loginAttemptService;
         this.jwtTokenProvider = jwtTokenProvider;
         this.passwordEncoder = passwordEncoder;
         this.userMapper = userMapper;
@@ -220,6 +223,12 @@ public class AuthService {
      * Password check plus the account-state gates, in the order that keeps the
      * lock meaningful: a locked account is refused even with the right password,
      * and every wrong password counts towards the next lock.
+     *
+     * <p>Failure and success are recorded through {@link LoginAttemptService},
+     * whose {@code REQUIRES_NEW} transactions commit the counter independently.
+     * Mutating {@code user} directly here would be pointless — throwing
+     * "invalid credentials" rolls this transaction back and takes the increment
+     * with it, so the account could never actually lock.</p>
      */
     private void authenticateUser(User user, String rawPassword) {
         Instant now = Instant.now();
@@ -229,10 +238,7 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            if (user.registerFailedLogin(now)) {
-                log.warn("User {} locked after {} failed login attempts",
-                        user.getId(), com.talentpipe.common.util.LockoutPolicy.MAX_FAILED_ATTEMPTS);
-            }
+            loginAttemptService.recordFailure(user.getId());
             throw invalidCredentials();
         }
 
@@ -250,7 +256,7 @@ public class AuthService {
             throw invalidCredentials(); // DISABLED — stays a generic 401
         }
 
-        user.registerSuccessfulLogin();
+        loginAttemptService.recordSuccess(user.getId());
     }
 
     // ---------------------------------------------------------------- tokens

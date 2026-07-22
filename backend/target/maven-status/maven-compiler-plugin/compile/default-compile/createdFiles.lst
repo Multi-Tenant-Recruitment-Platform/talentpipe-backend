@@ -23,6 +23,7 @@ com\talentpipe\notification\repository\NotificationRepository.class
 com\talentpipe\ai\package-info.class
 com\talentpipe\job\controller\PublicJobController.class
 com\talentpipe\auth\dto\RegisterRequest.class
+com\talentpipe\auth\service\LoginAttemptService.class
 com\talentpipe\auth\service\RefreshTokenService.class
 com\talentpipe\auth\dto\LoginRequest.class
 com\talentpipe\security\JwtProperties.class
@@ -32,6 +33,7 @@ com\talentpipe\common\exception\BusinessRuleException.class
 com\talentpipe\candidate\repository\CandidateRepository.class
 com\talentpipe\notification\entity\NotificationStatus.class
 com\talentpipe\auth\dto\PasswordResetConfirmRequest.class
+com\talentpipe\candidate\service\CandidateLoginAttemptService.class
 com\talentpipe\auth\repository\EmailVerificationTokenRepository.class
 com\talentpipe\security\SecurityConfig.class
 com\talentpipe\auth\entity\User.class

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, apiErrorMessage } from '../api/client';
 import type { CandidateRegisterRequest } from '../api/types';
 import { AuthShell } from '../components/AuthShell';
+import { RegisterTabs } from '../components/RegisterTabs';
 
 /** Small divider that labels a group of fields inside the form. */
 function SectionLabel({ children }: { children: ReactNode }) {
@@ -64,8 +65,17 @@ export function CandidateRegisterPage() {
 
   return (
     <AuthShell>
-      <h1 className="text-2xl font-bold tracking-tight">Create your candidate account</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
       <p className="mt-2 text-sm text-slate-600">
+        Choose how you want to use TalentPipe.
+      </p>
+
+      <div className="mt-6">
+        <RegisterTabs active="candidate" />
+      </div>
+
+      <h2 className="mt-6 text-lg font-semibold tracking-tight">Create your candidate account</h2>
+      <p className="mt-1 text-sm text-slate-600">
         One account for every company hiring on TalentPipe — apply once, get discovered again.
       </p>
 

@@ -48,13 +48,16 @@ class AuthServiceTest {
     @Mock
     private com.talentpipe.candidate.service.CandidateAuthService candidateAuthService;
     @Mock
+    private LoginAttemptService loginAttemptService;
+    @Mock
     private JwtTokenProvider jwtTokenProvider;
     @Mock
     private PasswordEncoder passwordEncoder;
 
     private AuthService service(UserMapper mapper) {
         return new AuthService(userRepository, roleRepository, tenantService,
-                refreshTokenService, emailVerificationService, candidateAuthService, jwtTokenProvider, passwordEncoder, mapper);
+                refreshTokenService, emailVerificationService, candidateAuthService, loginAttemptService,
+                jwtTokenProvider, passwordEncoder, mapper);
     }
 
     private static RegisterRequest acmeRequest() {

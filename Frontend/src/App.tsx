@@ -39,7 +39,7 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute deniedRoles={['CANDIDATE']} redirectTo="/jobs">
               <DashboardLayout />
             </ProtectedRoute>
           }

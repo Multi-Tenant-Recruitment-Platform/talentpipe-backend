@@ -31,13 +31,16 @@ public class CandidateAuthService {
 
     private final CandidateRepository candidateRepository;
     private final CandidateVerificationService verificationService;
+    private final CandidateLoginAttemptService loginAttempts;
     private final PasswordEncoder passwordEncoder;
 
     public CandidateAuthService(CandidateRepository candidateRepository,
                                 CandidateVerificationService verificationService,
+                                CandidateLoginAttemptService loginAttempts,
                                 PasswordEncoder passwordEncoder) {
         this.candidateRepository = candidateRepository;
         this.verificationService = verificationService;
+        this.loginAttempts = loginAttempts;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -67,9 +70,10 @@ public class CandidateAuthService {
         }
 
         if (!passwordEncoder.matches(rawPassword, candidate.getPasswordHash())) {
-            if (candidate.registerFailedLogin(now)) {
-                log.warn("Candidate {} locked after repeated failed logins", candidate.getId());
-            }
+            // Own transaction: the outer login transaction rolls back when it
+            // reports "invalid credentials", which would otherwise discard this
+            // increment and defeat the lock.
+            loginAttempts.recordFailure(candidate.getId());
             return Optional.empty();
         }
 
@@ -83,7 +87,7 @@ public class CandidateAuthService {
             return Optional.empty(); // DISABLED — stays a generic 401
         }
 
-        candidate.registerSuccessfulLogin();
+        loginAttempts.recordSuccess(candidate.getId());
         return Optional.of(toProfile(candidate));
     }
 

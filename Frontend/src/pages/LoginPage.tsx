@@ -97,8 +97,15 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       // Candidates have no tenant, so the subdomain (and its header) is empty.
-      await login(mode === 'company' ? subdomain.trim().toLowerCase() : '', email, password);
-      navigate(state.from ?? '/dashboard', { replace: true });
+      const loggedIn = await login(
+        mode === 'company' ? subdomain.trim().toLowerCase() : '',
+        email,
+        password,
+      );
+      // The company dashboard is for company roles only — candidates have no
+      // tenant and would hit 403s there, so send them to the job board.
+      const home = loggedIn.role === 'CANDIDATE' ? '/jobs' : '/dashboard';
+      navigate(state.from ?? home, { replace: true });
     } catch (err: unknown) {
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
       const message = apiErrorMessage(err, 'Login failed. Please try again.');

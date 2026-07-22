@@ -29,20 +29,24 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(LoginRateLimitFilter.class);
 
-    private static final int MAX_REQUESTS_PER_MINUTE = 10;
-
     /** Endpoints that either check credentials or trigger an email. */
     private static final Set<String> LIMITED_PATHS = Set.of(
             "/api/v1/auth/login",
             "/api/v1/auth/forgot-password",
             "/api/v1/auth/resend-verification");
 
-    private final RateLimiter rateLimiter =
-            new RateLimiter(MAX_REQUESTS_PER_MINUTE, Duration.ofMinutes(1));
+    private final RateLimiter rateLimiter;
     private final SecurityErrorWriter errorWriter;
 
-    public LoginRateLimitFilter(SecurityErrorWriter errorWriter) {
+    /**
+     * @param maxPerMinute requests per IP per minute before a 429; the
+     *                     architecture calls for 10. Configurable so the
+     *                     integration suite can raise it (all its requests share
+     *                     one IP) without disabling the filter entirely.
+     */
+    public LoginRateLimitFilter(SecurityErrorWriter errorWriter, int maxPerMinute) {
         this.errorWriter = errorWriter;
+        this.rateLimiter = new RateLimiter(maxPerMinute, Duration.ofMinutes(1));
     }
 
     @Override

@@ -32,6 +32,7 @@ C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\ma
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\AuthService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\EmailVerificationService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\InvitationService.java
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\LoginAttemptService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\PasswordResetService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\auth\service\RefreshTokenService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\controller\PublicCandidateController.java
@@ -43,6 +44,7 @@ C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\ma
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\repository\CandidateRepository.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\repository\CandidateVerificationTokenRepository.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\service\CandidateAuthService.java
+C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\service\CandidateLoginAttemptService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\service\CandidateService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\candidate\service\CandidateVerificationService.java
 C:\Users\ravin\Documents\GitHub\Multi-Tenant-Recruitment-Platform\backend\src\main\java\com\talentpipe\common\dto\PageResponse.java

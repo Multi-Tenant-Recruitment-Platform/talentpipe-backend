@@ -23,7 +23,11 @@ import org.testcontainers.utility.DockerImageName;
                 // Deterministic test secret — never a real one.
                 "talentpipe.security.jwt.secret=integration-test-secret-0123456789-0123456789",
                 "talentpipe.security.jwt.access-token-ttl=15m",
-                "talentpipe.security.jwt.refresh-token-ttl=7d"
+                "talentpipe.security.jwt.refresh-token-ttl=7d",
+                // All test requests share one IP (127.0.0.1); raise the login
+                // rate limit so the suite is deterministic. Dedicated lockout /
+                // rate-limit tests can still assert the behavior explicitly.
+                "talentpipe.security.login-rate-limit.max-per-minute=10000"
         })
 @Testcontainers(disabledWithoutDocker = true)
 public abstract class AbstractIntegrationTest {
