@@ -135,7 +135,31 @@ public class AuthService {
         String email = normalizeEmail(request.email());
 
         if (subdomain == null || subdomain.isBlank()) {
-            return globalLogin(email, request.password());
+            java.util.List<User> users = userRepository.findAllByEmail(email);
+            if (!users.isEmpty()) {
+                User matchingUser = null;
+                for (User u : users) {
+                    if (passwordEncoder.matches(request.password(), u.getPasswordHash())) {
+                        matchingUser = u;
+                        break;
+                    }
+                }
+                if (matchingUser != null) {
+                    authenticateUser(matchingUser, request.password());
+                    return issueTokens(matchingUser, resolveTenantName(matchingUser.getTenantId()));
+                }
+            }
+
+            // Fallback to global login (candidate or super-admin)
+            try {
+                return globalLogin(email, request.password());
+            } catch (BadCredentialsException ex) {
+                // Record failure for company users if any matched the email to prevent brute-force
+                for (User u : users) {
+                    loginAttemptService.recordFailure(u.getId());
+                }
+                throw ex;
+            }
         }
 
         TenantResponse tenant = tenantService.findBySubdomain(subdomain)

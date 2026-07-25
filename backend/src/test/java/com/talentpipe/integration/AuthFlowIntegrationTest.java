@@ -182,6 +182,72 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void login_companyUserWithoutSubdomainHeader_success() {
+        String subdomain = uniqueSubdomain();
+        String email = "ada@acme.io";
+        String password = "s3cret-password";
+
+        register(subdomain, email, password);
+
+        // Verify email so account becomes ACTIVE.
+        String verificationLink = emailCapture.lastVerificationLink();
+        String rawToken = verificationLink.substring(verificationLink.indexOf("token=") + 6);
+        rest.postForEntity("/api/v1/auth/verify-email",
+                jsonEntity(Map.of("token", rawToken), null), String.class);
+
+        // Login without subdomain header
+        ResponseEntity<Map> loginResp = rest.postForEntity("/api/v1/auth/login",
+                jsonEntity(Map.of("email", email, "password", password), null), Map.class);
+        assertThat(loginResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> auth = loginResp.getBody();
+        assertThat(auth).containsKeys("accessToken", "refreshToken", "expiresIn", "user");
+
+        // Verify /me works and resolves correct tenant
+        HttpHeaders bearer = new HttpHeaders();
+        bearer.setBearerAuth((String) auth.get("accessToken"));
+        ResponseEntity<Map> me = rest.exchange("/api/v1/auth/me", HttpMethod.GET,
+                new HttpEntity<>(bearer), Map.class);
+        assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(me.getBody().get("email")).isEqualTo(email);
+        assertThat(me.getBody().get("tenantName")).isEqualTo("Acme Inc");
+    }
+
+    @Test
+    void login_companyUserWithoutSubdomainHeader_wrongPassword_fails() {
+        String subdomain = uniqueSubdomain();
+        String email = "ada@acme.io";
+        String password = "s3cret-password";
+
+        register(subdomain, email, password);
+        String verificationLink = emailCapture.lastVerificationLink();
+        String rawToken = verificationLink.substring(verificationLink.indexOf("token=") + 6);
+        rest.postForEntity("/api/v1/auth/verify-email",
+                jsonEntity(Map.of("token", rawToken), null), String.class);
+
+        ResponseEntity<Map> response = rest.postForEntity("/api/v1/auth/login",
+                jsonEntity(Map.of("email", email, "password", "wrong-password"), null), Map.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void resendVerification_companyUserWithoutSubdomainHeader_success() {
+        String subdomain = uniqueSubdomain();
+        String email = "pending-resend@acme.io";
+        String password = "s3cret-password";
+
+        register(subdomain, email, password);
+        emailCapture.clear();
+
+        ResponseEntity<Void> resendResp = rest.postForEntity("/api/v1/auth/resend-verification",
+                jsonEntity(Map.of("email", email), null), Void.class);
+        assertThat(resendResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Verify email was captured
+        String link = emailCapture.lastVerificationLink();
+        assertThat(link).contains("token=");
+    }
+
+    @Test
     void publicJobs_requiresNoAuth_andReturnsEmptyPage() {
         ResponseEntity<Map> response = rest.getForEntity("/api/v1/public/jobs", Map.class);
 

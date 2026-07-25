@@ -35,6 +35,9 @@ public class TenantService {
      */
     @Transactional
     public TenantResponse createTenant(String name, String subdomain) {
+        if (subdomain == null || subdomain.isBlank()) {
+            subdomain = generateUniqueSubdomain(name);
+        }
         String normalizedSubdomain = normalize(subdomain);
         if (tenantRepository.existsBySubdomain(normalizedSubdomain)) {
             throw new DuplicateResourceException(
@@ -42,6 +45,37 @@ public class TenantService {
         }
         Tenant tenant = tenantRepository.save(new Tenant(name.trim(), normalizedSubdomain));
         return tenantMapper.toResponse(tenant);
+    }
+
+    /**
+     * Dynamically generates a clean, unique subdomain based on the company name.
+     */
+    public String generateUniqueSubdomain(String companyName) {
+        String base = companyName.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9\\s-]", "")
+                .replaceAll("[\\s-]+", "-");
+
+        if (base.startsWith("-")) base = base.substring(1);
+        if (base.endsWith("-")) base = base.substring(0, base.length() - 1);
+
+        if (base.isEmpty()) {
+            base = "company";
+        }
+        if (base.length() > 90) {
+            base = base.substring(0, 90);
+        }
+
+        String candidate = base;
+        int suffix = 1;
+        while (tenantRepository.existsBySubdomain(candidate)) {
+            String suffixStr = "-" + suffix;
+            if (base.length() + suffixStr.length() > 100) {
+                base = base.substring(0, 100 - suffixStr.length());
+            }
+            candidate = base + suffixStr;
+            suffix++;
+        }
+        return candidate;
     }
 
     /** Resolves a tenant by subdomain (used for login tenant resolution). */

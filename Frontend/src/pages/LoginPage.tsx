@@ -71,7 +71,7 @@ export function LoginPage() {
   const state = (useLocation().state ?? {}) as LoginLocationState;
 
   const [mode, setMode] = useState<LoginMode>(state.mode ?? 'company');
-  const [subdomain, setSubdomain] = useState(state.subdomain ?? '');
+
   const [email, setEmail] = useState(state.email ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -96,9 +96,8 @@ export function LoginPage() {
     setNeedsVerification(false);
     setSubmitting(true);
     try {
-      // Candidates have no tenant, so the subdomain (and its header) is empty.
       const loggedIn = await login(
-        mode === 'company' ? subdomain.trim().toLowerCase() : '',
+        '',
         email,
         password,
       );
@@ -123,9 +122,6 @@ export function LoginPage() {
       await api.post(
         '/auth/resend-verification',
         { email },
-        mode === 'company'
-          ? { headers: { 'X-Tenant-Subdomain': subdomain.trim().toLowerCase() } }
-          : undefined,
       );
     } catch {
       // Deliberately ignored: the confirmation below must look identical
@@ -165,7 +161,7 @@ export function LoginPage() {
 
       {state.inviteAccepted && (
         <div className="mt-6 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-          Invitation accepted. Sign in with your company subdomain to reach the workspace.
+          Invitation accepted. Sign in with your email to reach the workspace.
         </div>
       )}
 
@@ -211,27 +207,6 @@ export function LoginPage() {
           </div>
         )}
 
-        {mode === 'company' && (
-          <div>
-            <label htmlFor="subdomain" className="block text-sm font-medium text-slate-700">
-              Company subdomain
-            </label>
-            <div className="mt-1 flex items-center">
-              <input
-                id="subdomain"
-                required
-                value={subdomain}
-                onChange={(e) => setSubdomain(e.target.value)}
-                className={`${inputClass} mt-0 rounded-r-none`}
-                placeholder="acme"
-                autoComplete="organization"
-              />
-              <span className="rounded-r-md border border-l-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
-                .talentpipe.io
-              </span>
-            </div>
-          </div>
-        )}
 
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-slate-700">

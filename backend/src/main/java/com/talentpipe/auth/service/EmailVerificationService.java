@@ -94,6 +94,23 @@ public class EmailVerificationService {
     }
 
     /**
+     * Re-sends verification for any company accounts matching the email globally.
+     * Returns true if at least one was pending verification and resent.
+     */
+    @Transactional
+    public boolean resendCompanyVerification(String email) {
+        var users = userRepository.findAllByEmail(email);
+        boolean found = false;
+        for (User user : users) {
+            if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
+                issueAndSend(user);
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    /**
      * Consumes a verification token and activates the user account.
      *
      * @return {@code false} when the token is not a company-user token, so the

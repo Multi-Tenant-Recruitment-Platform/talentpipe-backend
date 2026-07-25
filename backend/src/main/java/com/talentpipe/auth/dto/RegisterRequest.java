@@ -17,10 +17,7 @@ public record RegisterRequest(
         @Size(max = 255)
         String companyName,
 
-        @NotBlank(message = "subdomain is required")
-        @Size(min = 2, max = 100)
-        @Pattern(regexp = "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
-                message = "must contain only lowercase letters, digits and inner hyphens")
+        @Size(max = 100)
         String subdomain,
 
         @NotNull(message = "admin is required")

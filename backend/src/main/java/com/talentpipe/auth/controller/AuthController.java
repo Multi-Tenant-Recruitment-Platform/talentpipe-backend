@@ -144,7 +144,10 @@ public class AuthController {
 
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         if (tenantSubdomain == null || tenantSubdomain.isBlank()) {
-            candidateAuthService.resendVerification(email);
+            boolean companyHandled = emailVerificationService.resendCompanyVerification(email);
+            if (!companyHandled) {
+                candidateAuthService.resendVerification(email);
+            }
         } else {
             tenantService.findBySubdomain(tenantSubdomain).ifPresent(
                     tenant -> emailVerificationService.resend(tenant.id(), email));

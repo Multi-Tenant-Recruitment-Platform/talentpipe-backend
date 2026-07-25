@@ -35,7 +35,7 @@ export interface AuthResponse {
 
 export interface RegisterRequest {
   companyName: string;
-  subdomain: string;
+  subdomain?: string;
   admin: {
     firstName: string;
     lastName: string;

@@ -11,7 +11,7 @@ export function RegisterPage() {
   const navigate = useNavigate();
 
   const [companyName, setCompanyName] = useState('');
-  const [subdomain, setSubdomain] = useState('');
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -26,12 +26,11 @@ export function RegisterPage() {
     try {
       await register({
         companyName,
-        subdomain: subdomain.trim().toLowerCase(),
         admin: { firstName, lastName, email, password },
       });
-      // Registration issues no tokens: continue at login, subdomain prefilled.
+      // Registration issues no tokens: continue at login.
       navigate('/login', {
-        state: { subdomain: subdomain.trim().toLowerCase(), registered: 'company', mode: 'company' },
+        state: { registered: 'company', mode: 'company' },
       });
     } catch (err: unknown) {
       setError(apiErrorMessage(err, 'Registration failed. Please try again.'));
@@ -81,29 +80,6 @@ export function RegisterPage() {
           />
         </div>
 
-        <div>
-          <label htmlFor="subdomain" className="block text-sm font-medium text-slate-700">
-            Subdomain
-          </label>
-          <div className="mt-1 flex items-center">
-            <input
-              id="subdomain"
-              required
-              minLength={2}
-              maxLength={100}
-              pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
-              title="Lowercase letters, digits and inner hyphens"
-              value={subdomain}
-              onChange={(e) => setSubdomain(e.target.value)}
-              className={`${inputClass} mt-0 rounded-r-none`}
-              placeholder="acme"
-            />
-            <span className="rounded-r-md border border-l-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
-              .talentpipe.io
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">You'll use this to log in.</p>
-        </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
