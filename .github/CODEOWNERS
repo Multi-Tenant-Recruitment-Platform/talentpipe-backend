@@ -1,0 +1,16 @@
+# ---------------------------------------------------------------------------
+# CODEOWNERS — every PR automatically requests review from these people.
+# Replace/extend with your teammates' GitHub usernames (one line per area).
+# Order matters: later rules win on overlapping paths.
+# ---------------------------------------------------------------------------
+
+# Default owner for the whole repository
+* @RavinduIT
+
+# Add teammates as co-owners (uncomment and fill in real usernames):
+# * @RavinduIT @anuja-github-username @winuka-github-username
+
+# Area-specific ownership (examples — adjust to your team):
+# /backend/src/main/java/com/talentpipe/auth/       @RavinduIT
+# /backend/src/main/java/com/talentpipe/security/   @RavinduIT
+# /backend/src/main/resources/db/migration/         @RavinduIT
