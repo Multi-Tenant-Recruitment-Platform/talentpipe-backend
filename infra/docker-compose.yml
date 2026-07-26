@@ -53,5 +53,23 @@ services:
       postgres:
         condition: service_healthy
 
+  sonarqube:
+    # Optional local code-quality server — NOT part of the normal dev stack.
+    # Start with:  docker compose --profile sonar up -d sonarqube
+    # Then see docs/QUALITY.md for the one-time token setup.
+    image: sonarqube:community
+    profiles: ["sonar"]
+    container_name: talentpipe-sonarqube
+    environment:
+      # Avoids the vm.max_map_count bootstrap check failing on some hosts.
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+
 volumes:
   talentpipe_pgdata:
+  sonarqube_data:
+  sonarqube_extensions:
