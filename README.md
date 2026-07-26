@@ -1,5 +1,7 @@
 # TalentPipe — Backend
 
+[![backend-ci](https://github.com/RavinduIT/talentpipe-backend/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/RavinduIT/talentpipe-backend/actions/workflows/ci.yml)
+
 Multi-tenant recruitment platform: one deployment hosts many companies, each with
 isolated jobs, candidates and hiring pipelines. This repository contains the
 Spring Boot API, database migrations and local infrastructure.
