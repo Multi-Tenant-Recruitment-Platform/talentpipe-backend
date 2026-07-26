@@ -1,7 +1,10 @@
 package com.talentpipe.integration;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
@@ -52,5 +55,34 @@ public abstract class AbstractIntegrationTest {
 
     static {
         POSTGRES.start();
+    }
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    /**
+     * Every test method gets a pristine database. The singleton container and
+     * Spring's cached context mean all integration classes share ONE database;
+     * without cleanup, state leaks across methods and classes (duplicate
+     * globally-unique candidate emails, forgot-password tokens issued for a
+     * same-email account from another class's tenant, lockout counters
+     * accumulating into 403s). The {@code roles} seed table is reference data
+     * and is deliberately kept.
+     */
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.execute("""
+                TRUNCATE TABLE
+                    notifications,
+                    invitation_tokens,
+                    password_reset_tokens,
+                    email_verification_tokens,
+                    refresh_tokens,
+                    candidate_verification_tokens,
+                    candidates,
+                    users,
+                    tenants
+                CASCADE
+                """);
     }
 }
