@@ -19,7 +19,7 @@ import org.springframework.http.ResponseEntity;
 /**
  * End-to-end integration tests for the email verification flow (PB-001):
  * <ul>
- *   <li>Register → login before verification → 401</li>
+ *   <li>Register → login before verification → 403 (actionable)</li>
  *   <li>Register → verify → login → 200</li>
  *   <li>Expired token → 401</li>
  *   <li>Re-use of consumed token → 401</li>
@@ -82,14 +82,16 @@ class EmailVerificationFlowIntegrationTest extends AbstractIntegrationTest {
     // ------------------------------------------------------------------ tests
 
     @Test
-    void registerWithoutVerification_loginReturns401() {
+    void registerWithoutVerification_loginReturns403() {
         String subdomain = uniqueSubdomain();
         assertThat(register(subdomain, "ada@acme.io", "s3cret-password").getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);
 
-        // Account is PENDING_VERIFICATION — login must be blocked.
+        // Account is PENDING_VERIFICATION — login must be blocked with an
+        // actionable 403 (credentials are correct, so pointing at the
+        // verification email leaks nothing).
         ResponseEntity<Map> loginResp = login(subdomain, "ada@acme.io", "s3cret-password");
-        assertThat(loginResp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(loginResp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test

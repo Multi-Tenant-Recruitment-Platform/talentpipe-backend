@@ -21,7 +21,7 @@ import org.springframework.http.ResponseEntity;
  * End-to-end integration tests for Candidate registration and login flows (PB-006 & PB-007):
  * <ul>
  *   <li>Candidate registers -> returns 201 Created and PENDING_VERIFICATION</li>
- *   <li>Attempt login before verification -> returns 401</li>
+ *   <li>Attempt login before verification -> returns 403 (actionable)</li>
  *   <li>Verify candidate email -> returns 200</li>
  *   <li>Candidate logs in -> returns valid JWT and Candidate profile details</li>
  *   <li>Candidate checks profile via /auth/me -> returns Candidate details</li>
@@ -93,9 +93,10 @@ class CandidateRegistrationFlowIntegrationTest extends AbstractIntegrationTest {
         assertThat(regResp.getBody().get("role")).isEqualTo("CANDIDATE");
         assertThat(regResp.getBody().get("status")).isEqualTo("PENDING_VERIFICATION");
 
-        // 2. Try Login before Verification -> Should Fail (401)
+        // 2. Try Login before Verification -> Should Fail (403 actionable: correct
+        // credentials, unverified email — same contract as company users)
         ResponseEntity<Map> initialLogin = loginCandidate(email, password);
-        assertThat(initialLogin.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(initialLogin.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
         // 3. Extract token & verify email
         String link = emailCapture.lastVerificationLink();
