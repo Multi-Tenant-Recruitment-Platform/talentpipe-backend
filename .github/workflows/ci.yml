@@ -18,6 +18,7 @@ jobs:
           distribution: temurin
           version: '17'
           cache: maven
+          cache-dependency-path: backend/pom.xml
 
       - name: Make Maven wrapper executable
         working-directory: backend
@@ -51,6 +52,7 @@ jobs:
           distribution: temurin
           version: '17'
           cache: maven
+          cache-dependency-path: backend/pom.xml
 
       - name: Make Maven wrapper executable
         working-directory: backend
