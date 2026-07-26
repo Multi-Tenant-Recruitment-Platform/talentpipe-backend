@@ -1,12 +1,15 @@
 # ---------------------------------------------------------------------------
-# TalentPipe local infrastructure — Week 1: PostgreSQL only.
+# TalentPipe local infrastructure — PostgreSQL (+ optional full backend).
 #
 # Image: pgvector/pgvector:pg15 = official PostgreSQL 15 with the pgvector
 # extension pre-installed (required because V1__extensions.sql runs
 # `CREATE EXTENSION vector`; the vanilla postgres:15 image does not ship it).
 #
 # Usage:  cp .env.example .env   (adjust if needed)
-#         docker compose up -d
+#         docker compose up -d postgres      # database only (usual dev setup)
+#         docker compose up -d               # database + containerized backend
+#
+# The frontend lives in its own repository: talentpipe-frontend.
 # ---------------------------------------------------------------------------
 services:
   postgres:
@@ -49,19 +52,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  frontend:
-    build:
-      context: ../Frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
-    container_name: talentpipe-frontend
-    ports:
-      - "5173:80"
-    depends_on:
-      backend:
-        condition: service_started
 
 volumes:
   talentpipe_pgdata:

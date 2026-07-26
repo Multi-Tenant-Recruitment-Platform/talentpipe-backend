@@ -1,5 +1,6 @@
 # ---------------------------------------------------------------------------
-# TalentPipe monorepo .gitignore (Java / Maven + Node / Vite + env files)
+# TalentPipe backend .gitignore (Java / Maven + env files)
+# (Frontend lives in the talentpipe-frontend repository)
 # ---------------------------------------------------------------------------
 
 ### Environment / secrets — never commit real credentials ###
@@ -18,16 +19,6 @@ backend/target/
 *.war
 hs_err_pid*
 replay_pid*
-
-### Node / Vite ###
-frontend/node_modules/
-frontend/dist/
-frontend/dist-ssr/
-frontend/coverage/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 ### IDE / editor ###
 .idea/

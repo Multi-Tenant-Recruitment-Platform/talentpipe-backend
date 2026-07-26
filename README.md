@@ -1,6 +1,9 @@
-# TalentPipe
+# TalentPipe — Backend
 
 **Multi-Tenant Recruitment Intelligence Platform** — one place for a company's jobs, candidates and hiring pipeline, with AI-assisted matching arriving in later sprints.
+
+This repository contains the **Spring Boot backend** (API, database migrations, local infra).
+The frontend SPA lives in its own repository: **talentpipe-frontend**.
 
 ## Architecture at a glance
 
@@ -10,37 +13,44 @@ TalentPipe is a **modular monolith**:
 |---|---|
 | Backend | Java 17, Spring Boot 3.x (Maven), Spring Data JPA + Hibernate, Spring Security, JJWT, Flyway |
 | Database | PostgreSQL 15 with **pgvector** (enabled now, used by the AI module later) |
-| Frontend | React 18 + TypeScript + Vite, React Router, Tailwind CSS, Axios |
-| Local infra | Docker Compose (PostgreSQL only this sprint) |
+| Frontend | React 18 + TypeScript + Vite — separate repo |
+| Local infra | Docker Compose (`infra/`) |
 
 Backend modules live under `com.talentpipe.<module>` — `auth`, `tenant`, `job`, `candidate`, `pipeline`, `ai`, `notification`, `analytics` — plus the shared `common` kernel and `security` infrastructure. Ground rules: **no cross-module entity imports** (modules talk via services/DTOs), **entities never cross the controller boundary**, **stateless token auth** (no server sessions), and **tenant identity always comes from context** (JWT claim / resolved subdomain), never from a request body. See [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ```
-/backend    Spring Boot app (modular monolith)
-/frontend   React + Vite SPA
-/infra      docker-compose.yml + .env.example
-/docs       DECISIONS.md (architecture decision records)
-/qa         QA workspace: test plan, test cases, API test kit, and the
-            evidence trail of executed test runs (qa/test-runs/)
+/backend    Spring Boot app (com.talentpipe.*) + Flyway migrations
+/infra      docker-compose.yml + .env.example (PostgreSQL, optional full backend)
+/docs       DECISIONS.md (architecture decision records), sprint audit
 ```
+
+## Branching model & contribution rules
+
+| Branch | Purpose | Rules |
+|---|---|---|
+| `master` | Production-ready code | PR only · **2 approvals** · CI green |
+| `development` | Integration branch | PR only · **1 approval** · CI green |
+| `feature/*` | All work happens here | branch off `development`, PR back into `development` |
+
+Direct pushes to `master` and `development` are blocked by branch protection.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first PR.
 
 ## Prerequisites
 
 - **JDK 17** (e.g. [Temurin 17](https://adoptium.net/)) — Maven itself is NOT needed; the repo ships the Maven Wrapper (`mvnw`)
-- **Node.js 18+** and npm
 - **Docker Desktop** (for PostgreSQL, and for running the integration tests)
 
-## Running everything locally
+## Running locally
 
 ### 1. Start PostgreSQL
 
 ```bash
 cd infra
 cp .env.example .env        # defaults work for local dev
-docker compose up -d
+docker compose up -d postgres
 ```
 
-This starts `pgvector/pgvector:pg15` (PostgreSQL 15 + pgvector) on port 5432 with database/user/password `talentpipe`.
+This starts `pgvector/pgvector:pg15` (PostgreSQL 15 + pgvector) on port 5432 with database/user/password `talentpipe`. (`docker compose up -d` without a service name also builds and runs the containerized backend.)
 
 ### 2. Run the backend
 
@@ -60,7 +70,7 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
-On first boot Flyway migrates the empty database (extensions → auth tables → role seed). The API listens on `http://localhost:8080`.
+On first boot Flyway migrates the empty database (extensions → auth tables → role seed → …). The API listens on `http://localhost:8080`.
 
 Environment variables (all optional except `JWT_SECRET` — see `infra/.env.example`):
 
@@ -107,40 +117,14 @@ database transaction commits, so a mail outage still leaves registration, reset 
 succeeding. Failed attempts to company users are recorded in the `notifications` table as
 `FAILED` with a correlation id, and users can request a new link from the sign-in page.
 
-### 3. Run the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`. The dev server proxies `/api` to the backend, so no extra config is needed.
-
-### 4. Walk the whole thing end to end
-
-Running in console email mode, so every link comes from the backend log:
-
-1. **Register a company** (`/register`): company name, subdomain (e.g. `acme`), admin details.
-2. **Verify the admin.** Find `[EMAIL-CONSOLE]` in the backend log, copy the `/verify-email?token=…`
-   link into the browser. (Logging in first shows a `403` telling you to verify — that is the gate working.)
-3. **Log in** with **subdomain + email + password** (the subdomain travels as the `X-Tenant-Subdomain`
-   header — ADR-1) → the dashboard.
-4. **Invite an HR manager** from *Team & invitations* → copy the `/accept-invite?token=…` link from
-   the log → set a password → log in with the same subdomain.
-5. **Register a candidate** (`/register-candidate`) → verify from the log → log in on the
-   **Candidate** tab with **no subdomain**.
-6. **Reset a password**: *Forgot password?* → copy `/reset-password?token=…` from the log → set a new
-   one. Every existing session for that account is revoked.
-
 ## API
 
 Base path: `/api/v1`
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/register` | public | Company onboarding: tenant + first `COMPANY_ADMIN`, created `PENDING_VERIFICATION`. `409` on duplicate subdomain. |
-| POST | `/auth/login` | public | Optional header `X-Tenant-Subdomain` + body `{ email, password }`. No header ⇒ candidate / super-admin login. `401` bad credentials, `403` unverified or locked, `429` rate-limited. |
+| POST | `/auth/register` | public | Company onboarding: tenant + first `COMPANY_ADMIN`, created `PENDING_VERIFICATION`. Subdomain optional — generated from the company name when omitted. `409` on duplicate subdomain. |
+| POST | `/auth/login` | public | Optional header `X-Tenant-Subdomain` + body `{ email, password }`. No header ⇒ candidate / company / super-admin resolved globally. `401` bad credentials, `403` unverified or locked, `429` rate-limited. |
 | POST | `/auth/verify-email` | public | Consumes a verification token (user *or* candidate) and activates the account. |
 | POST | `/auth/resend-verification` | public | New verification link. Always `200` — never reveals whether the address exists. |
 | POST | `/auth/refresh` | public | Rotates a refresh token → new pair. Replay of a consumed token → `401`. |
@@ -172,9 +156,7 @@ cd backend
 ```
 
 - **Unit tests** always run: JWT issue/validate/expiry/tampering, bcrypt cost 12, registration service.
-- **Integration tests** (register→login→me flow, error paths, and the **TenantContext leak guard** — the most important test in the suite) run against real PostgreSQL via Testcontainers and are **skipped automatically when Docker isn't available** (`@Testcontainers(disabledWithoutDocker = true)`). Run them on any machine with Docker running.
-
-Frontend type-check + build: `cd frontend && npm run build`.
+- **Integration tests** (register→login→me flow, error paths, and the **TenantContext leak guard** — the most important test in the suite) run against real PostgreSQL via Testcontainers and are **skipped automatically when Docker isn't available** (`@Testcontainers(disabledWithoutDocker = true)`). CI runs the full suite on every PR.
 
 ## Sprint status
 
@@ -184,6 +166,6 @@ and candidate auth, team invitations, RBAC enforcement, and login rate limiting 
 event-driven email path behind all of it.
 
 Remaining placeholders are tagged `// TODO(sprint2):` (job module, pipeline data, tenant profile
-updates, dashboard metrics still on mock data). Architecture decisions are recorded in
+updates, dashboard metrics still on mock data in the frontend). Architecture decisions are recorded in
 [docs/DECISIONS.md](docs/DECISIONS.md); the Week 2 code audit is in
 [docs/SPRINT1_W2_AUDIT.md](docs/SPRINT1_W2_AUDIT.md).
