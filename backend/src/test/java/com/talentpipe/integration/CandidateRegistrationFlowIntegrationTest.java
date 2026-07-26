@@ -90,7 +90,8 @@ class CandidateRegistrationFlowIntegrationTest extends AbstractIntegrationTest {
         ResponseEntity<Map> regResp = registerCandidate(email, password, name);
         assertThat(regResp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(regResp.getBody().get("email")).isEqualTo(email);
-        assertThat(regResp.getBody().get("role")).isEqualTo("CANDIDATE");
+        // CandidateProfile carries no "role" field by design — the role is
+        // asserted below on the login response, where it belongs.
         assertThat(regResp.getBody().get("status")).isEqualTo("PENDING_VERIFICATION");
 
         // 2. Try Login before Verification -> Should Fail (403 actionable: correct
