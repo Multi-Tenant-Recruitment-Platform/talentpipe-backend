@@ -16,8 +16,9 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          version: '17'
+          java-version: '17'
           cache: maven
+          cache-dependency-path: backend/pom.xml
 
       - name: Make Maven wrapper executable
         working-directory: backend
@@ -49,8 +50,9 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          version: '17'
+          java-version: '17'
           cache: maven
+          cache-dependency-path: backend/pom.xml
 
       - name: Make Maven wrapper executable
         working-directory: backend

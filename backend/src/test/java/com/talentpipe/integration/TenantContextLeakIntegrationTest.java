@@ -48,16 +48,20 @@ import org.springframework.web.bind.annotation.RestController;
  * request. A probe endpoint records the value mid-request to prove the test
  * isn't vacuously passing.</p>
  */
-@Import(TenantContextLeakIntegrationTest.ProbeConfig.class)
+@Import({TenantContextLeakIntegrationTest.ProbeConfig.class, TestEmailConfig.class})
 class TenantContextLeakIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private TestRestTemplate rest;
 
+    @Autowired
+    private TestEmailConfig.CapturingEmailService emailCapture;
+
     @BeforeEach
     void resetProbe() {
         ContextProbeFilter.OBSERVED_AT_ENTRY.clear();
         ContextProbeFilter.OBSERVED_AT_EXIT.clear();
+        emailCapture.clear();
     }
 
     @Test
@@ -70,6 +74,12 @@ class TenantContextLeakIntegrationTest extends AbstractIntegrationTest {
                 "admin", Map.of(
                         "firstName", "Grace", "lastName", "Hopper",
                         "email", "grace@probe.io", "password", "s3cret-password"))), String.class);
+
+        // Verify the admin's email first — unverified accounts get an
+        // actionable 403 at login (PB-001), and we need a real session.
+        String verificationLink = emailCapture.lastVerificationLink();
+        String rawToken = verificationLink.substring(verificationLink.indexOf("token=") + 6);
+        rest.postForEntity("/api/v1/auth/verify-email", json(Map.of("token", rawToken)), String.class);
 
         HttpHeaders loginHeaders = new HttpHeaders();
         loginHeaders.setContentType(MediaType.APPLICATION_JSON);

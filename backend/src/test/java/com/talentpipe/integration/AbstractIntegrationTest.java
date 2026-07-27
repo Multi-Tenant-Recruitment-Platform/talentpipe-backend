@@ -1,9 +1,11 @@
 package com.talentpipe.integration;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
@@ -36,9 +38,51 @@ public abstract class AbstractIntegrationTest {
      * pgvector/pgvector:pg15 = PostgreSQL 15 + pgvector, matching
      * infra/docker-compose.yml — V1__extensions.sql needs the extension
      * available at migration time.
+     *
+     * <p><b>Singleton container:</b> started once per JVM in the static
+     * initializer and left running for the whole suite (Ryuk stops it at JVM
+     * exit). Do NOT put {@code @Container} on this field: JUnit would stop the
+     * container after the FIRST test class while Spring's cached application
+     * context — shared by every integration class — keeps pointing at its dead
+     * port (Hikari "connection refused" + 30s timeouts for classes 2..N).
+     * {@code @Testcontainers(disabledWithoutDocker = true)} stays: it is the
+     * execution condition that skips these tests when Docker is absent, and
+     * the static initializer only runs when the tests are actually enabled.
      */
-    @Container
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
             DockerImageName.parse("pgvector/pgvector:pg15").asCompatibleSubstituteFor("postgres"));
+
+    static {
+        POSTGRES.start();
+    }
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    /**
+     * Every test method gets a pristine database. The singleton container and
+     * Spring's cached context mean all integration classes share ONE database;
+     * without cleanup, state leaks across methods and classes (duplicate
+     * globally-unique candidate emails, forgot-password tokens issued for a
+     * same-email account from another class's tenant, lockout counters
+     * accumulating into 403s). The {@code roles} seed table is reference data
+     * and is deliberately kept.
+     */
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.execute("""
+                TRUNCATE TABLE
+                    notifications,
+                    invitation_tokens,
+                    password_reset_tokens,
+                    email_verification_tokens,
+                    refresh_tokens,
+                    candidate_verification_tokens,
+                    candidates,
+                    users,
+                    tenants
+                CASCADE
+                """);
+    }
 }
