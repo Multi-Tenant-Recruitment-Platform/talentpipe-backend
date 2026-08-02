@@ -49,6 +49,10 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
 
+      - name: Make Maven wrapper executable
+        working-directory: backend
+        run: chmod +x mvnw
+
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
