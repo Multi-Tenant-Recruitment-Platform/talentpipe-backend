@@ -33,14 +33,14 @@ jobs:
           JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
 
   # Static analysis + coverage via SonarCloud.
-  sonar:
+sonar:
     runs-on: ubuntu-latest
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # full history for accurate new-code analysis
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -62,12 +62,11 @@ jobs:
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-kets: ${{ runner.os }}-m2
+          restore-keys: ${{ runner.os }}-m2
 
       - name: Build and analyze with SonarCloud
         working-directory: backend
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-          -Dsonar.projectKey=Multi-Tenant-Recruitment-Platform_talentpipe-backend
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=Multi-Tenant-Recruitment-Platform_talentpipe-backend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
