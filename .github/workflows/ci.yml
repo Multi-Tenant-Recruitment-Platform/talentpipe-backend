@@ -24,17 +24,16 @@ jobs:
         working-directory: backend
         run: chmod +x mvnw
 
-      # GitHub-hosted runners have Docker, so the full suite runs —
-      # including the Testcontainers/PostgreSQL integration tests.
       - name: Build and run all tests
         working-directory: backend
         run: ./mvnw -B verify
         env:
           JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
 
-  # Static analysis + coverage via SonarCloud.
-sonar:
+  sonar:
+    needs: build-test
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
@@ -50,23 +49,16 @@ sonar:
           cache: maven
           cache-dependency-path: backend/pom.xml
 
-      - name: Cache SonarQube packages
+      - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      - name: Cache Maven packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-
-      - name: Build and analyze with SonarCloud
+      - name: Build and analyze
         working-directory: backend
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=Multi-Tenant-Recruitment-Platform_talentpipe-backend
+        run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
