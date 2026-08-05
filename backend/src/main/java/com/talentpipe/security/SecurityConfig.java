@@ -61,6 +61,9 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // CORS preflight must be allowed explicitly so browsers can
+                        // submit JSON requests from the SPA dev server.
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         // Credential and token-bearing flows: the token in the
                         // link IS the credential, so no session is required.
                         .requestMatchers(HttpMethod.POST,
@@ -104,12 +107,12 @@ public class SecurityConfig {
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-            @Value("${talentpipe.security.cors.allowed-origins:http://localhost:5173}") List<String> allowedOrigins) {
+            @Value("${talentpipe.security.cors.allowed-origins:http://localhost:*,http://127.0.0.1:*,http://0.0.0.0:*}") List<String> allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedOriginPatterns(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of(
-                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, "X-Tenant-Subdomain"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of(HttpHeaders.AUTHORIZATION));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", configuration);
         return source;

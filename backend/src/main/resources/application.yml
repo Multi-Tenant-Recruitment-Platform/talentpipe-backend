@@ -47,8 +47,8 @@ talentpipe:
       access-token-ttl: ${JWT_ACCESS_TTL:15m}
       refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
     cors:
-      # Vite dev server origin; production origins are injected per environment.
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+      # Vite dev server origins; wildcard localhost patterns keep local dev ports like 5173/5174 working.
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*,http://0.0.0.0:*}
   app:
     # Base URL of the frontend SPA. Used to build links in emails (verification,
     # password reset, invitations). Override per environment via FRONTEND_BASE_URL.
