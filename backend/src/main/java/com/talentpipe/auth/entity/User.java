@@ -1,6 +1,7 @@
 package com.talentpipe.auth.entity;
 
 import com.talentpipe.common.entity.BaseEntity;
+import com.talentpipe.common.tenant.TenantFilters;
 import com.talentpipe.common.util.LockoutPolicy;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,6 +13,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
 
 /**
  * A platform staff account (company admins, HR managers, interviewers,
@@ -28,6 +32,15 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "users")
+// Tenant isolation, enforced in the ORM (see TenantFilterAspect). The filter
+// definition lives here because users is the first tenant-scoped table; every
+// other tenant-scoped entity reuses it with its own @Filter line. With
+// applyToLoadByKey, even findById cannot load another tenant's row while a
+// tenant is in context — the lookup comes back empty and surfaces as 404.
+@FilterDef(name = TenantFilters.TENANT_FILTER,
+        parameters = @ParamDef(name = TenantFilters.PARAM_TENANT_ID, type = UUID.class),
+        applyToLoadByKey = true)
+@Filter(name = TenantFilters.TENANT_FILTER, condition = "tenant_id = :tenantId")
 public class User extends BaseEntity {
 
     @Column(name = "tenant_id", updatable = false)

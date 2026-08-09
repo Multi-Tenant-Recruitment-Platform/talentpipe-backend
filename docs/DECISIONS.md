@@ -193,6 +193,57 @@ where nothing is being delivered. The Resend path logs recipient and subject onl
 
 ---
 
+## ADR-7 — Tenant isolation enforced in the ORM, not just by discipline
+
+**Date:** 2026-08-09 · **Status:** Accepted
+
+### Context
+
+The isolation story requires that *all* queries are scoped by tenant id and
+that cross-tenant access is denied. Until now that held only by discipline:
+every service had to remember the `tenant_id` predicate (or an ownership
+`.filter(...)`) by hand. One forgotten `findById` in a future module would
+silently serve another company's data — the worst failure mode this platform
+has.
+
+### Decision
+
+Three independent layers, each sufficient to stop a cross-tenant read:
+
+1. **Context** (existing): `TenantContext` is populated only from the verified
+   JWT and cleared in a `finally` block (leak-guard tested).
+2. **ORM filter** (new): a Hibernate `@FilterDef`/`@Filter`
+   (`tenant_id = :tenantId`, `applyToLoadByKey = true`) on every tenant-scoped
+   entity (`User`, `Notification` today). `TenantFilterAspect` enables it on
+   the transaction's session for any repository call made while a tenant is in
+   context, so the predicate is appended at the SQL level to every query —
+   including loads by primary key. A cross-tenant row is not "forbidden", it is
+   *invisible*: lookups come back empty and surface as **404**, never
+   confirming existence (standing convention).
+3. **Service checks** (existing): explicit tenant-scope re-checks (e.g. in
+   `InvitationService`) remain as an independent layer.
+
+The filter is deliberately NOT enabled when no tenant is in context:
+unauthenticated flows (login, register, emailed-link endpoints), candidates and
+SUPER_ADMIN legitimately query across tenants (global login's find-by-email,
+global password reset), and the async email threads carry no context at all.
+
+### Consequences
+
+- New tenant-scoped entities must add one `@Filter` line and their table gets
+  isolation for free — the default becomes *scoped*, not *global*.
+- `@Filter` does not apply to queries that bypass Hibernate (native SQL with
+  its own session handling) — none exist today; if one is ever added it must
+  scope by hand and say so in review.
+- The limit is per JVM instance state only in the aspect; the filter itself is
+  per-session, so pooled threads/sessions cannot leak a stale tenant.
+- Guarded by `TenantIsolationIntegrationTest`, including a test that bypasses
+  the service layer entirely to prove the ORM layer alone blocks cross-tenant
+  reads (`findAll` narrowed, foreign `findById` empty, unscoped again once the
+  context is cleared).
+
+---
+
 ## Standing conventions (not individually numbered)
 
 - **Deferred-work marker:** `// TODO(sprint2): ...` — grep for it at sprint
