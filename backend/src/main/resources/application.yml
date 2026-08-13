@@ -28,6 +28,15 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  servlet:
+    multipart:
+      # Company logo (2 MB) and cover (5 MB) are checked precisely in
+      # TenantService, which answers 422 with a message the admin can act on.
+      # These are the outer container limits: set just above the largest
+      # allowed upload so an oversized request is refused before it is buffered.
+      max-file-size: 6MB
+      max-request-size: 8MB
+
 server:
   port: ${SERVER_PORT:8080}
   error:

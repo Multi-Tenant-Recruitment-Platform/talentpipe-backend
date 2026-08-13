@@ -39,6 +39,16 @@ services:
       DB_USERNAME: ${POSTGRES_USER:-talentpipe}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-talentpipe}
       SERVER_PORT: 8080
+      # This long-lived development volume carries a V8 applied from a branch
+      # that was never pushed, so that migration cannot be resolved from source
+      # control and Flyway's validate refuses to start. Tolerating a MISSING
+      # migration keeps the dev database usable without discarding it or
+      # rewriting its history.
+      #
+      # Deliberately set here and NOT in application.yml: the shipped artifact
+      # keeps strict validation, so this cannot mask real drift in CI or
+      # production. Delete this line once that migration lands on development.
+      SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: ${FLYWAY_IGNORE_PATTERNS:-*:missing}
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-at-least-32-bytes-long-change-me}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
