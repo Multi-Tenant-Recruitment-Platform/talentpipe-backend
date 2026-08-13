@@ -16,6 +16,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -55,6 +58,47 @@ public class GlobalExceptionHandler {
                                                              HttpServletRequest request) {
         return envelope(HttpStatus.BAD_REQUEST,
                 "Missing required header: " + ex.getHeaderName(), request);
+    }
+
+    /**
+     * An unparseable path or query value — most often a malformed UUID, as in
+     * {@code DELETE /team/invitations/not-a-uuid}.
+     *
+     * <p>Without this it fell through to the catch-all below and answered 500
+     * with a stack trace in the log, telling the caller to retry something that
+     * could never succeed. It is a client mistake, so it is a 400. The
+     * parameter name is named but the raw value is not echoed back.</p>
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
+                                                            HttpServletRequest request) {
+        return envelope(HttpStatus.BAD_REQUEST,
+                "Invalid value for '" + ex.getName() + "'", request);
+    }
+
+    /**
+     * An upload past the container's multipart ceiling. The precise, per-image
+     * limits live in TenantService and answer 422; this is the outer guard, and
+     * it fires before the file is buffered.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(MaxUploadSizeExceededException ex,
+                                                              HttpServletRequest request) {
+        return envelope(HttpStatus.PAYLOAD_TOO_LARGE, "That file is too large", request);
+    }
+
+    /**
+     * A multipart request that omitted the file part entirely.
+     *
+     * <p>Argument resolution runs before the controller method is entered, so
+     * this fires ahead of any {@code @PreAuthorize} and previously reached the
+     * catch-all as a 500. It is a malformed request, not a server fault.</p>
+     */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(MissingServletRequestPartException ex,
+                                                           HttpServletRequest request) {
+        return envelope(HttpStatus.BAD_REQUEST,
+                "Missing required file part: " + ex.getRequestPartName(), request);
     }
 
     // ------------------------------------------------------------------ 401
