@@ -27,6 +27,17 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # Auto-repair checksum mismatches on startup (dev/CI only).
+    # If a migration file is edited after being applied, Flyway updates the
+    # stored checksum rather than crashing. Set FLYWAY_REPAIR=false in prod.
+    repair-on-migrate: ${FLYWAY_REPAIR:true}
+
+  servlet:
+    multipart:
+      # Hard limit applied by Spring before any controller code runs.
+      # Per-category limits (logo ≤2 MB, cover ≤4 MB) are enforced in TenantMediaService.
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 server:
   port: ${SERVER_PORT:8080}
@@ -62,6 +73,19 @@ talentpipe:
     # account owner's own inbox; emailing real recipients requires a VERIFIED
     # sending domain configured in Resend (see README).
     from: ${MAIL_FROM:onboarding@resend.dev}
+  storage:
+    # Provider: 'local' (default, dev/CI) or 's3' (staging/prod).
+    # Switch from local to S3 with STORAGE_PROVIDER=s3 — zero code changes.
+    provider: ${STORAGE_PROVIDER:local}
+    upload-dir: ${UPLOAD_DIR:uploads}
+    # Required when provider=s3:
+    s3-bucket: ${AWS_S3_BUCKET:}
+    s3-region: ${AWS_S3_REGION:ap-south-1}
+    # Optional CDN base URL (CloudFront). If absent, direct S3 URLs are used.
+    cdn-base-url: ${AWS_CDN_BASE_URL:}
+    # Per-category size limits (bytes). Defaults: logo 2 MB, cover 4 MB.
+    max-logo-bytes: ${MAX_LOGO_BYTES:2097152}
+    max-cover-bytes: ${MAX_COVER_BYTES:4194304}
 
 logging:
   level:

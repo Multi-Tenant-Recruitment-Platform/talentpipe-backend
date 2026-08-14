@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -147,6 +148,25 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex,
                                                              HttpServletRequest request) {
         return envelope(HttpStatus.CONFLICT, "Request conflicts with existing data", request);
+    }
+
+    // ------------------------------------------------------------------ 413
+
+    /** Multipart file exceeds the configured {@code spring.servlet.multipart.max-file-size}. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex,
+                                                             HttpServletRequest request) {
+        return envelope(HttpStatus.PAYLOAD_TOO_LARGE,
+                "File size exceeds the maximum allowed limit", request);
+    }
+
+    // ------------------------------------------------------------------ 415
+
+    /** Uploaded file has an unsupported MIME type (e.g. not image/png, jpeg, svg, webp). */
+    @ExceptionHandler(UnsupportedMediaException.class)
+    public ResponseEntity<ErrorResponse> handleUnsupportedMedia(UnsupportedMediaException ex,
+                                                                HttpServletRequest request) {
+        return envelope(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage(), request);
     }
 
     // ------------------------------------------------------------------ 422

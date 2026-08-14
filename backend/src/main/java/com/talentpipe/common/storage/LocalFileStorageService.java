@@ -1,0 +1,101 @@
+package com.talentpipe.common.storage;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+/**
+ * Local filesystem implementation of {@link FileStorageService}.
+ *
+ * <p>Files are written to {@code {uploadDir}/tenant/{tenantId}/{category}/{uuid}.{ext}}.
+ * The UUID filename prevents name collisions and URL guessing. The returned
+ * URL is the request's base URL + the storage path (suited for development).
+ * In production, switch to {@link S3FileStorageService} via
+ * {@code STORAGE_PROVIDER=s3}.</p>
+ *
+ * <p><b>Not activated in production.</b> Selected only when
+ * {@code talentpipe.storage.provider=local} (the default).</p>
+ */
+public class LocalFileStorageService implements FileStorageService {
+
+    private static final Logger log = LoggerFactory.getLogger(LocalFileStorageService.class);
+
+    private final Path rootDir;
+
+    public LocalFileStorageService(StorageProperties properties) {
+        this.rootDir = Paths.get(properties.uploadDir()).toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(rootDir);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not create storage directory: " + rootDir, e);
+        }
+    }
+
+    @Override
+    public String store(UUID tenantId, String category, String filename,
+                        byte[] data, String mimeType) {
+        String ext = extractExtension(filename);
+        Path dir = rootDir.resolve("tenant").resolve(tenantId.toString()).resolve(category);
+        try {
+            Files.createDirectories(dir);
+            String storedName = UUID.randomUUID() + ext;
+            Path target = dir.resolve(storedName);
+            Files.write(target, data);
+            log.debug("Stored file locally: {}", target);
+            // Build an absolute URL using the current request's base URL.
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .pathSegment("api", "v1", "public", "media", category, storedName)
+                    .toUriString();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to store file", e);
+        }
+    }
+
+    @Override
+    public void delete(String storedUrl) {
+        if (storedUrl == null || storedUrl.isBlank()) {
+            return;
+        }
+        // Extract the filename from the URL and resolve the path.
+        String[] parts = storedUrl.split("/");
+        if (parts.length < 2) {
+            return;
+        }
+        String category = parts[parts.length - 2];
+        String filename  = parts[parts.length - 1];
+        // Walk all tenant subdirectories to find the file (we don't have tenantId here).
+        try {
+            Path categoryPath = rootDir.resolve("tenant");
+            if (!Files.exists(categoryPath)) {
+                return;
+            }
+            Files.walk(categoryPath)
+                    .filter(p -> p.getFileName().toString().equals(filename)
+                            && p.getParent().getFileName().toString().equals(category))
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                            log.debug("Deleted local file: {}", p);
+                        } catch (IOException e) {
+                            log.warn("Could not delete local file: {}", p, e);
+                        }
+                    });
+        } catch (IOException e) {
+            log.warn("Error during local file deletion for URL: {}", storedUrl, e);
+        }
+    }
+
+    private String extractExtension(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot >= 0 ? filename.substring(dot).toLowerCase() : "";
+    }
+}

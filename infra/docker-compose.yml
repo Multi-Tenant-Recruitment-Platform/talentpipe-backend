@@ -47,6 +47,13 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-onboarding@resend.dev}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
+      # Storage — 'local' for dev, 's3' for production.
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      UPLOAD_DIR: ${UPLOAD_DIR:-uploads}
+      # AWS — required only when STORAGE_PROVIDER=s3.
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_S3_REGION: ${AWS_S3_REGION:-ap-south-1}
+      AWS_CDN_BASE_URL: ${AWS_CDN_BASE_URL:-}
     ports:
       - "8080:8080"
     depends_on:
