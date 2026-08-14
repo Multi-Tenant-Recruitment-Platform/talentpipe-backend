@@ -20,6 +20,13 @@ Base path: `/api/v1`. All bodies are JSON.
 | POST | `/team/invitations` | `COMPANY_ADMIN` | Invites an `HR_MANAGER` or `INTERVIEWER`. `409` if the email already exists here. |
 | POST | `/team/invitations/{userId}/resend` | `COMPANY_ADMIN` | Re-sends an invitation. `404` if it isn't in the caller's tenant. |
 | DELETE | `/team/invitations/{userId}` | `COMPANY_ADMIN` | Revokes a pending invitation. |
+| GET | `/tenant` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Full company profile for the authenticated tenant. Used by dashboard header and Settings page. |
+| PATCH | `/tenant` | `COMPANY_ADMIN` | Update editable profile fields. Returns full normalized profile. Immutable fields (`subdomain`, `planTier`, `status`) are ignored. |
+| POST | `/tenant/logo` | `COMPANY_ADMIN` | Upload (or replace) company logo. `multipart/form-data`, field `file`. Allowed: `image/png`, `image/jpeg`, `image/svg+xml`, `image/webp`. Max 2 MB. Returns full profile with new `logoUrl`. |
+| POST | `/tenant/cover` | `COMPANY_ADMIN` | Upload (or replace) cover image. Max 4 MB. Returns full profile with new `coverImageUrl`. |
+| DELETE | `/tenant/logo` | `COMPANY_ADMIN` | Remove company logo. Idempotent — `204` even when no logo exists. |
+| DELETE | `/tenant/cover` | `COMPANY_ADMIN` | Remove cover image. Idempotent — `204`. |
+| GET | `/public/companies/{subdomain}` | public | Curated public company profile (name, logo, cover, tagline, description, industry, website, socials, city, country). `404` for unknown subdomain. |
 | POST | `/public/candidates/register` | public | Candidate self-registration (no tenant, globally unique email). |
 | GET | `/public/jobs` | public | Public job board — empty page until the Job module lands. |
 
