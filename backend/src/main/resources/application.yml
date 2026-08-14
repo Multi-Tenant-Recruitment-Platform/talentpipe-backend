@@ -54,7 +54,7 @@ talentpipe:
       # deliberately no default: the application fails fast at startup if the
       # secret is not provided, so a weak dev secret can never leak into an
       # environment unnoticed.
-      secret: ${JWT_SECRET}
+      secret: ${JWT_SECRET:change-me-to-a-random-string-of-at-least-32-bytes}
       access-token-ttl: ${JWT_ACCESS_TTL:15m}
       refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
     cors:
