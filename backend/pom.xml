@@ -27,11 +27,24 @@
     <properties>
         <java.version>17</java.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <aws.sdk.version>2.26.12</aws.sdk.version>
         <!-- SonarCloud -->
         <sonar.organization>multi-tenant-recruitment-platform</sonar.organization>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
         <sonar.projectKey>Multi-Tenant-Recruitment-Platform_talentpipe-backend</sonar.projectKey>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Web / REST -->
@@ -98,6 +111,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- AWS SDK v2 — S3 for image storage (active when STORAGE_PROVIDER=s3).
+             Version managed by the AWS BOM in dependencyManagement. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
         </dependency>
 
         <!-- Test -->
