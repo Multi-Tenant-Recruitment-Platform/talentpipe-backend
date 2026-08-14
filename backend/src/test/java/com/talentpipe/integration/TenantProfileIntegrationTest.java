@@ -229,7 +229,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 new HttpEntity<>(invite, jsonHeaders(adminToken)), Map.class);
 
         // Accept invite
-        String inviteLink = emailCapture.lastVerificationLink();
+        String inviteLink = emailCapture.lastInviteLink();
         String inviteToken = inviteLink.substring(inviteLink.indexOf("token=") + 6);
         rest.postForEntity("/api/v1/auth/accept-invite",
                 jsonEntity(Map.of("token", inviteToken, "password", "hr-password"), null),
