@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -75,17 +76,18 @@ public class LocalFileStorageService implements FileStorageService {
             if (!Files.exists(categoryPath)) {
                 return;
             }
-            Files.walk(categoryPath)
-                    .filter(p -> p.getFileName().toString().equals(filename)
-                            && p.getParent().getFileName().toString().equals(category))
-                    .forEach(p -> {
-                        try {
-                            Files.deleteIfExists(p);
-                            log.debug("Deleted local file: {}", p);
-                        } catch (IOException e) {
-                            log.warn("Could not delete local file: {}", p, e);
-                        }
-                    });
+            try (Stream<Path> walker = Files.walk(categoryPath)) {
+                walker.filter(p -> p.getFileName().toString().equals(filename)
+                                && p.getParent().getFileName().toString().equals(category))
+                        .forEach(p -> {
+                            try {
+                                Files.deleteIfExists(p);
+                                log.debug("Deleted local file: {}", p);
+                            } catch (IOException e) {
+                                log.warn("Could not delete local file: {}", p, e);
+                            }
+                        });
+            }
         } catch (IOException e) {
             log.warn("Error during local file deletion for URL: {}", storedUrl, e);
         }
