@@ -328,8 +328,14 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 new org.springframework.util.LinkedMultiValueMap<>();
         org.springframework.http.HttpHeaders fileHeaders = new org.springframework.http.HttpHeaders();
         fileHeaders.setContentType(MediaType.TEXT_PLAIN);
-        multipart.add("file", new org.springframework.http.HttpEntity<>(
-                "not an image".getBytes(), fileHeaders));
+        
+        org.springframework.core.io.ByteArrayResource fileResource = new org.springframework.core.io.ByteArrayResource("not an image".getBytes()) {
+            @Override
+            public String getFilename() {
+                return "test.txt";
+            }
+        };
+        multipart.add("file", new org.springframework.http.HttpEntity<>(fileResource, fileHeaders));
 
         HttpHeaders headers = bearerHeaders(token);
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -374,8 +380,13 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
     void uploadLogo_withoutAuth_returns401() {
         org.springframework.util.LinkedMultiValueMap<String, Object> multipart =
                 new org.springframework.util.LinkedMultiValueMap<>();
-        multipart.add("file", new org.springframework.http.HttpEntity<>(
-                new byte[]{1, 2, 3}, new org.springframework.http.HttpHeaders()));
+        org.springframework.core.io.ByteArrayResource fileResource = new org.springframework.core.io.ByteArrayResource(new byte[]{1, 2, 3}) {
+            @Override
+            public String getFilename() {
+                return "test.bin";
+            }
+        };
+        multipart.add("file", new org.springframework.http.HttpEntity<>(fileResource, new org.springframework.http.HttpHeaders()));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
