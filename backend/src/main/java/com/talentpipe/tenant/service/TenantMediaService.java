@@ -67,7 +67,6 @@ public class TenantMediaService {
         validateSize(file, storageProperties.maxLogoBytes(), "Logo");
 
         // Delete existing logo before storing the new one.
-        tenantService.getProfile(tenantId).logoUrl();  // fetch to get current URL
         CompanyProfileResponse current = tenantService.getProfile(tenantId);
         if (current.logoUrl() != null) {
             storageService.delete(current.logoUrl());
