@@ -1,5 +1,6 @@
 package com.talentpipe.tenant.service;
 
+import com.talentpipe.common.util.HtmlSanitizer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -11,36 +12,48 @@ import org.springframework.stereotype.Component;
  * Stateless normalizer for company profile fields, applied after bean
  * validation and before persistence in {@code TenantService.updateProfile}.
  *
- * <p>Rules (mirrors the frontend normalization in {@code companyProfile.ts}
- * but the server is the source of truth):</p>
- * <ul>
- *   <li>Trim leading/trailing whitespace on every string field.</li>
- *   <li>Collapse repeated internal whitespace on single-line fields.</li>
- *   <li>Preserve multiline semantics (newlines) for {@code description},
- *       {@code culture}, {@code mission}, {@code vision}.</li>
- *   <li>Prepend {@code https://} when a URL field has no scheme.</li>
- *   <li>Deduplicate list values case-insensitively, preserving the first
- *       occurrence (and its original casing).</li>
- *   <li>Convert empty / whitespace-only strings to {@code null} so the
- *       database never stores empty strings for optional fields.</li>
- * </ul>
+ * <p>Normalization pipeline (applied in order):</p>
+ * <ol>
+ *   <li><strong>Sanitize</strong> — strip all HTML tags via OWASP to prevent
+ *       stored XSS regardless of whether the client-side sanitized first.</li>
+ *   <li><strong>Trim</strong> — remove leading/trailing whitespace.</li>
+ *   <li><strong>Collapse</strong> (single-line fields only) — replace runs of
+ *       two or more whitespace characters with a single space.</li>
+ *   <li><strong>Null-coerce</strong> — convert empty/blank strings to
+ *       {@code null} so the database never stores empty strings for optional
+ *       fields.</li>
+ * </ol>
+ *
+ * <p>URL fields additionally have {@code https://} prepended when no URI
+ * scheme is present. List fields are deduplicated case-insensitively,
+ * preserving the first occurrence and its original casing.</p>
+ *
+ * <p>These rules mirror the frontend normalization in {@code companyProfile.ts}
+ * but the server is the authoritative source of truth.</p>
  */
 @Component
 public class ProfileNormalizer {
 
     private static final String HTTPS_PREFIX = "https://";
 
+    private final HtmlSanitizer htmlSanitizer;
+
+    public ProfileNormalizer(HtmlSanitizer htmlSanitizer) {
+        this.htmlSanitizer = htmlSanitizer;
+    }
+
     // ---------------------------------------------------------------- strings
 
     /**
-     * Normalizes a single-line field: trim, collapse internal whitespace,
-     * blank → null.
+     * Normalizes a single-line field: sanitize HTML, trim, collapse internal
+     * whitespace to single space, blank → null.
      */
     public String normalizeLine(String value) {
         if (value == null) {
             return null;
         }
-        String trimmed = value.trim();
+        String sanitized = htmlSanitizer.sanitize(value);
+        String trimmed = sanitized.trim();
         if (trimmed.isEmpty()) {
             return null;
         }
@@ -48,20 +61,27 @@ public class ProfileNormalizer {
     }
 
     /**
-     * Normalizes a multiline field: trim only, preserve internal newlines,
-     * blank → null.
+     * Normalizes a multiline field: sanitize HTML, trim only outer whitespace,
+     * preserve internal newlines, blank → null.
      */
     public String normalizeMultiline(String value) {
         if (value == null) {
             return null;
         }
-        String trimmed = value.trim();
+        String sanitized = htmlSanitizer.sanitize(value);
+        String trimmed = sanitized.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**
      * Normalizes a URL field: trim, prepend {@code https://} when no scheme
      * is present, blank → null.
+     *
+     * <p>Note: URL fields are not passed through the HTML sanitizer — a URL
+     * is not free text and stripping "markup" from one would corrupt legal
+     * query strings. Safety comes from {@code @ValidUrl} instead, which runs
+     * before this method and admits only {@code http}/{@code https} URLs with
+     * a real host, so no {@code javascript:} payload can reach persistence.</p>
      */
     public String normalizeUrl(String value) {
         if (value == null) {
@@ -78,11 +98,31 @@ public class ProfileNormalizer {
     }
 
     /**
-     * Normalizes a list field: trim each element, remove blank elements,
-     * deduplicate case-insensitively (first occurrence wins), return an
-     * unmodifiable list. A null input returns an empty list.
+     * Normalizes a free-text list field: sanitize HTML from each entry, trim
+     * it, drop blanks, deduplicate case-insensitively (first occurrence wins,
+     * keeping its original casing), and return an unmodifiable list. A null
+     * input returns an empty list.
      */
     public List<String> normalizeList(List<String> values) {
+        return normalizeList(values, null);
+    }
+
+    /**
+     * Normalizes a checkbox-driven list field, additionally canonicalizing
+     * every entry to its spelling in {@code canonicalOptions}.
+     *
+     * <p>{@code @AllowedValues} accepts these fields case-insensitively, so
+     * without this step a client sending {@code "remote"} and one sending
+     * {@code "Remote"} would persist different strings for the same option and
+     * the frontend's exact-match checkbox binding would fail to tick for one
+     * of them. Entries with no canonical match are kept verbatim — validation
+     * has already rejected genuinely unknown values by this point.</p>
+     *
+     * @param values          raw entries from the request
+     * @param canonicalOptions canonical spellings, or {@code null} for
+     *                         free-text lists that have no fixed option set
+     */
+    public List<String> normalizeList(List<String> values, List<String> canonicalOptions) {
         if (values == null || values.isEmpty()) {
             return Collections.emptyList();
         }
@@ -92,7 +132,8 @@ public class ProfileNormalizer {
             if (raw == null) {
                 continue;
             }
-            String trimmed = raw.trim();
+            String sanitized = htmlSanitizer.sanitize(raw);
+            String trimmed = canonicalize(sanitized.trim(), canonicalOptions);
             if (trimmed.isEmpty()) {
                 continue;
             }
@@ -102,5 +143,22 @@ public class ProfileNormalizer {
             }
         }
         return Collections.unmodifiableList(result);
+    }
+
+    /**
+     * Returns the canonical spelling of {@code value} when
+     * {@code canonicalOptions} contains a case-insensitive match, otherwise
+     * {@code value} unchanged.
+     */
+    private String canonicalize(String value, List<String> canonicalOptions) {
+        if (canonicalOptions == null) {
+            return value;
+        }
+        for (String option : canonicalOptions) {
+            if (option.equalsIgnoreCase(value)) {
+                return option;
+            }
+        }
+        return value;
     }
 }

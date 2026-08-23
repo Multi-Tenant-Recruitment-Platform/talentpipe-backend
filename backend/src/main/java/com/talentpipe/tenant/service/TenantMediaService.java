@@ -28,6 +28,12 @@ import org.springframework.web.multipart.MultipartFile;
  * <p>Authorization (role + tenant scope) is enforced in the controller
  * before these methods are called. This service trusts that the {@code tenantId}
  * is already verified.</p>
+ *
+ * <p>Business rule: images are part of the editable company profile, so every
+ * mutating method here calls {@code TenantService.assertProfileEditable}
+ * first — a suspended tenant may not change its logo or cover any more than it
+ * may edit {@code name} or {@code description} (see
+ * {@code TenantService.requireEditableTenant}).</p>
  */
 @Service
 public class TenantMediaService {
@@ -63,6 +69,7 @@ public class TenantMediaService {
      */
     @Transactional
     public CompanyProfileResponse uploadLogo(UUID tenantId, MultipartFile file) {
+        tenantService.assertProfileEditable(tenantId);
         validateMimeType(file);
         validateSize(file, storageProperties.maxLogoBytes(), "Logo");
 
@@ -86,6 +93,7 @@ public class TenantMediaService {
      */
     @Transactional
     public CompanyProfileResponse uploadCover(UUID tenantId, MultipartFile file) {
+        tenantService.assertProfileEditable(tenantId);
         validateMimeType(file);
         validateSize(file, storageProperties.maxCoverBytes(), "Cover image");
 
@@ -105,6 +113,7 @@ public class TenantMediaService {
      */
     @Transactional
     public void deleteLogo(UUID tenantId) {
+        tenantService.assertProfileEditable(tenantId);
         CompanyProfileResponse current = tenantService.getProfile(tenantId);
         if (current.logoUrl() != null) {
             storageService.delete(current.logoUrl());
@@ -119,6 +128,7 @@ public class TenantMediaService {
      */
     @Transactional
     public void deleteCover(UUID tenantId) {
+        tenantService.assertProfileEditable(tenantId);
         CompanyProfileResponse current = tenantService.getProfile(tenantId);
         if (current.coverImageUrl() != null) {
             storageService.delete(current.coverImageUrl());
