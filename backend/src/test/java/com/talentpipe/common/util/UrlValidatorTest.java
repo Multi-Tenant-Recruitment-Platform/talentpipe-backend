@@ -43,4 +43,31 @@ class UrlValidatorTest {
     void invalidUrls_areRejected(String url) {
         assertThat(validator.isValid(url, null)).isFalse();
     }
+
+    // ---------------------------------------------------------------- scheme whitelist
+
+    /**
+     * These fields are later rendered as {@code href} attributes on the
+     * public company page: any scheme besides http/https is a stored-XSS or
+     * local-file-read vector, not a "valid but unusual" URL.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "javascript:alert(1)",
+            "javascript://evil.com/%0aalert(1)",
+            "JAVASCRIPT://evil.com/%0aalert(1)",   // scheme match is case-insensitive
+            "vbscript://evil.com/x",
+            "data:text/html;base64,PHNjcmlwdD4=",
+            "file:///etc/passwd",
+            "ftp://files.example.com/x"
+    })
+    void nonHttpSchemes_areRejected(String url) {
+        assertThat(validator.isValid(url, null)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"HTTPS://Example.com", "HTTP://example.com"})
+    void httpSchemes_areAcceptedRegardlessOfCase(String url) {
+        assertThat(validator.isValid(url, null)).isTrue();
+    }
 }

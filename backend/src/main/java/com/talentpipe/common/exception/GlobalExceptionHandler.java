@@ -51,6 +51,18 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.BAD_REQUEST, "Malformed request body", request);
     }
 
+    /**
+     * Input that only turns out to be invalid after service-layer
+     * normalization (e.g. a name that is nothing but HTML markup). Reported as
+     * 400 alongside bean-validation failures, since from the client's point of
+     * view it is the same class of problem.
+     */
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException ex,
+                                                              HttpServletRequest request) {
+        return envelope(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ErrorResponse> handleMissingHeader(MissingRequestHeaderException ex,
                                                              HttpServletRequest request) {

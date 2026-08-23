@@ -9,10 +9,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Validates that a string is a well-formed URL with a host component.
- * Accepts {@code null} and blank values (field is optional unless combined with
- * {@code @NotBlank}). Before persisting, the service normalizer prepends
- * {@code https://} when no scheme is present.
+ * Validates that a string is a well-formed {@code http} or {@code https} URL
+ * with a host component. Any other scheme is rejected — see
+ * {@link UrlValidator} for why the whitelist matters. Accepts {@code null} and
+ * blank values (field is optional unless combined with {@code @NotBlank}).
+ * Before persisting, the service normalizer prepends {@code https://} when no
+ * scheme is present.
  */
 @Documented
 @Constraint(validatedBy = UrlValidator.class)
@@ -20,7 +22,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ValidUrl {
 
-    String message() default "must be a valid URL";
+    String message() default "must be a valid http or https URL";
 
     Class<?>[] groups() default {};
 
