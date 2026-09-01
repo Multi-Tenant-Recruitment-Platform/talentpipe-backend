@@ -1,12 +1,16 @@
 package com.talentpipe.tenant.service;
 
+import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.DuplicateResourceException;
+import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.ProfileTaxonomy;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
 import com.talentpipe.tenant.dto.UpdateCompanyProfileRequest;
 import com.talentpipe.tenant.entity.Tenant;
+import com.talentpipe.tenant.entity.TenantStatus;
 import com.talentpipe.tenant.mapper.TenantMapper;
 import com.talentpipe.tenant.repository.TenantRepository;
 import java.util.Locale;
@@ -135,10 +139,19 @@ public class TenantService {
      */
     @Transactional
     public CompanyProfileResponse updateProfile(UUID tenantId, UpdateCompanyProfileRequest request) {
-        Tenant tenant = requireTenant(tenantId);
+        Tenant tenant = requireEditableTenant(tenantId);
+
+        // Required fields are validated on the raw input, which cannot see
+        // what normalization will leave behind: "<b></b>" satisfies @NotBlank
+        // but strips to nothing, and both columns are NOT NULL. Re-check after
+        // normalizing so the client gets a 400 instead of a database error.
+        String name = requireNonEmptyAfterNormalization(
+                normalizer.normalizeLine(request.name()), "name");
+        String email = requireNonEmptyAfterNormalization(
+                normalizer.normalizeLine(request.email()), "email");
 
         // ---- single-line fields
-        tenant.setName(normalizer.normalizeLine(request.name()));
+        tenant.setName(name);
         tenant.setTagline(normalizer.normalizeLine(request.tagline()));
         tenant.setIndustry(normalizer.normalizeLine(request.industry()));
         tenant.setCompanyType(normalizer.normalizeLine(request.companyType()));
@@ -148,7 +161,7 @@ public class TenantService {
         tenant.setTimezone(normalizer.normalizeLine(request.timezone()));
         tenant.setCurrency(normalizer.normalizeLine(request.currency()));
         tenant.setLanguage(normalizer.normalizeLine(request.language()));
-        tenant.setEmail(normalizer.normalizeLine(request.email()));
+        tenant.setEmail(email);
         tenant.setHrEmail(normalizer.normalizeLine(request.hrEmail()));
         tenant.setPhone(normalizer.normalizeLine(request.phone()));
         tenant.setAlternativePhone(normalizer.normalizeLine(request.alternativePhone()));
@@ -177,16 +190,17 @@ public class TenantService {
 
         // ---- list fields (trim, deduplicate, blank-filter)
         tenant.setValues(normalizer.normalizeList(request.values()));
-        tenant.setBenefits(normalizer.normalizeList(request.benefits()));
-        tenant.setWorkModes(normalizer.normalizeList(request.workModes()));
+        tenant.setBenefits(normalizer.normalizeList(request.benefits(), ProfileTaxonomy.BENEFITS));
+        tenant.setWorkModes(normalizer.normalizeList(request.workModes(), ProfileTaxonomy.WORK_MODES));
         tenant.setOfficeLocations(normalizer.normalizeList(request.officeLocations()));
         tenant.setDepartments(normalizer.normalizeList(request.departments()));
         tenant.setTeams(normalizer.normalizeList(request.teams()));
         tenant.setBusinessUnits(normalizer.normalizeList(request.businessUnits()));
-        tenant.setEmploymentTypes(normalizer.normalizeList(request.employmentTypes()));
+        tenant.setEmploymentTypes(
+                normalizer.normalizeList(request.employmentTypes(), ProfileTaxonomy.EMPLOYMENT_TYPES));
         tenant.setJobCategories(normalizer.normalizeList(request.jobCategories()));
         tenant.setJobFamilies(normalizer.normalizeList(request.jobFamilies()));
-        tenant.setJobLevels(normalizer.normalizeList(request.jobLevels()));
+        tenant.setJobLevels(normalizer.normalizeList(request.jobLevels(), ProfileTaxonomy.JOB_LEVELS));
         tenant.setJobTitles(normalizer.normalizeList(request.jobTitles()));
 
         Tenant saved = tenantRepository.save(tenant);
@@ -214,7 +228,7 @@ public class TenantService {
      */
     @Transactional
     public CompanyProfileResponse updateLogoUrl(UUID tenantId, String logoUrl) {
-        Tenant tenant = requireTenant(tenantId);
+        Tenant tenant = requireEditableTenant(tenantId);
         tenant.setLogoUrl(logoUrl);
         return tenantMapper.toProfileResponse(tenantRepository.save(tenant));
     }
@@ -226,7 +240,7 @@ public class TenantService {
      */
     @Transactional
     public CompanyProfileResponse updateCoverImageUrl(UUID tenantId, String coverImageUrl) {
-        Tenant tenant = requireTenant(tenantId);
+        Tenant tenant = requireEditableTenant(tenantId);
         tenant.setCoverImageUrl(coverImageUrl);
         return tenantMapper.toProfileResponse(tenantRepository.save(tenant));
     }
@@ -238,7 +252,7 @@ public class TenantService {
      */
     @Transactional
     public void clearLogoUrl(UUID tenantId) {
-        Tenant tenant = requireTenant(tenantId);
+        Tenant tenant = requireEditableTenant(tenantId);
         tenant.setLogoUrl(null);
         tenantRepository.save(tenant);
     }
@@ -250,12 +264,63 @@ public class TenantService {
      */
     @Transactional
     public void clearCoverImageUrl(UUID tenantId) {
-        Tenant tenant = requireTenant(tenantId);
+        Tenant tenant = requireEditableTenant(tenantId);
         tenant.setCoverImageUrl(null);
         tenantRepository.save(tenant);
     }
 
+    /**
+     * Throws if the tenant may not currently edit its profile, without
+     * mutating anything.
+     *
+     * <p>For {@code TenantMediaService}: it writes the uploaded file to
+     * storage <em>before</em> asking this service to persist the new URL, and
+     * a rollback would undo the database write but not the file. Calling this
+     * first keeps a suspended tenant's upload from leaving an orphan on
+     * disk.</p>
+     *
+     * @throws ResourceNotFoundException if the tenant does not exist (404)
+     * @throws BusinessRuleException     if the tenant is suspended (422)
+     */
+    @Transactional(readOnly = true)
+    public void assertProfileEditable(UUID tenantId) {
+        requireEditableTenant(tenantId);
+    }
+
     // ---------------------------------------------------------------- private
+
+    /**
+     * Fetches the tenant and asserts it is in a state that permits profile
+     * changes. Every mutating method goes through this rather than
+     * {@link #requireTenant} so the rule cannot be forgotten on a new one.
+     *
+     * <p>Suspension is a 422 (Unprocessable Entity) rather than a 403 because
+     * the request itself is syntactically valid and the caller is properly
+     * authorized — it is the business state of the tenant that prevents the
+     * operation (DECISIONS.md §business-rules).</p>
+     */
+    private Tenant requireEditableTenant(UUID tenantId) {
+        Tenant tenant = requireTenant(tenantId);
+        if (TenantStatus.SUSPENDED.equals(tenant.getStatus())) {
+            throw new BusinessRuleException(
+                    "Profile updates are not allowed for suspended tenants");
+        }
+        return tenant;
+    }
+
+    /**
+     * Guards a NOT NULL column against a value that bean validation accepted
+     * as raw input but normalization emptied out.
+     *
+     * @throws InvalidRequestException if {@code normalized} is null (400)
+     */
+    private String requireNonEmptyAfterNormalization(String normalized, String field) {
+        if (normalized == null) {
+            throw new InvalidRequestException(
+                    field + " must contain at least one non-markup character");
+        }
+        return normalized;
+    }
 
     /**
      * Fetches the tenant or throws 404. The same exception is used for a

@@ -10,6 +10,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.UnsupportedMediaException;
 import com.talentpipe.common.storage.FileStorageService;
 import com.talentpipe.common.storage.StorageProperties;
@@ -161,6 +165,22 @@ class TenantMediaServiceTest {
         verify(storageService).store(eq(tenantId), eq("logo"), anyString(), any(), eq("image/svg+xml"));
     }
 
+    @Test
+    void uploadLogo_suspendedTenant_throwsBeforeTouchingStorage() {
+        // The suspension check must run before the file is written to disk —
+        // otherwise a rejected upload would still leave an orphaned file
+        // (there is no transaction to roll that back on this side).
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "logo.png", "image/png", new byte[100]);
+        doThrow(new BusinessRuleException("Profile updates are not allowed for suspended tenants"))
+                .when(tenantService).assertProfileEditable(tenantId);
+
+        assertThatThrownBy(() -> tenantMediaService.uploadLogo(tenantId, file))
+                .isInstanceOf(BusinessRuleException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
     // ---------------------------------------------------------------- uploadCover
 
     @Test
@@ -222,6 +242,19 @@ class TenantMediaServiceTest {
                 .hasMessageContaining("4 MB");
     }
 
+    @Test
+    void uploadCover_suspendedTenant_throwsBeforeTouchingStorage() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "cover.jpg", "image/jpeg", new byte[200]);
+        doThrow(new BusinessRuleException("Profile updates are not allowed for suspended tenants"))
+                .when(tenantService).assertProfileEditable(tenantId);
+
+        assertThatThrownBy(() -> tenantMediaService.uploadCover(tenantId, file))
+                .isInstanceOf(BusinessRuleException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
     // ---------------------------------------------------------------- deleteLogo
 
     @Test
@@ -246,6 +279,17 @@ class TenantMediaServiceTest {
         verify(tenantService).clearLogoUrl(tenantId);
     }
 
+    @Test
+    void deleteLogo_suspendedTenant_throwsAndSkipsStorageDeletion() {
+        doThrow(new BusinessRuleException("Profile updates are not allowed for suspended tenants"))
+                .when(tenantService).assertProfileEditable(tenantId);
+
+        assertThatThrownBy(() -> tenantMediaService.deleteLogo(tenantId))
+                .isInstanceOf(BusinessRuleException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
     // ---------------------------------------------------------------- deleteCover
 
     @Test
@@ -268,6 +312,17 @@ class TenantMediaServiceTest {
 
         verify(storageService, never()).delete(anyString());
         verify(tenantService).clearCoverImageUrl(tenantId);
+    }
+
+    @Test
+    void deleteCover_suspendedTenant_throwsAndSkipsStorageDeletion() {
+        doThrow(new BusinessRuleException("Profile updates are not allowed for suspended tenants"))
+                .when(tenantService).assertProfileEditable(tenantId);
+
+        assertThatThrownBy(() -> tenantMediaService.deleteCover(tenantId))
+                .isInstanceOf(BusinessRuleException.class);
+
+        verifyNoInteractions(storageService);
     }
 
     // ---------------------------------------------------------------- helpers

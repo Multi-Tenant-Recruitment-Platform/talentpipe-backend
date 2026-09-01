@@ -21,11 +21,11 @@ Base path: `/api/v1`. All bodies are JSON.
 | POST | `/team/invitations/{userId}/resend` | `COMPANY_ADMIN` | Re-sends an invitation. `404` if it isn't in the caller's tenant. |
 | DELETE | `/team/invitations/{userId}` | `COMPANY_ADMIN` | Revokes a pending invitation. |
 | GET | `/tenant` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Full company profile for the authenticated tenant. Used by dashboard header and Settings page. |
-| PATCH | `/tenant` | `COMPANY_ADMIN` | Update editable profile fields. Returns full normalized profile. Immutable fields (`subdomain`, `planTier`, `status`) are ignored. |
-| POST | `/tenant/logo` | `COMPANY_ADMIN` | Upload (or replace) company logo. `multipart/form-data`, field `file`. Allowed: `image/png`, `image/jpeg`, `image/svg+xml`, `image/webp`. Max 2 MB. Returns full profile with new `logoUrl`. |
-| POST | `/tenant/cover` | `COMPANY_ADMIN` | Upload (or replace) cover image. Max 4 MB. Returns full profile with new `coverImageUrl`. |
-| DELETE | `/tenant/logo` | `COMPANY_ADMIN` | Remove company logo. Idempotent — `204` even when no logo exists. |
-| DELETE | `/tenant/cover` | `COMPANY_ADMIN` | Remove cover image. Idempotent — `204`. |
+| PATCH | `/tenant` | `COMPANY_ADMIN` | Full-replace semantics despite the verb: every editable field must be sent, and an omitted/`null` field clears it — the client is expected to resubmit the whole profile it fetched from `GET`. Returns the full normalized profile. Immutable fields (`subdomain`, `planTier`, `status`) are ignored. `422` if the tenant is `SUSPENDED`. `400` if `workModes`, `benefits`, `employmentTypes` or `jobLevels` contains a value outside their fixed option set, or if `name`/`email` is nothing but HTML markup once sanitized. |
+| POST | `/tenant/logo` | `COMPANY_ADMIN` | Upload (or replace) company logo. `multipart/form-data`, field `file`. Allowed: `image/png`, `image/jpeg`, `image/svg+xml`, `image/webp`. Max 2 MB. Returns full profile with new `logoUrl`. `422` if the tenant is `SUSPENDED`. |
+| POST | `/tenant/cover` | `COMPANY_ADMIN` | Upload (or replace) cover image. Max 4 MB. Returns full profile with new `coverImageUrl`. `422` if the tenant is `SUSPENDED`. |
+| DELETE | `/tenant/logo` | `COMPANY_ADMIN` | Remove company logo. Idempotent — `204` even when no logo exists. `422` if the tenant is `SUSPENDED`. |
+| DELETE | `/tenant/cover` | `COMPANY_ADMIN` | Remove cover image. Idempotent — `204`. `422` if the tenant is `SUSPENDED`. |
 | GET | `/public/companies/{subdomain}` | public | Curated public company profile (name, logo, cover, tagline, description, industry, website, socials, city, country). `404` for unknown subdomain. |
 | POST | `/public/candidates/register` | public | Candidate self-registration (no tenant, globally unique email). |
 | GET | `/public/jobs` | public | Public job board — empty page until the Job module lands. |
@@ -56,6 +56,12 @@ Status semantics: `400` validation · `401` bad/expired token or bad credentials
 - **Anti-enumeration**: identical generic `401` for unknown tenant/email/wrong
   password; always-`200` on forgot-password and resend-verification; `404` (not
   `403`) for cross-tenant resources.
+- **Company profile free-text fields** (`name`, `tagline`, `description`,
+  `culture`, `mission`, `vision`, `legalName`, address fields, and every
+  tag-input list) are HTML-stripped server-side before persistence — plain
+  text in, plain text out, no entity-encoding. URL fields (`website`,
+  `linkedinUrl`, …) accept only `http`/`https` schemes; anything else
+  (`javascript:`, `data:`, `file:`, …) is rejected with `400`.
 
 ## Email-linked flows (verification, reset, invitations)
 

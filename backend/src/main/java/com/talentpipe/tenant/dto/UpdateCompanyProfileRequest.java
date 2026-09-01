@@ -1,7 +1,9 @@
 package com.talentpipe.tenant.dto;
 
+import com.talentpipe.common.util.AllowedValues;
 import com.talentpipe.common.util.MaxCurrentYear;
 import com.talentpipe.common.util.ValidPhone;
+import com.talentpipe.common.util.ValidTaxonomyList;
 import com.talentpipe.common.util.ValidUrl;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
@@ -25,6 +27,21 @@ import java.util.List;
  *
  * <p>All optional fields accept {@code null}, which means "clear this value".
  * An empty string is treated as null by the normalizer.</p>
+ *
+ * <h3>List field taxonomy</h3>
+ * <ul>
+ *   <li><strong>Checkbox-driven</strong> ({@code workModes}, {@code benefits},
+ *       {@code employmentTypes}, {@code jobLevels}): validated against a
+ *       {@link AllowedValues} whitelist that matches the fixed frontend
+ *       checkboxes ({@link ProfileTaxonomy}). Unknown values are rejected
+ *       with 400; accepted values are canonicalized to the casing declared
+ *       there before persistence.</li>
+ *   <li><strong>Tag-input</strong> ({@code values}, {@code officeLocations},
+ *       {@code departments}, {@code teams}, {@code businessUnits},
+ *       {@code jobCategories}, {@code jobFamilies}, {@code jobTitles}):
+ *       validated with {@link ValidTaxonomyList} — max 50 entries, max 100
+ *       characters per entry.</li>
+ * </ul>
  */
 public record UpdateCompanyProfileRequest(
 
@@ -130,18 +147,67 @@ public record UpdateCompanyProfileRequest(
         @Size(max = 120, message = "country must be at most 120 characters")
         String country,
 
-        // ---- taxonomy lists (null treated as empty list by service layer)
+        // ---- free-text tag-input lists (max 50 entries, max 100 chars each)
+        @ValidTaxonomyList
         List<String> values,
+
+        // ---- checkbox-driven list: fixed options only.
+        // Keep in sync with ProfileTaxonomy.BENEFITS (ProfileTaxonomyDriftTest guards this).
+        @AllowedValues(
+                value = {
+                        "Remote / hybrid work", "Flexible working hours",
+                        "Health insurance", "Training & development",
+                        "Generous paid leave", "Parental leave",
+                        "Performance bonus", "Stock options",
+                        "Wellbeing & gym support", "Transport allowance",
+                        "Meals provided", "Relocation support",
+                        "Career development"
+                },
+                message = "benefits contains an unrecognised option")
         List<String> benefits,
+
+        // ---- checkbox-driven list: keep in sync with ProfileTaxonomy.WORK_MODES
+        @AllowedValues(
+                value = {"Remote", "Hybrid", "On-site"},
+                message = "workModes must be one of: Remote, Hybrid, On-site")
         List<String> workModes,
+
+        // ---- free-text tag-input lists
+        @ValidTaxonomyList
         List<String> officeLocations,
+
+        @ValidTaxonomyList
         List<String> departments,
+
+        @ValidTaxonomyList
         List<String> teams,
+
+        @ValidTaxonomyList
         List<String> businessUnits,
+
+        // ---- checkbox-driven list: keep in sync with ProfileTaxonomy.EMPLOYMENT_TYPES
+        @AllowedValues(
+                value = {"Full-time", "Part-time", "Contract",
+                        "Internship", "Temporary", "Freelance"},
+                message = "employmentTypes must be one of: Full-time, Part-time, Contract, Internship, Temporary, Freelance")
         List<String> employmentTypes,
+
+        // ---- free-text tag-input lists
+        @ValidTaxonomyList
         List<String> jobCategories,
+
+        @ValidTaxonomyList
         List<String> jobFamilies,
+
+        // ---- checkbox-driven list: keep in sync with ProfileTaxonomy.JOB_LEVELS
+        @AllowedValues(
+                value = {"Intern", "Junior", "Mid-level", "Senior",
+                        "Lead", "Manager", "Director"},
+                message = "jobLevels must be one of: Intern, Junior, Mid-level, Senior, Lead, Manager, Director")
         List<String> jobLevels,
+
+        // ---- free-text tag-input list
+        @ValidTaxonomyList
         List<String> jobTitles
 ) {
 }

@@ -106,6 +106,15 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- OWASP Java HTML Sanitizer — strips all HTML tags from free-text
+             inputs to prevent stored XSS. Configured with a deny-all policy
+             in HtmlSanitizer so only plain text reaches the database. -->
+        <dependency>
+            <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+            <artifactId>owasp-java-html-sanitizer</artifactId>
+            <version>20240325.1</version>
+        </dependency>
+
         <!-- Configuration metadata for @ConfigurationProperties -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

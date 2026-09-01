@@ -4,18 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.DuplicateResourceException;
+import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.ProfileTaxonomy;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
 import com.talentpipe.tenant.dto.UpdateCompanyProfileRequest;
 import com.talentpipe.tenant.entity.Tenant;
+import com.talentpipe.tenant.entity.TenantStatus;
 import com.talentpipe.tenant.mapper.TenantMapper;
 import com.talentpipe.tenant.repository.TenantRepository;
 import java.time.Instant;
@@ -29,6 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
 
 /**
  * Unit tests for {@link TenantService}.
@@ -277,6 +283,83 @@ class TenantServiceTest {
     }
 
     @Test
+    void updateProfile_suspendedTenant_throwsBusinessRuleException() {
+        // Verify business rule: SUSPENDED tenants may not update their profile.
+        // A valid request must still be rejected at service layer with 422.
+        UpdateCompanyProfileRequest request = buildUpdateRequest("Acme", "admin@acme.io");
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(suspendedTenant()));
+
+        assertThatThrownBy(() -> tenantService.updateProfile(tenantId, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("suspended");
+
+        verify(tenantRepository, never()).save(any());
+    }
+
+    @Test
+    void updateProfile_nameNormalizesToEmpty_throwsInvalidRequestException() {
+        // "<b></b>" satisfies @NotBlank on the raw input but the sanitizer
+        // strips it to nothing — the service must catch this itself rather
+        // than let a null hit the NOT NULL `name` column.
+        UpdateCompanyProfileRequest request = buildUpdateRequest("<b></b>", "admin@acme.io");
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(normalizer.normalizeLine("<b></b>")).thenReturn(null);
+        // email normalization is never reached — name is checked first and
+        // throws immediately — so no stub for "admin@acme.io" here.
+
+        assertThatThrownBy(() -> tenantService.updateProfile(tenantId, request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("name");
+
+        verify(tenantRepository, never()).save(any());
+    }
+
+    @Test
+    void updateProfile_emailNormalizesToEmpty_throwsInvalidRequestException() {
+        UpdateCompanyProfileRequest request = buildUpdateRequest("Acme", "<b></b>");
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(normalizer.normalizeLine("Acme")).thenReturn("Acme");
+        when(normalizer.normalizeLine("<b></b>")).thenReturn(null);
+
+        assertThatThrownBy(() -> tenantService.updateProfile(tenantId, request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("email");
+
+        verify(tenantRepository, never()).save(any());
+    }
+
+    @Test
+    void updateProfile_canonicalizesCheckboxDrivenLists() {
+        // Every list field gets a distinct single-element value so the
+        // verifications below can't accidentally match the wrong field's
+        // call — with an all-null request every normalizeList(null) call is
+        // indistinguishable from the others.
+        UpdateCompanyProfileRequest request = buildUpdateRequestWithLists(
+                List.of("value1"), List.of("benefit1"), List.of("workMode1"),
+                List.of("officeLocation1"), List.of("department1"), List.of("team1"),
+                List.of("businessUnit1"), List.of("employmentType1"),
+                List.of("jobCategory1"), List.of("jobFamily1"), List.of("jobLevel1"),
+                List.of("jobTitle1"));
+
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(normalizer.normalizeLine(anyString())).thenAnswer(inv -> inv.getArgument(0));
+        when(normalizer.normalizeList(any())).thenReturn(List.of());
+        when(normalizer.normalizeList(any(), any())).thenReturn(List.of());
+        when(tenantRepository.save(tenant)).thenReturn(tenant);
+        when(tenantMapper.toProfileResponse(tenant)).thenReturn(profileResponse);
+
+        tenantService.updateProfile(tenantId, request);
+
+        verify(normalizer).normalizeList(List.of("benefit1"), ProfileTaxonomy.BENEFITS);
+        verify(normalizer).normalizeList(List.of("workMode1"), ProfileTaxonomy.WORK_MODES);
+        verify(normalizer).normalizeList(List.of("employmentType1"), ProfileTaxonomy.EMPLOYMENT_TYPES);
+        verify(normalizer).normalizeList(List.of("jobLevel1"), ProfileTaxonomy.JOB_LEVELS);
+        // free-text fields must NOT be canonicalized — they have no fixed option set
+        verify(normalizer).normalizeList(List.of("department1"));
+        verify(normalizer, never()).normalizeList(eq(List.of("department1")), any());
+    }
+
+    @Test
     void updateProfile_setsListFieldsFromNormalizer() {
         List<String> normalized = List.of("Engineering", "Product");
         UpdateCompanyProfileRequest request = buildUpdateRequest("Acme", "admin@acme.io");
@@ -318,6 +401,19 @@ class TenantServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    @Test
+    void updateLogoUrl_suspendedTenant_throwsBusinessRuleException() {
+        // Image fields are part of the editable profile: a suspended tenant
+        // must not be able to rebrand via the logo endpoint either.
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(suspendedTenant()));
+
+        assertThatThrownBy(() -> tenantService.updateLogoUrl(tenantId, "https://cdn.example.com/logo.png"))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("suspended");
+
+        verify(tenantRepository, never()).save(any());
+    }
+
     // ---------------------------------------------------------------- updateCoverImageUrl
 
     @Test
@@ -338,6 +434,17 @@ class TenantServiceTest {
 
         assertThatThrownBy(() -> tenantService.updateCoverImageUrl(tenantId, "https://cdn.example.com/cover.jpg"))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateCoverImageUrl_suspendedTenant_throwsBusinessRuleException() {
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(suspendedTenant()));
+
+        assertThatThrownBy(() -> tenantService.updateCoverImageUrl(tenantId, "https://cdn.example.com/cover.jpg"))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("suspended");
+
+        verify(tenantRepository, never()).save(any());
     }
 
     // ---------------------------------------------------------------- clearLogoUrl
@@ -362,6 +469,17 @@ class TenantServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    @Test
+    void clearLogoUrl_suspendedTenant_throwsBusinessRuleException() {
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(suspendedTenant()));
+
+        assertThatThrownBy(() -> tenantService.clearLogoUrl(tenantId))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("suspended");
+
+        verify(tenantRepository, never()).save(any());
+    }
+
     // ---------------------------------------------------------------- clearCoverImageUrl
 
     @Test
@@ -381,6 +499,43 @@ class TenantServiceTest {
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> tenantService.clearCoverImageUrl(tenantId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void clearCoverImageUrl_suspendedTenant_throwsBusinessRuleException() {
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(suspendedTenant()));
+
+        assertThatThrownBy(() -> tenantService.clearCoverImageUrl(tenantId))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("suspended");
+
+        verify(tenantRepository, never()).save(any());
+    }
+
+    // ---------------------------------------------------------------- assertProfileEditable
+
+    @Test
+    void assertProfileEditable_activeTenant_doesNotThrow() {
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+
+        tenantService.assertProfileEditable(tenantId); // no exception
+    }
+
+    @Test
+    void assertProfileEditable_suspendedTenant_throwsBusinessRuleException() {
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(suspendedTenant()));
+
+        assertThatThrownBy(() -> tenantService.assertProfileEditable(tenantId))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("suspended");
+    }
+
+    @Test
+    void assertProfileEditable_nonExistingTenant_throwsResourceNotFoundException() {
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tenantService.assertProfileEditable(tenantId))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -419,6 +574,20 @@ class TenantServiceTest {
 
     // ---------------------------------------------------------------- helpers
 
+    /**
+     * A tenant whose status is SUSPENDED. {@link Tenant} has no status setter
+     * accessible from outside the entity, so this is a minimal anonymous
+     * subclass that overrides just the getter used by the guard under test.
+     */
+    private Tenant suspendedTenant() {
+        return new Tenant("Acme Corp", "acme") {
+            @Override
+            public TenantStatus getStatus() {
+                return TenantStatus.SUSPENDED;
+            }
+        };
+    }
+
     private UpdateCompanyProfileRequest buildUpdateRequest(String name, String email) {
         return new UpdateCompanyProfileRequest(
                 name, null, null, null, null, null, null,
@@ -426,6 +595,25 @@ class TenantServiceTest {
                 email, null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    /** Like {@link #buildUpdateRequest}, but with every list field populated
+     *  with a distinct value — for tests that need to verify per-field
+     *  normalizer wiring without null-argument collisions. */
+    private UpdateCompanyProfileRequest buildUpdateRequestWithLists(
+            List<String> values, List<String> benefits, List<String> workModes,
+            List<String> officeLocations, List<String> departments, List<String> teams,
+            List<String> businessUnits, List<String> employmentTypes,
+            List<String> jobCategories, List<String> jobFamilies,
+            List<String> jobLevels, List<String> jobTitles) {
+        return new UpdateCompanyProfileRequest(
+                "Acme", null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
+                "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null, null,
+                values, benefits, workModes, officeLocations, departments, teams,
+                businessUnits, employmentTypes, jobCategories, jobFamilies,
+                jobLevels, jobTitles);
     }
 
     private CompanyProfileResponse buildProfileResponse(UUID id, String logoUrl, String coverUrl) {
