@@ -1,5 +1,6 @@
 package com.talentpipe.auth.service;
 
+import com.talentpipe.auth.dto.AcceptInviteResponse;
 import com.talentpipe.auth.dto.InviteUserRequest;
 import com.talentpipe.auth.dto.UserResponse;
 import com.talentpipe.auth.entity.InvitationToken;
@@ -183,10 +184,15 @@ public class InvitationService {
      * Accepts an invitation: sets the first password and activates the account.
      * Public endpoint — the token is the only credential.
      *
+     * <p>Returns the invitee's email and the workspace subdomain so the SPA can
+     * carry both to the login form: the invitee never chose the slug and a
+     * fresh device has nothing remembered, so asking them to type it would
+     * dead-end the flow this endpoint completes.</p>
+     *
      * @throws InvalidTokenException if the token is unknown, expired or used (401)
      */
     @Transactional
-    public void accept(String rawToken, String password) {
+    public AcceptInviteResponse accept(String rawToken, String password) {
         InvitationToken token = tokenRepository.findByTokenHash(SecureTokens.sha256(rawToken))
                 .orElseThrow(() -> new InvalidTokenException("Unknown or invalid invitation token"));
 
@@ -207,8 +213,14 @@ public class InvitationService {
         invitee.setPasswordHash(passwordEncoder.encode(password));
         invitee.setStatus(UserStatus.ACTIVE);
 
+        String subdomain = tenantService.findById(invitee.getTenantId())
+                .map(TenantResponse::subdomain)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Tenant " + invitee.getTenantId() + " missing for invited user " + invitee.getId()));
+
         log.info("Invitation accepted - user {} activated in tenant {} as {}",
                 invitee.getId(), invitee.getTenantId(), invitee.getRole().getName());
+        return new AcceptInviteResponse(invitee.getEmail(), subdomain);
     }
 
     // ------------------------------------------------------------------ util

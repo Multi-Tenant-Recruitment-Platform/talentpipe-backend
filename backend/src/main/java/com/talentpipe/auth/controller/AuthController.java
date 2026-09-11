@@ -1,6 +1,7 @@
 package com.talentpipe.auth.controller;
 
 import com.talentpipe.auth.dto.AcceptInviteRequest;
+import com.talentpipe.auth.dto.AcceptInviteResponse;
 import com.talentpipe.auth.dto.AuthResponse;
 import com.talentpipe.auth.dto.ForgotPasswordRequest;
 import com.talentpipe.auth.dto.LoginRequest;
@@ -183,11 +184,13 @@ public class AuthController {
 
     /**
      * Accepts a team invitation by setting the first password, activating the
-     * account in the tenant and role it was invited into.
+     * account in the tenant and role it was invited into. Returns the email
+     * and workspace subdomain so the SPA can drop the invitee straight onto a
+     * prefilled login form — they were never told the slug, and a fresh device
+     * opened from the email link has nothing remembered to offer them.
      */
     @PostMapping("/accept-invite")
-    public ResponseEntity<Void> acceptInvite(@Valid @RequestBody AcceptInviteRequest request) {
-        invitationService.accept(request.token(), request.password());
-        return ResponseEntity.ok().build();
+    public AcceptInviteResponse acceptInvite(@Valid @RequestBody AcceptInviteRequest request) {
+        return invitationService.accept(request.token(), request.password());
     }
 }
