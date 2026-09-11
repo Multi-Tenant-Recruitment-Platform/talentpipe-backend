@@ -9,14 +9,15 @@ import java.util.UUID;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * Local filesystem implementation of {@link FileStorageService}.
  *
  * <p>Files are written to {@code {uploadDir}/tenant/{tenantId}/{category}/{uuid}.{ext}}.
  * The UUID filename prevents name collisions and URL guessing. The returned
- * URL is the request's base URL + the storage path (suited for development).
+ * URL is a root-relative path, which the frontend resolves against whatever
+ * origin it is served from — so the same stored value works behind a dev proxy
+ * and a single-origin deployment alike, and survives a host change.
  * In production, switch to {@link S3FileStorageService} via
  * {@code STORAGE_PROVIDER=s3}.</p>
  *

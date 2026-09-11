@@ -329,6 +329,61 @@ class UpdateCompanyProfileRequestValidationTest {
                 .doesNotContain("REMOTE_HYBRID");
     }
 
+    /** The message lists at most three offenders and then trails off, so a
+     *  client that posts a whole wrong vocabulary gets a readable error rather
+     *  than its entire payload echoed back. */
+    @Test
+    void manyUnknownBenefits_messageIsTruncatedToThree() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null, null,
+                null, null, List.of("alpha", "beta", "gamma", "delta", "epsilon"),
+                null, null, null, null, null,
+                null, null, null, null);
+        assertThat(benefitsMessage(validate(r)))
+                .contains("alpha", "beta", "gamma")
+                .doesNotContain("delta", "epsilon")
+                .endsWith(", …)");
+    }
+
+    /** One very long value must not drag the whole error response out with it. */
+    @Test
+    void overlongUnknownBenefit_isTruncatedInTheMessage() {
+        String overlong = "x".repeat(200);
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null, null,
+                null, null, List.of(overlong), null, null, null, null, null,
+                null, null, null, null);
+        assertThat(benefitsMessage(validate(r)))
+                .hasSizeLessThan(overlong.length())
+                .contains("…");
+    }
+
+    /** Interpolation metacharacters in a rejected value are stripped, not
+     *  evaluated — an echoed value must never become part of the template. */
+    @Test
+    void rejectedValueContainingTemplateSyntax_isNeutralised() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null, null,
+                null, null, List.of("${1+1}"), null, null, null, null, null,
+                null, null, null, null);
+        assertThat(benefitsMessage(validate(r)))
+                .contains("1+1")            // the literal characters, minus the EL punctuation
+                .doesNotContain("${", "2"); // never evaluated, and no template syntax left behind
+    }
+
+    /** The single benefits violation message, for the message-shape tests. */
+    private static String benefitsMessage(
+            java.util.Set<jakarta.validation.ConstraintViolation<UpdateCompanyProfileRequest>> violations) {
+        return violations.stream()
+                .filter(v -> v.getPropertyPath().toString().equals("benefits"))
+                .map(jakarta.validation.ConstraintViolation::getMessage)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("expected a violation on benefits"));
+    }
+
     // ---------------------------------------------------------------- employmentTypes (checkbox @AllowedValues)
 
     @Test
