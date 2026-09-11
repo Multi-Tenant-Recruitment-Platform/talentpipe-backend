@@ -45,68 +45,50 @@ class UpdateCompanyProfileRequestValidationTest {
      * all optional fields are null. This record must pass validation so tests
      * can modify a single field and assert a targeted violation.
      *
-     * Field order matches the record declaration exactly (42 fields):
+     * <p>Field order matches the record declaration exactly (30 fields):
      *   name, tagline, industry, companyType, size,
-     *   employeeCount, foundedYear, description, culture, mission, vision,
-     *   legalName, registrationNumber, timezone, currency, language,
+     *   foundedYear, description, mission, vision,
+     *   legalName, registrationNumber,
+     *   timezone, currency, language,
      *   email, hrEmail, phone, alternativePhone, website,
      *   linkedinUrl, facebookUrl, twitterUrl, instagramUrl,
-     *   address, city, state, postalCode, country,
-     *   values, benefits, workModes, officeLocations, departments,
-     *   teams, businessUnits, employmentTypes, jobCategories, jobFamilies,
-     *   jobLevels, jobTitles
-     *
-     * <p>Note: this helper's own parameter order is {@code (values, workModes,
-     * benefits, ...)} for readability, but the record's canonical order is
-     * {@code (values, benefits, workModes, ...)} — the constructor call below
-     * reorders the two to match.</p>
+     *   city, state, postalCode, country,
+     *   benefits, officeLocations, departments</p>
      */
     private static UpdateCompanyProfileRequest req(
             String name, String tagline, String industry, String companyType, String size,
-            Integer employeeCount, Integer foundedYear,
-            String description, String culture, String mission, String vision,
+            Integer foundedYear,
+            String description, String mission, String vision,
             String legalName, String registrationNumber,
             String timezone, String currency, String language,
             String email, String hrEmail, String phone, String alternativePhone, String website,
             String linkedinUrl, String facebookUrl, String twitterUrl, String instagramUrl,
-            String address, String city, String state, String postalCode, String country,
-            List<String> values, List<String> workModes, List<String> benefits,
-            List<String> officeLocations, List<String> departments, List<String> teams,
-            List<String> businessUnits, List<String> employmentTypes,
-            List<String> jobCategories, List<String> jobFamilies,
-            List<String> jobLevels, List<String> jobTitles) {
+            String city, String state, String postalCode, String country,
+            List<String> benefits, List<String> officeLocations, List<String> departments) {
         return new UpdateCompanyProfileRequest(
                 name, tagline, industry, companyType, size,
-                employeeCount, foundedYear,
-                description, culture, mission, vision,
+                foundedYear,
+                description, mission, vision,
                 legalName, registrationNumber,
                 timezone, currency, language,
                 email, hrEmail, phone, alternativePhone, website,
                 linkedinUrl, facebookUrl, twitterUrl, instagramUrl,
-                address, city, state, postalCode, country,
-                values, benefits, workModes,
-                officeLocations, departments, teams,
-                businessUnits, employmentTypes,
-                jobCategories, jobFamilies,
-                jobLevels, jobTitles);
+                city, state, postalCode, country,
+                benefits, officeLocations, departments);
     }
 
     /** The minimal valid request baseline. */
     private static UpdateCompanyProfileRequest valid() {
         return req(
                 "Acme Corp", null, null, null, null,
-                null, null,
-                null, null, null, null,
+                null,
+                null, null, null,
                 null, null,
                 null, null, null,
                 "admin@acme.io", null, null, null, null,
                 null, null, null, null,
-                null, null, null, null, null,
-                null, null, null,
-                null, null, null,
-                null, null,
-                null, null,
-                null, null);
+                null, null, null, null,
+                null, null, null);
     }
 
     private static Set<ConstraintViolation<UpdateCompanyProfileRequest>> validate(
@@ -131,19 +113,17 @@ class UpdateCompanyProfileRequestValidationTest {
 
     @Test
     void blankName_producesViolationOnName() {
-        var r = req("", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "name")).isTrue();
     }
 
     @Test
     void nameTooLong_producesViolationOnName() {
-        var r = req("A".repeat(256), null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("A".repeat(256), null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "name")).isTrue();
     }
 
@@ -151,19 +131,17 @@ class UpdateCompanyProfileRequestValidationTest {
 
     @Test
     void blankEmail_producesViolationOnEmail() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "email")).isTrue();
     }
 
     @Test
     void invalidEmailFormat_producesViolationOnEmail() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "not-an-email", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "email")).isTrue();
     }
 
@@ -171,50 +149,27 @@ class UpdateCompanyProfileRequestValidationTest {
 
     @Test
     void foundedYearInFuture_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, 9999, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, 9999, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "foundedYear")).isTrue();
     }
 
     @Test
     void foundedYearBefore1800_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, 1799, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, 1799, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "foundedYear")).isTrue();
-    }
-
-    // ---------------------------------------------------------------- employeeCount
-
-    @Test
-    void employeeCountBelowMin_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, 0, null, null, null, null, null, null, null,
-                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
-        assertThat(hasViolationOn(validate(r), "employeeCount")).isTrue();
-    }
-
-    @Test
-    void employeeCountAboveMax_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, 5_000_001, null, null, null, null, null, null, null,
-                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
-        assertThat(hasViolationOn(validate(r), "employeeCount")).isTrue();
     }
 
     // ---------------------------------------------------------------- description
 
     @Test
     void descriptionTooLong_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, "D".repeat(1001), null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, "D".repeat(1001), null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "description")).isTrue();
     }
 
@@ -222,10 +177,9 @@ class UpdateCompanyProfileRequestValidationTest {
 
     @Test
     void invalidPhone_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, "123", null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "phone")).isTrue();
     }
 
@@ -233,92 +187,123 @@ class UpdateCompanyProfileRequestValidationTest {
 
     @Test
     void invalidWebsiteUrl_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, "not a url", null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null, null);
         assertThat(hasViolationOn(validate(r), "website")).isTrue();
-    }
-
-    // ---------------------------------------------------------------- workModes (checkbox @AllowedValues)
-
-    @Test
-    void unknownWorkMode_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, List.of("Freelance"), null, null, null, null, null, null,
-                null, null, null, null);
-        assertThat(hasViolationOn(validate(r), "workModes")).isTrue();
-    }
-
-    @Test
-    void validWorkModes_noViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, List.of("Remote", "Hybrid"), null, null, null, null, null, null,
-                null, null, null, null);
-        assertThat(hasViolationOn(validate(r), "workModes")).isFalse();
     }
 
     // ---------------------------------------------------------------- benefits (checkbox @AllowedValues)
 
     @Test
     void unknownBenefit_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, null, List.of("Free lunch every day"), null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null,
+                List.of("Free lunch every day"), null, null);
         assertThat(hasViolationOn(validate(r), "benefits")).isTrue();
     }
 
     @Test
     void validBenefits_noViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, null, List.of("Health insurance", "Stock options"), null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null,
+                List.of("HEALTH_INSURANCE", "STOCK_OPTIONS"), null, null);
         assertThat(hasViolationOn(validate(r), "benefits")).isFalse();
     }
 
-    /** benefits contains an ampersand ("Training & development") — a regression
-     *  guard for the whitelist entry the sanitizer used to mangle before it was
-     *  fixed to preserve plain text (see HtmlSanitizerTest). */
+    /** The whitelist holds catalogue ids, but {@code OptionKey} folds case and
+     *  punctuation, so a client that lower-cases or hyphenates an id is not
+     *  turned away over spelling. */
     @Test
-    void benefitContainingAmpersand_isAccepted() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+    void benefitIdInAnEquivalentSpelling_isAccepted() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, null, List.of("Training & development"), null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null,
+                List.of("remote_hybrid", "Career-Development"), null, null);
         assertThat(hasViolationOn(validate(r), "benefits")).isFalse();
     }
 
-    // ---------------------------------------------------------------- employmentTypes (checkbox @AllowedValues)
-
+    /** Benefits moved from candidate-facing labels to catalogue ids. Where a
+     *  label is just its id in prose ("Health insurance" / HEALTH_INSURANCE)
+     *  the fold still accepts it and the normalizer rewrites it to the id, but
+     *  a label whose wording diverges from its id is a different vocabulary,
+     *  not a different spelling, and is refused. */
     @Test
-    void unknownEmploymentType_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+    void benefitLabelThatDivergesFromItsId_producesViolation() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, null, null, null, null, null,
-                null, List.of("Gig"), null, null, null, null);
-        assertThat(hasViolationOn(validate(r), "employmentTypes")).isTrue();
+                null, null, null, null,
+                List.of("Remote / hybrid work"), null, null);
+        assertThat(hasViolationOn(validate(r), "benefits")).isTrue();
     }
 
-    // ---------------------------------------------------------------- jobLevels (checkbox @AllowedValues)
-
+    /** A rejected option is named in the message — the client should be able to
+     *  see which value was refused, not only that one was. */
     @Test
-    void unknownJobLevel_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+    void unknownBenefit_messageNamesTheRejectedValue() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, null, null, null, null, null,
-                null, null, null, null, List.of("Executive"), null);
-        assertThat(hasViolationOn(validate(r), "jobLevels")).isTrue();
+                null, null, null, null,
+                List.of("REMOTE_HYBRID", "Free lunch every day"), null, null);
+        assertThat(validate(r))
+                .filteredOn(v -> v.getPropertyPath().toString().equals("benefits"))
+                .extracting(jakarta.validation.ConstraintViolation::getMessage)
+                .singleElement(org.assertj.core.api.InstanceOfAssertFactories.STRING)
+                .contains("Free lunch every day")
+                .doesNotContain("REMOTE_HYBRID");
+    }
+
+    /** The message lists at most three offenders and then trails off, so a
+     *  client that posts a whole wrong vocabulary gets a readable error rather
+     *  than its entire payload echoed back. */
+    @Test
+    void manyUnknownBenefits_messageIsTruncatedToThree() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null,
+                List.of("alpha", "beta", "gamma", "delta", "epsilon"), null, null);
+        assertThat(benefitsMessage(validate(r)))
+                .contains("alpha", "beta", "gamma")
+                .doesNotContain("delta", "epsilon")
+                .endsWith(", …)");
+    }
+
+    /** One very long value must not drag the whole error response out with it. */
+    @Test
+    void overlongUnknownBenefit_isTruncatedInTheMessage() {
+        String overlong = "x".repeat(200);
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null,
+                List.of(overlong), null, null);
+        assertThat(benefitsMessage(validate(r)))
+                .hasSizeLessThan(overlong.length())
+                .contains("…");
+    }
+
+    /** Interpolation metacharacters in a rejected value are stripped, not
+     *  evaluated — an echoed value must never become part of the template. */
+    @Test
+    void rejectedValueContainingTemplateSyntax_isNeutralised() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null,
+                List.of("${1+1}"), null, null);
+        assertThat(benefitsMessage(validate(r)))
+                .contains("1+1")            // the literal characters, minus the EL punctuation
+                .doesNotContain("${", "2"); // never evaluated, and no template syntax left behind
+    }
+
+    /** The single benefits violation message, for the message-shape tests. */
+    private static String benefitsMessage(
+            java.util.Set<jakarta.validation.ConstraintViolation<UpdateCompanyProfileRequest>> violations) {
+        return violations.stream()
+                .filter(v -> v.getPropertyPath().toString().equals("benefits"))
+                .map(jakarta.validation.ConstraintViolation::getMessage)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("expected a violation on benefits"));
     }
 
     // ---------------------------------------------------------------- taxonomy tag-input lists (@ValidTaxonomyList)
@@ -329,32 +314,28 @@ class UpdateCompanyProfileRequestValidationTest {
         for (int i = 0; i < 51; i++) {
             tooMany.add("entry-" + i);
         }
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                tooMany, null, null, null, null, null,
-                null, null, null, null, null, null);
-        assertThat(hasViolationOn(validate(r), "values")).isTrue();
+                null, null, null, null,
+                null, null, tooMany);
+        assertThat(hasViolationOn(validate(r), "departments")).isTrue();
     }
 
     @Test
     void taxonomyEntryExceeding100Chars_producesViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
                 null, null, null, null,
-                List.of("A".repeat(101)), null, null, null,
-                null, null, null, null);
+                null, null, List.of("A".repeat(101)));
         assertThat(hasViolationOn(validate(r), "departments")).isTrue();
     }
 
     @Test
     void validTaxonomyList_noViolation() {
-        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                List.of("Innovation", "Integrity"), null, null, null, null, null,
-                null, null, null, null, null, null);
-        assertThat(hasViolationOn(validate(r), "values")).isFalse();
+                null, null, null, null,
+                null, null, List.of("Engineering", "Product"));
+        assertThat(hasViolationOn(validate(r), "departments")).isFalse();
     }
 }

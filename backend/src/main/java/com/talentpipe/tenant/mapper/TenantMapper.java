@@ -48,10 +48,8 @@ public class TenantMapper {
                 tenant.getIndustry(),
                 tenant.getCompanyType(),
                 tenant.getSize(),
-                tenant.getEmployeeCount(),
                 tenant.getFoundedYear(),
                 tenant.getDescription(),
-                tenant.getCulture(),
                 tenant.getMission(),
                 tenant.getVision(),
                 tenant.getLegalName(),
@@ -71,24 +69,14 @@ public class TenantMapper {
                 tenant.getTwitterUrl(),
                 tenant.getInstagramUrl(),
 
-                tenant.getAddress(),
                 tenant.getCity(),
                 tenant.getState(),
                 tenant.getPostalCode(),
                 tenant.getCountry(),
 
-                safeList(tenant.getValues()),
                 safeList(tenant.getBenefits()),
-                safeList(tenant.getWorkModes()),
                 safeList(tenant.getOfficeLocations()),
                 safeList(tenant.getDepartments()),
-                safeList(tenant.getTeams()),
-                safeList(tenant.getBusinessUnits()),
-                safeList(tenant.getEmploymentTypes()),
-                safeList(tenant.getJobCategories()),
-                safeList(tenant.getJobFamilies()),
-                safeList(tenant.getJobLevels()),
-                safeList(tenant.getJobTitles()),
 
                 tenant.getUpdatedAt());
     }

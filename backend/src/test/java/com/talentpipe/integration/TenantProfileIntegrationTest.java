@@ -106,7 +106,6 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 "tagline", "We hire great people",
                 "industry", "Technology",
                 "website", "https://acme.io",
-                "values", List.of("Integrity", "Innovation"),
                 "city", "Bangalore",
                 "country", "India");
     }
@@ -153,9 +152,8 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 "tagline", "Great place to work",
                 "industry", "Technology",
                 "website", "acme.io",               // should get https:// prepended
-                "values", List.of("Java", "java"),  // deduped case-insensitively
+                "departments", List.of("Engineering", "engineering"),  // deduped case-insensitively
                 "foundedYear", 2015,
-                "employeeCount", 200,
                 "city", "Bangalore",
                 "country", "India");
 
@@ -168,10 +166,10 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
         assertThat(resp.getBody().get("website")).isEqualTo("https://acme.io"); // scheme added
         assertThat(resp.getBody().get("foundedYear")).isEqualTo(2015);
         assertThat(resp.getBody().get("city")).isEqualTo("Bangalore");
-        // "java" deduplicated — only "Java" should remain
+        // "engineering" deduplicated — only "Engineering" should remain
         @SuppressWarnings("unchecked")
-        List<String> values = (List<String>) resp.getBody().get("values");
-        assertThat(values).containsExactly("Java");
+        List<String> departments = (List<String>) resp.getBody().get("departments");
+        assertThat(departments).containsExactly("Engineering");
     }
 
     @Test

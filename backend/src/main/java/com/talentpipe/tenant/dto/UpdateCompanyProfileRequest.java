@@ -1,12 +1,10 @@
 package com.talentpipe.tenant.dto;
 
 import com.talentpipe.common.util.AllowedValues;
-import com.talentpipe.common.util.MaxCurrentYear;
 import com.talentpipe.common.util.ValidPhone;
 import com.talentpipe.common.util.ValidTaxonomyList;
 import com.talentpipe.common.util.ValidUrl;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -30,17 +28,14 @@ import java.util.List;
  *
  * <h3>List field taxonomy</h3>
  * <ul>
- *   <li><strong>Checkbox-driven</strong> ({@code workModes}, {@code benefits},
- *       {@code employmentTypes}, {@code jobLevels}): validated against a
- *       {@link AllowedValues} whitelist that matches the fixed frontend
+ *   <li><strong>Checkbox-driven</strong> ({@code benefits}): validated against
+ *       a {@link AllowedValues} whitelist that matches the fixed frontend
  *       checkboxes ({@link ProfileTaxonomy}). Unknown values are rejected
  *       with 400; accepted values are canonicalized to the casing declared
  *       there before persistence.</li>
- *   <li><strong>Tag-input</strong> ({@code values}, {@code officeLocations},
- *       {@code departments}, {@code teams}, {@code businessUnits},
- *       {@code jobCategories}, {@code jobFamilies}, {@code jobTitles}):
- *       validated with {@link ValidTaxonomyList} — max 50 entries, max 100
- *       characters per entry.</li>
+ *   <li><strong>Tag-input</strong> ({@code officeLocations},
+ *       {@code departments}): validated with {@link ValidTaxonomyList} — max
+ *       50 entries, max 100 characters per entry.</li>
  * </ul>
  */
 public record UpdateCompanyProfileRequest(
@@ -64,19 +59,12 @@ public record UpdateCompanyProfileRequest(
         @Size(max = 100, message = "size must be at most 100 characters")
         String size,
 
-        @Min(value = 1, message = "employeeCount must be at least 1")
-        @Max(value = 5_000_000, message = "employeeCount must be at most 5,000,000")
-        Integer employeeCount,
-
         @Min(value = 1800, message = "foundedYear must be 1800 or later")
-        @MaxCurrentYear(message = "foundedYear must not be a future year")
+        @com.talentpipe.common.util.MaxCurrentYear(message = "foundedYear must not be a future year")
         Integer foundedYear,
 
         @Size(max = 1000, message = "description must be at most 1000 characters")
         String description,
-
-        @Size(max = 600, message = "culture must be at most 600 characters")
-        String culture,
 
         @Size(max = 400, message = "mission must be at most 400 characters")
         String mission,
@@ -132,9 +120,6 @@ public record UpdateCompanyProfileRequest(
         String instagramUrl,
 
         // ---- location
-        @Size(max = 255, message = "address must be at most 255 characters")
-        String address,
-
         @Size(max = 120, message = "city must be at most 120 characters")
         String city,
 
@@ -147,67 +132,32 @@ public record UpdateCompanyProfileRequest(
         @Size(max = 120, message = "country must be at most 120 characters")
         String country,
 
-        // ---- free-text tag-input lists (max 50 entries, max 100 chars each)
-        @ValidTaxonomyList
-        List<String> values,
-
         // ---- checkbox-driven list: fixed options only.
         // Keep in sync with ProfileTaxonomy.BENEFITS (ProfileTaxonomyDriftTest guards this).
         @AllowedValues(
                 value = {
-                        "Remote / hybrid work", "Flexible working hours",
-                        "Health insurance", "Training & development",
-                        "Generous paid leave", "Parental leave",
-                        "Performance bonus", "Stock options",
-                        "Wellbeing & gym support", "Transport allowance",
-                        "Meals provided", "Relocation support",
-                        "Career development"
+                        "REMOTE_HYBRID",
+                        "FLEXIBLE_HOURS",
+                        "HEALTH_INSURANCE",
+                        "TRAINING",
+                        "PAID_LEAVE",
+                        "PARENTAL_LEAVE",
+                        "PERFORMANCE_BONUS",
+                        "STOCK_OPTIONS",
+                        "WELLBEING",
+                        "TRANSPORT",
+                        "MEALS",
+                        "RELOCATION",
+                        "CAREER_DEVELOPMENT"
                 },
                 message = "benefits contains an unrecognised option")
         List<String> benefits,
 
-        // ---- checkbox-driven list: keep in sync with ProfileTaxonomy.WORK_MODES
-        @AllowedValues(
-                value = {"Remote", "Hybrid", "On-site"},
-                message = "workModes must be one of: Remote, Hybrid, On-site")
-        List<String> workModes,
-
-        // ---- free-text tag-input lists
+        // ---- free-text tag-input lists (max 50 entries, max 100 chars each)
         @ValidTaxonomyList
         List<String> officeLocations,
 
         @ValidTaxonomyList
-        List<String> departments,
-
-        @ValidTaxonomyList
-        List<String> teams,
-
-        @ValidTaxonomyList
-        List<String> businessUnits,
-
-        // ---- checkbox-driven list: keep in sync with ProfileTaxonomy.EMPLOYMENT_TYPES
-        @AllowedValues(
-                value = {"Full-time", "Part-time", "Contract",
-                        "Internship", "Temporary", "Freelance"},
-                message = "employmentTypes must be one of: Full-time, Part-time, Contract, Internship, Temporary, Freelance")
-        List<String> employmentTypes,
-
-        // ---- free-text tag-input lists
-        @ValidTaxonomyList
-        List<String> jobCategories,
-
-        @ValidTaxonomyList
-        List<String> jobFamilies,
-
-        // ---- checkbox-driven list: keep in sync with ProfileTaxonomy.JOB_LEVELS
-        @AllowedValues(
-                value = {"Intern", "Junior", "Mid-level", "Senior",
-                        "Lead", "Manager", "Director"},
-                message = "jobLevels must be one of: Intern, Junior, Mid-level, Senior, Lead, Manager, Director")
-        List<String> jobLevels,
-
-        // ---- free-text tag-input list
-        @ValidTaxonomyList
-        List<String> jobTitles
+        List<String> departments
 ) {
 }

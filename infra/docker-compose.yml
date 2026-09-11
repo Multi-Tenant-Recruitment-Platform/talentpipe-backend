@@ -56,6 +56,8 @@ services:
       AWS_CDN_BASE_URL: ${AWS_CDN_BASE_URL:-}
     ports:
       - "8080:8080"
+    volumes:
+      - talentpipe_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,5 +80,7 @@ services:
 
 volumes:
   talentpipe_pgdata:
+  talentpipe_uploads:
   sonarqube_data:
   sonarqube_extensions:
+

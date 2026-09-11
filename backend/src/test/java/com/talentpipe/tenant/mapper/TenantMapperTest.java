@@ -45,10 +45,8 @@ class TenantMapperTest {
         tenant.setIndustry("Technology");
         tenant.setCompanyType("Private");
         tenant.setSize("51-200");
-        tenant.setEmployeeCount(150);
         tenant.setFoundedYear(2015);
         tenant.setDescription("We build great software.");
-        tenant.setCulture("Collaborative and inclusive.");
         tenant.setMission("To innovate.");
         tenant.setVision("To lead.");
         tenant.setLegalName("LankaTech Solutions Pvt Ltd");
@@ -65,23 +63,13 @@ class TenantMapperTest {
         tenant.setFacebookUrl("https://facebook.com/lankatech");
         tenant.setTwitterUrl("https://x.com/lankatech");
         tenant.setInstagramUrl("https://instagram.com/lankatech");
-        tenant.setAddress("125 Galle Road");
         tenant.setCity("Colombo");
         tenant.setState("Western Province");
         tenant.setPostalCode("00300");
         tenant.setCountry("Sri Lanka");
-        tenant.setDepartments(List.of("Engineering", "QA", "HR"));
-        tenant.setTeams(List.of("Backend", "Frontend"));
-        tenant.setValues(List.of("Innovation", "Integrity"));
-        tenant.setWorkModes(List.of("Remote", "Hybrid"));
-        tenant.setBenefits(List.of("Health insurance"));
+        tenant.setBenefits(List.of("HEALTH_INSURANCE"));
         tenant.setOfficeLocations(List.of("Colombo", "Kandy"));
-        tenant.setEmploymentTypes(List.of("Full-time", "Contract"));
-        tenant.setJobCategories(List.of("Software Engineering"));
-        tenant.setJobFamilies(List.of("Engineering"));
-        tenant.setJobLevels(List.of("Junior", "Senior"));
-        tenant.setJobTitles(List.of("Backend Developer"));
-        tenant.setBusinessUnits(List.of("Cloud Services"));
+        tenant.setDepartments(List.of("Engineering", "QA", "HR"));
     }
 
     // ---------------------------------------------------------------- toResponse (lean auth DTO)
@@ -135,10 +123,8 @@ class TenantMapperTest {
         assertThat(profile.industry()).isEqualTo("Technology");
         assertThat(profile.companyType()).isEqualTo("Private");
         assertThat(profile.size()).isEqualTo("51-200");
-        assertThat(profile.employeeCount()).isEqualTo(150);
         assertThat(profile.foundedYear()).isEqualTo(2015);
         assertThat(profile.description()).isEqualTo("We build great software.");
-        assertThat(profile.culture()).isEqualTo("Collaborative and inclusive.");
         assertThat(profile.mission()).isEqualTo("To innovate.");
         assertThat(profile.vision()).isEqualTo("To lead.");
         assertThat(profile.legalName()).isEqualTo("LankaTech Solutions Pvt Ltd");
@@ -173,17 +159,15 @@ class TenantMapperTest {
         assertThat(profile.state()).isEqualTo("Western Province");
         assertThat(profile.country()).isEqualTo("Sri Lanka");
         assertThat(profile.postalCode()).isEqualTo("00300");
-        assertThat(profile.address()).isEqualTo("125 Galle Road");
     }
 
     @Test
     void toProfileResponse_mapsTaxonomyListFields() {
         CompanyProfileResponse profile = mapper.toProfileResponse(tenant);
 
-        assertThat(profile.departments()).containsExactly("Engineering", "QA", "HR");
-        assertThat(profile.teams()).containsExactly("Backend", "Frontend");
-        assertThat(profile.jobLevels()).containsExactly("Junior", "Senior");
+        assertThat(profile.benefits()).containsExactly("HEALTH_INSURANCE");
         assertThat(profile.officeLocations()).containsExactly("Colombo", "Kandy");
+        assertThat(profile.departments()).containsExactly("Engineering", "QA", "HR");
     }
 
     @Test
@@ -192,18 +176,9 @@ class TenantMapperTest {
         CompanyProfileResponse profile = mapper.toProfileResponse(sparse);
 
         // Lists must never be null — frontend iteration must not require null guards
-        assertThat(profile.values()).isNotNull().isEmpty();
         assertThat(profile.benefits()).isNotNull().isEmpty();
-        assertThat(profile.workModes()).isNotNull().isEmpty();
         assertThat(profile.officeLocations()).isNotNull().isEmpty();
         assertThat(profile.departments()).isNotNull().isEmpty();
-        assertThat(profile.teams()).isNotNull().isEmpty();
-        assertThat(profile.businessUnits()).isNotNull().isEmpty();
-        assertThat(profile.employmentTypes()).isNotNull().isEmpty();
-        assertThat(profile.jobCategories()).isNotNull().isEmpty();
-        assertThat(profile.jobFamilies()).isNotNull().isEmpty();
-        assertThat(profile.jobLevels()).isNotNull().isEmpty();
-        assertThat(profile.jobTitles()).isNotNull().isEmpty();
     }
 
     @Test
