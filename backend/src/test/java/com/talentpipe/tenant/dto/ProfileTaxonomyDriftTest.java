@@ -3,6 +3,7 @@ package com.talentpipe.tenant.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.talentpipe.common.util.AllowedValues;
+import com.talentpipe.common.util.OptionKey;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
@@ -57,5 +58,26 @@ class ProfileTaxonomyDriftTest {
         assertThat(checked)
                 .as("expected to find all four checkbox-driven fields via reflection")
                 .isEqualTo(EXPECTED.size());
+    }
+
+    /**
+     * {@code @AllowedValues} and {@code ProfileNormalizer} both identify an
+     * option by its {@link OptionKey}, which folds away case, punctuation and
+     * {@code and}/{@code &}. Two options within one set that fold to the same
+     * key would therefore be indistinguishable: the validator would accept
+     * either spelling and the normalizer would canonicalize both to whichever
+     * comes first. Adding such an option must fail the build.
+     */
+    @Test
+    void everyOptionSetHasCollisionFreeKeys() {
+        EXPECTED.forEach((field, options) -> {
+            List<String> keys = options.stream().map(OptionKey::of).toList();
+            assertThat(keys)
+                    .as("two options in '%s' fold to the same OptionKey and "
+                            + "can no longer be told apart", field)
+                    .doesNotHaveDuplicates()
+                    .as("an option in '%s' folds to an empty OptionKey", field)
+                    .doesNotContain("");
+        });
     }
 }

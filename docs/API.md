@@ -21,7 +21,7 @@ Base path: `/api/v1`. All bodies are JSON.
 | POST | `/team/invitations/{userId}/resend` | `COMPANY_ADMIN` | Re-sends an invitation. `404` if it isn't in the caller's tenant. |
 | DELETE | `/team/invitations/{userId}` | `COMPANY_ADMIN` | Revokes a pending invitation. |
 | GET | `/tenant` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Full company profile for the authenticated tenant. Used by dashboard header and Settings page. |
-| PATCH | `/tenant` | `COMPANY_ADMIN` | Full-replace semantics despite the verb: every editable field must be sent, and an omitted/`null` field clears it — the client is expected to resubmit the whole profile it fetched from `GET`. Returns the full normalized profile. Immutable fields (`subdomain`, `planTier`, `status`) are ignored. `422` if the tenant is `SUSPENDED`. `400` if `workModes`, `benefits`, `employmentTypes` or `jobLevels` contains a value outside their fixed option set, or if `name`/`email` is nothing but HTML markup once sanitized. |
+| PATCH | `/tenant` | `COMPANY_ADMIN` | Full-replace semantics despite the verb: every editable field must be sent, and an omitted/`null` field clears it — the client is expected to resubmit the whole profile it fetched from `GET`. Returns the full normalized profile. Immutable fields (`subdomain`, `planTier`, `status`) are ignored. `422` if the tenant is `SUSPENDED`. `400` if `workModes`, `benefits`, `employmentTypes` or `jobLevels` contains a value outside their fixed option set — the message names the rejected value — or if `name`/`email` is nothing but HTML markup once sanitized. See [Checkbox option sets](#checkbox-option-sets). |
 | POST | `/tenant/logo` | `COMPANY_ADMIN` | Upload (or replace) company logo. `multipart/form-data`, field `file`. Allowed: `image/png`, `image/jpeg`, `image/svg+xml`, `image/webp`. Max 2 MB. Returns full profile with new `logoUrl`. `422` if the tenant is `SUSPENDED`. |
 | POST | `/tenant/cover` | `COMPANY_ADMIN` | Upload (or replace) cover image. Max 4 MB. Returns full profile with new `coverImageUrl`. `422` if the tenant is `SUSPENDED`. |
 | DELETE | `/tenant/logo` | `COMPANY_ADMIN` | Remove company logo. Idempotent — `204` even when no logo exists. `422` if the tenant is `SUSPENDED`. |
@@ -29,6 +29,21 @@ Base path: `/api/v1`. All bodies are JSON.
 | GET | `/public/companies/{subdomain}` | public | Curated public company profile (name, logo, cover, tagline, description, industry, website, socials, city, country). `404` for unknown subdomain. |
 | POST | `/public/candidates/register` | public | Candidate self-registration (no tenant, globally unique email). |
 | GET | `/public/jobs` | public | Public job board — empty page until the Job module lands. |
+
+### Checkbox option sets
+
+`workModes`, `benefits`, `employmentTypes` and `jobLevels` accept only the values below. Matching folds case, punctuation and `&`/`and`, so `remote_hybrid` and `REMOTE-HYBRID` are the same option; whatever is sent is stored in the canonical spelling shown here, which is what `GET` returns.
+
+`benefits` is the one set expressed as **ids** rather than prose. The label a candidate reads lives in the frontend catalogue, so a perk can be reworded without migrating tenant rows, and the stored value stays filterable.
+
+| Field | Accepted values |
+| --- | --- |
+| `benefits` | `REMOTE_HYBRID` (Remote / hybrid work), `FLEXIBLE_HOURS` (Flexible working hours), `HEALTH_INSURANCE` (Health insurance), `TRAINING` (Training & development), `PAID_LEAVE` (Generous paid leave), `PARENTAL_LEAVE` (Parental leave), `PERFORMANCE_BONUS` (Performance bonus), `STOCK_OPTIONS` (Stock options), `WELLBEING` (Wellbeing & gym support), `TRANSPORT` (Transport allowance), `MEALS` (Meals provided), `RELOCATION` (Relocation support), `CAREER_DEVELOPMENT` (Career development) |
+| `workModes` | `Remote`, `Hybrid`, `On-site` |
+| `employmentTypes` | `Full-time`, `Part-time`, `Contract`, `Internship`, `Temporary`, `Freelance` |
+| `jobLevels` | `Intern`, `Junior`, `Mid-level`, `Senior`, `Lead`, `Manager`, `Director` |
+
+The source of truth is `ProfileTaxonomy`; `ProfileTaxonomyDriftTest` fails the build if this set and the DTO's `@AllowedValues` drift apart.
 
 ## Error model
 

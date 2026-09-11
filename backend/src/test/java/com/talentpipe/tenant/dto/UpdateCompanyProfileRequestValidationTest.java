@@ -279,22 +279,54 @@ class UpdateCompanyProfileRequestValidationTest {
         var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, List.of("Health insurance", "Stock options"), null, null, null, null, null,
+                null, null, List.of("HEALTH_INSURANCE", "STOCK_OPTIONS"), null, null, null, null, null,
                 null, null, null, null);
         assertThat(hasViolationOn(validate(r), "benefits")).isFalse();
     }
 
-    /** benefits contains an ampersand ("Training & development") — a regression
-     *  guard for the whitelist entry the sanitizer used to mangle before it was
-     *  fixed to preserve plain text (see HtmlSanitizerTest). */
+    /** The whitelist holds catalogue ids, but {@code OptionKey} folds case and
+     *  punctuation, so a client that lower-cases or hyphenates an id is not
+     *  turned away over spelling. */
     @Test
-    void benefitContainingAmpersand_isAccepted() {
+    void benefitIdInAnEquivalentSpelling_isAccepted() {
         var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
                 null, null, null, null, null,
-                null, null, List.of("Training & development"), null, null, null, null, null,
+                null, null, List.of("remote_hybrid", "Career-Development"), null, null, null, null, null,
                 null, null, null, null);
         assertThat(hasViolationOn(validate(r), "benefits")).isFalse();
+    }
+
+    /** Benefits moved from candidate-facing labels to catalogue ids. Where a
+     *  label is just its id in prose ("Health insurance" / HEALTH_INSURANCE)
+     *  the fold still accepts it and the normalizer rewrites it to the id, but
+     *  a label whose wording diverges from its id is a different vocabulary,
+     *  not a different spelling, and is refused. */
+    @Test
+    void benefitLabelThatDivergesFromItsId_producesViolation() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null, null,
+                null, null, List.of("Remote / hybrid work"), null, null, null, null, null,
+                null, null, null, null);
+        assertThat(hasViolationOn(validate(r), "benefits")).isTrue();
+    }
+
+    /** A rejected option is named in the message — the client should be able to
+     *  see which value was refused, not only that one was. */
+    @Test
+    void unknownBenefit_messageNamesTheRejectedValue() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null, null,
+                null, null, List.of("REMOTE_HYBRID", "Free lunch every day"), null, null, null, null, null,
+                null, null, null, null);
+        assertThat(validate(r))
+                .filteredOn(v -> v.getPropertyPath().toString().equals("benefits"))
+                .extracting(jakarta.validation.ConstraintViolation::getMessage)
+                .singleElement(org.assertj.core.api.InstanceOfAssertFactories.STRING)
+                .contains("Free lunch every day")
+                .doesNotContain("REMOTE_HYBRID");
     }
 
     // ---------------------------------------------------------------- employmentTypes (checkbox @AllowedValues)

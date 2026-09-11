@@ -49,10 +49,8 @@ public class LocalFileStorageService implements FileStorageService {
             Path target = dir.resolve(storedName);
             Files.write(target, data);
             log.debug("Stored file locally: {}", target);
-            // Build an absolute URL using the current request's base URL.
-            return ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .pathSegment("api", "v1", "public", "media", category, storedName)
-                    .toUriString();
+            // Return relative URL path compatible with proxy and single-origin frontend.
+            return "/api/v1/public/media/" + category + "/" + storedName;
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to store file", e);
         }

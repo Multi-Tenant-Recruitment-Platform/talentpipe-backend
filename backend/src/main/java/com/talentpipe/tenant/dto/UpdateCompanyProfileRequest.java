@@ -151,17 +151,18 @@ public record UpdateCompanyProfileRequest(
         @ValidTaxonomyList
         List<String> values,
 
-        // ---- checkbox-driven list: fixed options only.
-        // Keep in sync with ProfileTaxonomy.BENEFITS (ProfileTaxonomyDriftTest guards this).
+        // ---- checkbox-driven list: fixed options only. Catalogue ids, not
+        // labels — see ProfileTaxonomy.BENEFITS for why, and keep the two in
+        // sync (ProfileTaxonomyDriftTest guards this).
         @AllowedValues(
                 value = {
-                        "Remote / hybrid work", "Flexible working hours",
-                        "Health insurance", "Training & development",
-                        "Generous paid leave", "Parental leave",
-                        "Performance bonus", "Stock options",
-                        "Wellbeing & gym support", "Transport allowance",
-                        "Meals provided", "Relocation support",
-                        "Career development"
+                        "REMOTE_HYBRID", "FLEXIBLE_HOURS",
+                        "HEALTH_INSURANCE", "TRAINING",
+                        "PAID_LEAVE", "PARENTAL_LEAVE",
+                        "PERFORMANCE_BONUS", "STOCK_OPTIONS",
+                        "WELLBEING", "TRANSPORT",
+                        "MEALS", "RELOCATION",
+                        "CAREER_DEVELOPMENT"
                 },
                 message = "benefits contains an unrecognised option")
         List<String> benefits,

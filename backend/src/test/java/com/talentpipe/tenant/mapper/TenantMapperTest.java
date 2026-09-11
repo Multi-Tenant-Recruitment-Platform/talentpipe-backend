@@ -74,7 +74,7 @@ class TenantMapperTest {
         tenant.setTeams(List.of("Backend", "Frontend"));
         tenant.setValues(List.of("Innovation", "Integrity"));
         tenant.setWorkModes(List.of("Remote", "Hybrid"));
-        tenant.setBenefits(List.of("Health insurance"));
+        tenant.setBenefits(List.of("HEALTH_INSURANCE"));
         tenant.setOfficeLocations(List.of("Colombo", "Kandy"));
         tenant.setEmploymentTypes(List.of("Full-time", "Contract"));
         tenant.setJobCategories(List.of("Software Engineering"));
