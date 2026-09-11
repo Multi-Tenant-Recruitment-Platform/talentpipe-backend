@@ -67,17 +67,11 @@ public class Tenant extends BaseEntity {
     @Column(name = "size", length = 100)
     private String size;
 
-    @Column(name = "employee_count")
-    private Integer employeeCount;
-
     @Column(name = "founded_year")
     private Integer foundedYear;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
-
-    @Column(name = "culture", columnDefinition = "TEXT")
-    private String culture;
 
     @Column(name = "mission", columnDefinition = "TEXT")
     private String mission;
@@ -133,9 +127,6 @@ public class Tenant extends BaseEntity {
 
     // --------------------------------------------------------------- location
 
-    @Column(name = "address", length = 255)
-    private String address;
-
     @Column(name = "city", length = 120)
     private String city;
 
@@ -151,16 +142,8 @@ public class Tenant extends BaseEntity {
     // -------------------------------------------------------- list / taxonomy
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "values", columnDefinition = "TEXT[]")
-    private List<String> values = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "benefits", columnDefinition = "TEXT[]")
     private List<String> benefits = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "work_modes", columnDefinition = "TEXT[]")
-    private List<String> workModes = new ArrayList<>();
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "office_locations", columnDefinition = "TEXT[]")
@@ -169,34 +152,6 @@ public class Tenant extends BaseEntity {
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "departments", columnDefinition = "TEXT[]")
     private List<String> departments = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "teams", columnDefinition = "TEXT[]")
-    private List<String> teams = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "business_units", columnDefinition = "TEXT[]")
-    private List<String> businessUnits = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "employment_types", columnDefinition = "TEXT[]")
-    private List<String> employmentTypes = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "job_categories", columnDefinition = "TEXT[]")
-    private List<String> jobCategories = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "job_families", columnDefinition = "TEXT[]")
-    private List<String> jobFamilies = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "job_levels", columnDefinition = "TEXT[]")
-    private List<String> jobLevels = new ArrayList<>();
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "job_titles", columnDefinition = "TEXT[]")
-    private List<String> jobTitles = new ArrayList<>();
 
     // ---------------------------------------------------------- constructors
 
@@ -283,14 +238,6 @@ public class Tenant extends BaseEntity {
         this.size = size;
     }
 
-    public Integer getEmployeeCount() {
-        return employeeCount;
-    }
-
-    public void setEmployeeCount(Integer employeeCount) {
-        this.employeeCount = employeeCount;
-    }
-
     public Integer getFoundedYear() {
         return foundedYear;
     }
@@ -305,14 +252,6 @@ public class Tenant extends BaseEntity {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public String getCulture() {
-        return culture;
-    }
-
-    public void setCulture(String culture) {
-        this.culture = culture;
     }
 
     public String getMission() {
@@ -449,14 +388,6 @@ public class Tenant extends BaseEntity {
 
     // --------------------------------------------------- location getters/setters
 
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
-    }
-
     public String getCity() {
         return city;
     }
@@ -491,28 +422,12 @@ public class Tenant extends BaseEntity {
 
     // ------------------------------------------------- list getters/setters
 
-    public List<String> getValues() {
-        return values;
-    }
-
-    public void setValues(List<String> values) {
-        this.values = values != null ? values : new ArrayList<>();
-    }
-
     public List<String> getBenefits() {
         return benefits;
     }
 
     public void setBenefits(List<String> benefits) {
         this.benefits = benefits != null ? benefits : new ArrayList<>();
-    }
-
-    public List<String> getWorkModes() {
-        return workModes;
-    }
-
-    public void setWorkModes(List<String> workModes) {
-        this.workModes = workModes != null ? workModes : new ArrayList<>();
     }
 
     public List<String> getOfficeLocations() {
@@ -529,61 +444,5 @@ public class Tenant extends BaseEntity {
 
     public void setDepartments(List<String> departments) {
         this.departments = departments != null ? departments : new ArrayList<>();
-    }
-
-    public List<String> getTeams() {
-        return teams;
-    }
-
-    public void setTeams(List<String> teams) {
-        this.teams = teams != null ? teams : new ArrayList<>();
-    }
-
-    public List<String> getBusinessUnits() {
-        return businessUnits;
-    }
-
-    public void setBusinessUnits(List<String> businessUnits) {
-        this.businessUnits = businessUnits != null ? businessUnits : new ArrayList<>();
-    }
-
-    public List<String> getEmploymentTypes() {
-        return employmentTypes;
-    }
-
-    public void setEmploymentTypes(List<String> employmentTypes) {
-        this.employmentTypes = employmentTypes != null ? employmentTypes : new ArrayList<>();
-    }
-
-    public List<String> getJobCategories() {
-        return jobCategories;
-    }
-
-    public void setJobCategories(List<String> jobCategories) {
-        this.jobCategories = jobCategories != null ? jobCategories : new ArrayList<>();
-    }
-
-    public List<String> getJobFamilies() {
-        return jobFamilies;
-    }
-
-    public void setJobFamilies(List<String> jobFamilies) {
-        this.jobFamilies = jobFamilies != null ? jobFamilies : new ArrayList<>();
-    }
-
-    public List<String> getJobLevels() {
-        return jobLevels;
-    }
-
-    public void setJobLevels(List<String> jobLevels) {
-        this.jobLevels = jobLevels != null ? jobLevels : new ArrayList<>();
-    }
-
-    public List<String> getJobTitles() {
-        return jobTitles;
-    }
-
-    public void setJobTitles(List<String> jobTitles) {
-        this.jobTitles = jobTitles != null ? jobTitles : new ArrayList<>();
     }
 }
