@@ -64,6 +64,35 @@ class AllowedValuesValidatorTest {
         assertThat(validator.isValid(Arrays.asList("Remote", "hybrid", "ON-SITE"), null)).isTrue();
     }
 
+    @Test
+    void punctuationAndSpacingVariantsOfAnOption_areValid() {
+        // "On-site" as a slug, as two words, and as one — all the same option
+        assertThat(validator.isValid(List.of("on_site"), null)).isTrue();
+        assertThat(validator.isValid(List.of("On site"), null)).isTrue();
+        assertThat(validator.isValid(List.of("onsite"), null)).isTrue();
+    }
+
+    @Test
+    void surroundingWhitespace_isValid() {
+        assertThat(validator.isValid(List.of("  Remote  "), null)).isTrue();
+    }
+
+    @Test
+    void labelAndSlugSpellingsOfAMultiWordOption_areValid() {
+        AllowedValuesValidator benefits = new AllowedValuesValidator();
+        benefits.initialize(createAnnotation(new String[] {
+                "Remote / hybrid work", "Training & development"}));
+
+        assertThat(benefits.isValid(List.of("Remote / hybrid work"), null)).isTrue();
+        assertThat(benefits.isValid(List.of("remote_hybrid_work"), null)).isTrue();
+        assertThat(benefits.isValid(List.of("Remote/Hybrid Work"), null)).isTrue();
+        // "&" written out is the same option, not a different one
+        assertThat(benefits.isValid(List.of("Training and development"), null)).isTrue();
+        assertThat(benefits.isValid(List.of("training-and-development"), null)).isTrue();
+        // ...but an option that is genuinely absent is still rejected
+        assertThat(benefits.isValid(List.of("Free coffee"), null)).isFalse();
+    }
+
     // ---------------------------------------------------------------- invalid values
 
     @Test
@@ -77,13 +106,27 @@ class AllowedValuesValidatorTest {
     }
 
     @Test
-    void emptyStringEntry_isInvalid() {
-        assertThat(validator.isValid(List.of(""), null)).isFalse();
+    void punctuationOnlyEntry_isInvalid() {
+        // folds to an empty key, which must not be treated as a match
+        assertThat(validator.isValid(List.of("///"), null)).isFalse();
+    }
+
+    // ---------------------------------------------------------------- blank entries
+
+    @Test
+    void emptyStringEntry_isValid() {
+        // blanks are dropped by ProfileNormalizer, not unrecognised options
+        assertThat(validator.isValid(List.of(""), null)).isTrue();
     }
 
     @Test
-    void blankStringEntry_isInvalid() {
-        assertThat(validator.isValid(List.of("   "), null)).isFalse();
+    void blankStringEntry_isValid() {
+        assertThat(validator.isValid(List.of("   "), null)).isTrue();
+    }
+
+    @Test
+    void blankEntryAlongsideAllowedValues_isValid() {
+        assertThat(validator.isValid(Arrays.asList("Remote", "", "Hybrid"), null)).isTrue();
     }
 
     // ---------------------------------------------------------------- null entries in list

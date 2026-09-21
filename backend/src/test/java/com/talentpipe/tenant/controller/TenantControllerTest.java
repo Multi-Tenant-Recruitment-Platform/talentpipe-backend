@@ -3,7 +3,6 @@ package com.talentpipe.tenant.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -174,11 +173,11 @@ class TenantControllerTest {
     }
 
     @Test
-    void updateProfile_invalidWorkMode_returns400() throws Exception {
+    void updateProfile_invalidBenefit_returns400() throws Exception {
         Map<String, Object> body = Map.of(
                 "name", "Acme Corp",
                 "email", "admin@acme.io",
-                "workModes", List.of("Freelance"));  // @AllowedValues violation
+                "benefits", List.of("Free lunch every day"));  // @AllowedValues violation
 
         mockMvc.perform(patch("/api/v1/tenant")
                         .with(asCompanyAdmin(tenantId))
@@ -186,7 +185,7 @@ class TenantControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", Matchers.containsString("workModes")));
+                .andExpect(jsonPath("$.message", Matchers.containsString("benefits")));
     }
 
     // ---------------------------------------------------------------- PATCH — authorization (403)
@@ -260,12 +259,11 @@ class TenantControllerTest {
         return new CompanyProfileResponse(
                 id, "Acme Corp", "acme", "STANDARD", "ACTIVE",
                 null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                null, null, null, null,
+                List.of(), List.of(), List.of(),
                 Instant.now());
     }
 }

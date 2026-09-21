@@ -165,7 +165,6 @@ public class TenantService {
         tenant.setHrEmail(normalizer.normalizeLine(request.hrEmail()));
         tenant.setPhone(normalizer.normalizeLine(request.phone()));
         tenant.setAlternativePhone(normalizer.normalizeLine(request.alternativePhone()));
-        tenant.setAddress(normalizer.normalizeLine(request.address()));
         tenant.setCity(normalizer.normalizeLine(request.city()));
         tenant.setState(normalizer.normalizeLine(request.state()));
         tenant.setPostalCode(normalizer.normalizeLine(request.postalCode()));
@@ -173,12 +172,10 @@ public class TenantService {
 
         // ---- multiline fields (preserve newlines)
         tenant.setDescription(normalizer.normalizeMultiline(request.description()));
-        tenant.setCulture(normalizer.normalizeMultiline(request.culture()));
         tenant.setMission(normalizer.normalizeMultiline(request.mission()));
         tenant.setVision(normalizer.normalizeMultiline(request.vision()));
 
         // ---- numeric fields (null = clear)
-        tenant.setEmployeeCount(request.employeeCount());
         tenant.setFoundedYear(request.foundedYear());
 
         // ---- URL fields (scheme normalization)
@@ -189,19 +186,9 @@ public class TenantService {
         tenant.setInstagramUrl(normalizer.normalizeUrl(request.instagramUrl()));
 
         // ---- list fields (trim, deduplicate, blank-filter)
-        tenant.setValues(normalizer.normalizeList(request.values()));
         tenant.setBenefits(normalizer.normalizeList(request.benefits(), ProfileTaxonomy.BENEFITS));
-        tenant.setWorkModes(normalizer.normalizeList(request.workModes(), ProfileTaxonomy.WORK_MODES));
         tenant.setOfficeLocations(normalizer.normalizeList(request.officeLocations()));
         tenant.setDepartments(normalizer.normalizeList(request.departments()));
-        tenant.setTeams(normalizer.normalizeList(request.teams()));
-        tenant.setBusinessUnits(normalizer.normalizeList(request.businessUnits()));
-        tenant.setEmploymentTypes(
-                normalizer.normalizeList(request.employmentTypes(), ProfileTaxonomy.EMPLOYMENT_TYPES));
-        tenant.setJobCategories(normalizer.normalizeList(request.jobCategories()));
-        tenant.setJobFamilies(normalizer.normalizeList(request.jobFamilies()));
-        tenant.setJobLevels(normalizer.normalizeList(request.jobLevels(), ProfileTaxonomy.JOB_LEVELS));
-        tenant.setJobTitles(normalizer.normalizeList(request.jobTitles()));
 
         Tenant saved = tenantRepository.save(tenant);
         return tenantMapper.toProfileResponse(saved);

@@ -331,12 +331,11 @@ class TenantMediaServiceTest {
         return new CompanyProfileResponse(
                 tenantId, "Acme Corp", "acme", "STANDARD", "ACTIVE",
                 logoUrl, coverImageUrl, null,
-                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                null, null, null, null,
+                List.of(), List.of(), List.of(),
                 Instant.now());
     }
 }

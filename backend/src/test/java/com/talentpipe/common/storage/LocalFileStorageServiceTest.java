@@ -38,11 +38,8 @@ class LocalFileStorageServiceTest {
     void store_createsFileInExpectedDirectory() throws Exception {
         byte[] data = "hello world".getBytes();
 
-        try {
-            storageService.store(tenantId, "logo", "logo.png", data, "image/png");
-        } catch (IllegalStateException e) {
-            // Expected outside a real HTTP request — file is written before URL building
-        }
+        String url = storageService.store(tenantId, "logo", "logo.png", data, "image/png");
+        assertThat(url).startsWith("/api/v1/public/media/logo/");
 
         // File must have been written to tempDir/tenant/{tenantId}/logo/
         Path expectedDir = tempDir.resolve("tenant").resolve(tenantId.toString()).resolve("logo");
@@ -52,19 +49,9 @@ class LocalFileStorageServiceTest {
 
     @Test
     void store_returnsNonNullUrl() {
-        // ServletUriComponentsBuilder is unavailable outside a request — store returns
-        // an IllegalStateException-wrapped URL in tests; we just verify no NPE on the path.
         byte[] data = "image bytes".getBytes();
-        // If running outside a servlet context this throws; the important thing is the
-        // directory and file are created. We verify that separately above.
-        try {
-            String url = storageService.store(tenantId, "logo", "logo.png", data, "image/png");
-            assertThat(url).isNotBlank();
-        } catch (IllegalStateException e) {
-            // Expected outside a real HTTP request context — file creation still succeeded.
-            Path dir = tempDir.resolve("tenant").resolve(tenantId.toString()).resolve("logo");
-            assertThat(dir).isDirectory();
-        }
+        String url = storageService.store(tenantId, "logo", "logo.png", data, "image/png");
+        assertThat(url).startsWith("/api/v1/public/media/logo/").endsWith(".png");
     }
 
     @Test

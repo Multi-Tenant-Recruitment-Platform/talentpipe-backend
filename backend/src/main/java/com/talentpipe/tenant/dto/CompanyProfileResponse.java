@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * Full company profile response — the shape returned by {@code GET /api/v1/tenant}
  * and {@code PATCH /api/v1/tenant}. Matches the frontend's {@code CompanyProfileResponse}
- * type in {@code types.ts} exactly (camelCase, all 50+ fields).
+ * type in {@code types.ts} exactly (camelCase, all fields).
  *
  * <p>This record is intentionally separate from {@link TenantResponse} to avoid
  * breaking the existing auth-module contract. Auth-module callers keep using the
@@ -33,10 +33,8 @@ public record CompanyProfileResponse(
         String industry,
         String companyType,
         String size,
-        Integer employeeCount,
         Integer foundedYear,
         String description,
-        String culture,
         String mission,
         String vision,
         String legalName,
@@ -59,25 +57,15 @@ public record CompanyProfileResponse(
         String instagramUrl,
 
         // ---- location
-        String address,
         String city,
         String state,
         String postalCode,
         String country,
 
         // ---- taxonomy lists (never null — empty list when not set)
-        List<String> values,
         List<String> benefits,
-        List<String> workModes,
         List<String> officeLocations,
         List<String> departments,
-        List<String> teams,
-        List<String> businessUnits,
-        List<String> employmentTypes,
-        List<String> jobCategories,
-        List<String> jobFamilies,
-        List<String> jobLevels,
-        List<String> jobTitles,
 
         // ---- audit
         Instant updatedAt

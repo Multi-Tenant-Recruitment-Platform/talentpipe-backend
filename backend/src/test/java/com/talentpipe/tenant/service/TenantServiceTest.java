@@ -263,7 +263,8 @@ class TenantServiceTest {
         when(normalizer.normalizeLine(null)).thenReturn(null);
         when(normalizer.normalizeMultiline(null)).thenReturn(null);
         when(normalizer.normalizeUrl(null)).thenReturn(null);
-        when(normalizer.normalizeList(null)).thenReturn(Collections.emptyList());
+        when(normalizer.normalizeList(any())).thenReturn(Collections.emptyList());
+        when(normalizer.normalizeList(any(), any())).thenReturn(Collections.emptyList());
         when(tenantRepository.save(tenant)).thenReturn(tenant);
         when(tenantMapper.toProfileResponse(tenant)).thenReturn(profileResponse);
 
@@ -335,11 +336,7 @@ class TenantServiceTest {
         // call — with an all-null request every normalizeList(null) call is
         // indistinguishable from the others.
         UpdateCompanyProfileRequest request = buildUpdateRequestWithLists(
-                List.of("value1"), List.of("benefit1"), List.of("workMode1"),
-                List.of("officeLocation1"), List.of("department1"), List.of("team1"),
-                List.of("businessUnit1"), List.of("employmentType1"),
-                List.of("jobCategory1"), List.of("jobFamily1"), List.of("jobLevel1"),
-                List.of("jobTitle1"));
+                List.of("benefit1"), List.of("officeLocation1"), List.of("department1"));
 
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
         when(normalizer.normalizeLine(anyString())).thenAnswer(inv -> inv.getArgument(0));
@@ -351,9 +348,6 @@ class TenantServiceTest {
         tenantService.updateProfile(tenantId, request);
 
         verify(normalizer).normalizeList(List.of("benefit1"), ProfileTaxonomy.BENEFITS);
-        verify(normalizer).normalizeList(List.of("workMode1"), ProfileTaxonomy.WORK_MODES);
-        verify(normalizer).normalizeList(List.of("employmentType1"), ProfileTaxonomy.EMPLOYMENT_TYPES);
-        verify(normalizer).normalizeList(List.of("jobLevel1"), ProfileTaxonomy.JOB_LEVELS);
         // free-text fields must NOT be canonicalized — they have no fixed option set
         verify(normalizer).normalizeList(List.of("department1"));
         verify(normalizer, never()).normalizeList(eq(List.of("department1")), any());
@@ -370,6 +364,7 @@ class TenantServiceTest {
         when(normalizer.normalizeMultiline(null)).thenReturn(null);
         when(normalizer.normalizeUrl(null)).thenReturn(null);
         when(normalizer.normalizeList(any())).thenReturn(normalized);
+        when(normalizer.normalizeList(any(), any())).thenReturn(Collections.emptyList());
         when(tenantRepository.save(tenant)).thenReturn(tenant);
         when(tenantMapper.toProfileResponse(tenant)).thenReturn(profileResponse);
 
@@ -590,42 +585,35 @@ class TenantServiceTest {
 
     private UpdateCompanyProfileRequest buildUpdateRequest(String name, String email) {
         return new UpdateCompanyProfileRequest(
-                name, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                name, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 email, null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null,
+                null, null, null);
     }
 
     /** Like {@link #buildUpdateRequest}, but with every list field populated
      *  with a distinct value — for tests that need to verify per-field
      *  normalizer wiring without null-argument collisions. */
     private UpdateCompanyProfileRequest buildUpdateRequestWithLists(
-            List<String> values, List<String> benefits, List<String> workModes,
-            List<String> officeLocations, List<String> departments, List<String> teams,
-            List<String> businessUnits, List<String> employmentTypes,
-            List<String> jobCategories, List<String> jobFamilies,
-            List<String> jobLevels, List<String> jobTitles) {
+            List<String> benefits, List<String> officeLocations, List<String> departments) {
         return new UpdateCompanyProfileRequest(
-                "Acme", null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                "Acme", null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 "admin@acme.io", null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                values, benefits, workModes, officeLocations, departments, teams,
-                businessUnits, employmentTypes, jobCategories, jobFamilies,
-                jobLevels, jobTitles);
+                null, null, null, null,
+                benefits, officeLocations, departments);
     }
 
     private CompanyProfileResponse buildProfileResponse(UUID id, String logoUrl, String coverUrl) {
         return new CompanyProfileResponse(
                 id, "Acme Corp", "acme", "STANDARD", "ACTIVE",
                 logoUrl, coverUrl, null,
-                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 null, null, null,
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null,
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                null, null, null, null,
+                List.of(), List.of(), List.of(),
                 Instant.now());
     }
 }

@@ -1,6 +1,7 @@
 package com.talentpipe.tenant.service;
 
 import com.talentpipe.common.util.HtmlSanitizer;
+import com.talentpipe.common.util.OptionKey;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -111,12 +112,16 @@ public class ProfileNormalizer {
      * Normalizes a checkbox-driven list field, additionally canonicalizing
      * every entry to its spelling in {@code canonicalOptions}.
      *
-     * <p>{@code @AllowedValues} accepts these fields case-insensitively, so
-     * without this step a client sending {@code "remote"} and one sending
-     * {@code "Remote"} would persist different strings for the same option and
-     * the frontend's exact-match checkbox binding would fail to tick for one
-     * of them. Entries with no canonical match are kept verbatim — validation
-     * has already rejected genuinely unknown values by this point.</p>
+     * <p>{@code @AllowedValues} accepts these fields leniently — differing
+     * case, punctuation, spacing, and {@code and} for {@code &} all pass — so
+     * without this step a client sending {@code "remote_hybrid"} and one
+     * sending {@code "REMOTE_HYBRID"} would persist different strings for the
+     * same option and the frontend's exact-match checkbox binding would fail
+     * to tick for one of them. Matching here uses the same
+     * {@link OptionKey} as the validator, so every value that passed
+     * validation is canonicalized. Entries with no canonical match are kept
+     * verbatim — validation has already rejected genuinely unknown values by
+     * this point.</p>
      *
      * @param values          raw entries from the request
      * @param canonicalOptions canonical spellings, or {@code null} for
@@ -147,15 +152,16 @@ public class ProfileNormalizer {
 
     /**
      * Returns the canonical spelling of {@code value} when
-     * {@code canonicalOptions} contains a case-insensitive match, otherwise
+     * {@code canonicalOptions} contains an {@link OptionKey} match, otherwise
      * {@code value} unchanged.
      */
     private String canonicalize(String value, List<String> canonicalOptions) {
         if (canonicalOptions == null) {
             return value;
         }
+        String key = OptionKey.of(value);
         for (String option : canonicalOptions) {
-            if (option.equalsIgnoreCase(value)) {
+            if (OptionKey.of(option).equals(key)) {
                 return option;
             }
         }
