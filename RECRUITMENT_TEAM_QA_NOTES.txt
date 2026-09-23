@@ -13,9 +13,9 @@ QA Verification Report
 
 2. Objective
 ------------
-To verify the Recruitment Team Management implementation, with particular
+To verify the Recruitment Team Management backend APIs, with particular
 attention to team member assignment, team member updates, team member removal,
-and department and vacancy mapping.
+department and vacancy mapping, and the related database operations.
 
 3. Functional Areas Reviewed
 ----------------------------
@@ -24,7 +24,9 @@ and department and vacancy mapping.
 - Team member removal
 - Department mapping
 - Vacancy mapping
+- Database persistence and retrieval operations
 - Recruitment Team service behavior and validation
+- Defect retesting and verification
 
 4. Automated Test Results
 -------------------------
@@ -43,6 +45,11 @@ and department and vacancy mapping.
 - Recruitment Team service tests passed for the tested assignment, update,
    removal, and vacancy-mapping behavior.
 - No new compilation or packaging errors were identified.
+- Continued QA testing covered the Recruitment Team backend API operations.
+- Database operations were reviewed to confirm that team members were assigned,
+  updated, and removed correctly.
+- Defects identified during testing were reported and subsequently retested for
+  verification.
 
 6. Test Limitation
 ------------------
@@ -56,9 +63,11 @@ and department and vacancy mapping.
 7. QA Assessment
 ----------------
 The Recruitment Team implementation passed all locally executable unit,
-service, build, and packaging checks. The result is positive for the tested
-local scope, but final sign-off should remain pending until the Docker-backed
-integration tests pass in CI or another Docker-enabled environment.
+service, build, and packaging checks. API and database behavior was also
+reviewed during continued QA, including member assignment, updates, removals,
+and defect verification. The result is positive for the tested local scope,
+but final sign-off should remain pending until the Docker-backed integration
+tests pass in CI or another Docker-enabled environment.
 
 8. Recommendation
 -----------------
