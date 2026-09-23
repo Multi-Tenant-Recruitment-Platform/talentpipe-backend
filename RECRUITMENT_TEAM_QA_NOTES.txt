@@ -1,65 +1,67 @@
-Recruitment Team Management - QA Notes
-=======================================
+Recruitment Team Management
+QA Verification Report
+=======================
 
-QA Scope
---------
-- Performed QA testing on the Recruitment Team Management module.
-- Tested team member assignment functionality.
-- Tested team member update functionality.
-- Tested team member removal functionality.
-- Tested department and vacancy mapping functionality.
-
-Issues and Observations
------------------------
-- Document issues and observations identified during testing below.
-
-1. Issue:
-   Steps to reproduce:
-   Expected result:
-   Actual result:
-   Severity:
-   Status:
-
-2. Issue:
-   Steps to reproduce:
-   Expected result:
-   Actual result:
-   Severity:
-   Status:
-
-3. Observation:
-   Details:
-   Impact:
-   Recommendation:
-
-Test Environment
-----------------
+1. Report Information
+----------------------
 - Branch: Manage-Recruitment-Teams
-- Module: Recruitment Team Management
 - Commit: 2d6b241
-- Date: 2026-09-23
+- Test date: 2026-09-23
+- Module: Recruitment Team Management
+- Tester: Development QA verification
 - Test command: backend/mvnw.cmd -B verify
 
-QA Execution Results
---------------------
-- Build result: PASS
-- Tests run: 63
-- Failures: 0
-- Errors: 0
-- Skipped: 24
-- RecruitmentTeamServiceTest: PASS (10 tests)
-- Packaging: PASS
+2. Objective
+------------
+To verify the Recruitment Team Management implementation, with particular
+attention to team member assignment, team member updates, team member removal,
+and department and vacancy mapping.
 
-Skipped Tests and Limitation
+3. Functional Areas Reviewed
 ----------------------------
-- The 24 skipped tests are Docker-backed integration tests using Testcontainers.
-- Docker was not available in the local environment, so those tests could not
-   be executed locally.
-- GitHub Actions previously reported a failure in the full verify step. The
-   detailed Maven log was unavailable, so the Docker-backed CI failure could not
-   be reproduced locally.
+- Team member assignment
+- Team member role/update operations
+- Team member removal
+- Department mapping
+- Vacancy mapping
+- Recruitment Team service behavior and validation
 
-Overall Assessment
+4. Automated Test Results
+-------------------------
+- Overall build: PASS
+- Maven verification: PASS
+- Tests executed: 63
+- Test failures: 0
+- Test errors: 0
+- Tests skipped: 24
+- RecruitmentTeamServiceTest: PASS (10 tests)
+- Application packaging: PASS
+
+5. Findings
+-----------
+- No failures were observed in the tests that executed locally.
+- Recruitment Team service tests passed for the tested assignment, update,
+   removal, and vacancy-mapping behavior.
+- No new compilation or packaging errors were identified.
+
+6. Test Limitation
 ------------------
-- Local unit and build verification passed.
-- Full integration-test coverage remains pending in an environment with Docker.
+- The 24 skipped tests are Docker-backed integration tests using Testcontainers.
+- Docker was unavailable in the local environment, so full API and database
+  integration coverage could not be completed locally.
+- GitHub Actions previously reported a failure during the full verify step.
+  The detailed Maven log was unavailable, so the CI failure could not be
+  reproduced or isolated from this environment.
+
+7. QA Assessment
+----------------
+The Recruitment Team implementation passed all locally executable unit,
+service, build, and packaging checks. The result is positive for the tested
+local scope, but final sign-off should remain pending until the Docker-backed
+integration tests pass in CI or another Docker-enabled environment.
+
+8. Recommendation
+-----------------
+Run the full Maven verification again in GitHub Actions with Docker enabled,
+review the failing integration-test log, and attach the result before final
+release approval.
