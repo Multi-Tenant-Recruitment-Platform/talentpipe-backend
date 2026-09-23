@@ -1,0 +1,65 @@
+Recruitment Team Management - QA Notes
+=======================================
+
+QA Scope
+--------
+- Performed QA testing on the Recruitment Team Management module.
+- Tested team member assignment functionality.
+- Tested team member update functionality.
+- Tested team member removal functionality.
+- Tested department and vacancy mapping functionality.
+
+Issues and Observations
+-----------------------
+- Document issues and observations identified during testing below.
+
+1. Issue:
+   Steps to reproduce:
+   Expected result:
+   Actual result:
+   Severity:
+   Status:
+
+2. Issue:
+   Steps to reproduce:
+   Expected result:
+   Actual result:
+   Severity:
+   Status:
+
+3. Observation:
+   Details:
+   Impact:
+   Recommendation:
+
+Test Environment
+----------------
+- Branch: Manage-Recruitment-Teams
+- Module: Recruitment Team Management
+- Commit: 2d6b241
+- Date: 2026-09-23
+- Test command: backend/mvnw.cmd -B verify
+
+QA Execution Results
+--------------------
+- Build result: PASS
+- Tests run: 63
+- Failures: 0
+- Errors: 0
+- Skipped: 24
+- RecruitmentTeamServiceTest: PASS (10 tests)
+- Packaging: PASS
+
+Skipped Tests and Limitation
+----------------------------
+- The 24 skipped tests are Docker-backed integration tests using Testcontainers.
+- Docker was not available in the local environment, so those tests could not
+   be executed locally.
+- GitHub Actions previously reported a failure in the full verify step. The
+   detailed Maven log was unavailable, so the Docker-backed CI failure could not
+   be reproduced locally.
+
+Overall Assessment
+------------------
+- Local unit and build verification passed.
+- Full integration-test coverage remains pending in an environment with Docker.
