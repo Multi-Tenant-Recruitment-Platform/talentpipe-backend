@@ -2,6 +2,7 @@ package com.talentpipe.job.controller;
 
 import com.talentpipe.common.dto.PageResponse;
 import com.talentpipe.job.dto.JobSummaryResponse;
+import com.talentpipe.job.service.JobService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,6 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/public/jobs")
 public class PublicJobController {
 
+    private final JobService jobService;
+
+    public PublicJobController(JobService jobService) {
+        this.jobService = jobService;
+    }
+
     /**
      * Lists published jobs across all tenants.
      *
@@ -28,6 +35,6 @@ public class PublicJobController {
     public PageResponse<JobSummaryResponse> listPublishedJobs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.empty(page, size);
+        return PageResponse.from(jobService.listPublished(page, size));
     }
 }
