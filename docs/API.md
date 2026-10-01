@@ -29,6 +29,13 @@ Base path: `/api/v1`. All bodies are JSON.
 | GET | `/public/companies/{subdomain}` | public | Curated public company profile (name, logo, cover, tagline, description, industry, website, socials, city, country). `404` for unknown subdomain. |
 | POST | `/public/candidates/register` | public | Candidate self-registration (no tenant, globally unique email). |
 | GET | `/public/jobs` | public | Public job board — empty page until the Job module lands. |
+| POST | `/jobs` | `COMPANY_ADMIN`, `HR_MANAGER` | Creates a published job for the authenticated tenant. |
+| POST | `/applications/jobs/{jobId}` | `CANDIDATE` | Submits one application to a published job. Duplicate submissions return `409`. |
+| GET | `/applications` | `CANDIDATE` | Lists the signed-in candidate's applications and current statuses. |
+| GET | `/applications/{applicationId}` | `CANDIDATE` | Gets one application owned by the signed-in candidate. |
+| DELETE | `/applications/{applicationId}` | `CANDIDATE` | Withdraws an application and notifies the tenant's company admins and HR managers. Idempotent when already withdrawn. |
+| GET | `/applications/tenant` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Lists applications belonging to the authenticated tenant. |
+| PATCH | `/applications/{applicationId}/status` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Updates status to `APPLIED`, `IN_REVIEW`, `SHORTLISTED`, or `REJECTED`. |
 
 ### Checkbox option sets
 
