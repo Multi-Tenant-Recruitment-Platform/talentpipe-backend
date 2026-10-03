@@ -29,6 +29,12 @@ class JobSlugTest {
     }
 
     @Test
+    void of_neverStartsOrEndsTheWordsWithAHyphen_whateverPunctuationSurroundsThem() {
+        assertThat(JobSlug.of("(Urgent) Engineer!", "Acme.", ID)).isEqualTo("urgent-engineer-acme-" + COMPACT_ID);
+        assertThat(JobSlug.of("--- Engineer ---", "*** Acme ***", ID)).isEqualTo("engineer-acme-" + COMPACT_ID);
+    }
+
+    @Test
     void of_foldsAccentsToPlainLetters() {
         assertThat(JobSlug.of("Ingénieur Sénior", "Café Zürich", ID))
                 .isEqualTo("ingenieur-senior-cafe-zurich-" + COMPACT_ID);

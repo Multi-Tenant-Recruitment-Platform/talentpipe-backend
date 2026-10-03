@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.springframework.util.StringUtils;
 
 /**
  * The public URL key of a vacancy:
@@ -88,14 +87,24 @@ public final class JobSlug {
     private static String slugify(String text) {
         String folded = COMBINING_MARKS.matcher(Normalizer.normalize(text, Normalizer.Form.NFKD)).replaceAll("");
         String hyphenated = NON_ALPHANUMERIC_RUN.matcher(folded.toLowerCase(Locale.ROOT)).replaceAll("-");
-        // Punctuation at either end of the text has become a hyphen there; drop it.
-        String slug = StringUtils.trimTrailingCharacter(StringUtils.trimLeadingCharacter(hyphenated, '-'), '-');
+        String slug = trimEdgeHyphens(hyphenated);
         if (slug.length() <= MAX_WORDS_LENGTH) {
             return slug;
         }
         String cut = slug.substring(0, MAX_WORDS_LENGTH);
         int lastBreak = cut.lastIndexOf('-');
         return lastBreak > 0 ? cut.substring(0, lastBreak) : cut;
+    }
+
+    /**
+     * Drops the hyphen that punctuation at either end of the text turned into.
+     * Runs were already collapsed to a single hyphen, so there is at most one
+     * at each end.
+     */
+    private static String trimEdgeHyphens(String text) {
+        int start = text.startsWith("-") ? 1 : 0;
+        int end = text.length() > start && text.endsWith("-") ? text.length() - 1 : text.length();
+        return text.substring(start, end);
     }
 
     private static String nullToEmpty(String value) {
