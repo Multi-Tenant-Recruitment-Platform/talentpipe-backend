@@ -3,6 +3,7 @@ package com.talentpipe.tenant.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
 import com.talentpipe.tenant.entity.Tenant;
@@ -238,5 +239,18 @@ class TenantMapperTest {
         assertThat(pub.twitterUrl()).isEqualTo("https://x.com/lankatech");
         assertThat(pub.instagramUrl()).isEqualTo("https://instagram.com/lankatech");
         assertThat(pub.facebookUrl()).isEqualTo("https://facebook.com/lankatech");
+    }
+
+    // ---------------------------------------------------------------- toCompanySummary (cross-module DTO)
+
+    @Test
+    void toCompanySummary_mapsWhatOtherModulesLabelACompanyWith() {
+        CompanySummaryResponse summary = mapper.toCompanySummary(tenant);
+
+        assertThat(summary.id()).isEqualTo(tenant.getId());
+        assertThat(summary.name()).isEqualTo("LankaTech Solutions");
+        assertThat(summary.subdomain()).isEqualTo("lankatech");
+        assertThat(summary.logoUrl()).isEqualTo("https://cdn.example.com/logo.png");
+        assertThat(summary.timezone()).isEqualTo("Asia/Colombo");
     }
 }
