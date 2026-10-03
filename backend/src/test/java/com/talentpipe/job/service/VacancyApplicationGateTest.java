@@ -64,28 +64,28 @@ class VacancyApplicationGateTest {
 
     @Test
     void closedVacancy_refusesNewApplications() {
-        JobVacancy vacancy = stored(VacancyFixtures.closed(TENANT));
+        UUID vacancyId = stored(VacancyFixtures.closed(TENANT)).getId();
 
-        assertThatThrownBy(() -> gate.requireOpen(vacancy.getId()))
+        assertThatThrownBy(() -> gate.requireOpen(vacancyId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("This vacancy is closed and no longer accepts applications.");
     }
 
     @Test
     void archivedVacancy_refusesNewApplications() {
-        JobVacancy vacancy = stored(VacancyFixtures.archived(TENANT));
+        UUID vacancyId = stored(VacancyFixtures.archived(TENANT)).getId();
 
-        assertThatThrownBy(() -> gate.requireOpen(vacancy.getId()))
+        assertThatThrownBy(() -> gate.requireOpen(vacancyId))
                 .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
     void draftVacancy_looksExactlyLikeOneThatDoesNotExist() {
-        JobVacancy draft = stored(VacancyFixtures.draft(TENANT));
+        UUID draft = stored(VacancyFixtures.draft(TENANT)).getId();
         UUID missing = UUID.randomUUID();
         when(repository.findByIdForShare(missing)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> gate.requireOpen(draft.getId()))
+        assertThatThrownBy(() -> gate.requireOpen(draft))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Job not found");
         assertThatThrownBy(() -> gate.requireOpen(missing))
@@ -108,8 +108,9 @@ class VacancyApplicationGateTest {
         vacancy.publish(NOW, TODAY);
         stored(VacancyFixtures.persisted(vacancy));
         when(calendar.today(TENANT)).thenReturn(TODAY.plusDays(1));
+        UUID vacancyId = vacancy.getId();
 
-        assertThatThrownBy(() -> gate.requireOpen(vacancy.getId()))
+        assertThatThrownBy(() -> gate.requireOpen(vacancyId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Applications for this vacancy closed on 2026-10-03.");
     }

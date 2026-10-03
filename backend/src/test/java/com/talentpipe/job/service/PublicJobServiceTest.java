@@ -203,8 +203,9 @@ class PublicJobServiceTest {
         // archived vacancy with this id simply does not come back.
         UUID id = UUID.randomUUID();
         when(repository.findByIdAndStatus(id, VacancyStatus.PUBLISHED)).thenReturn(Optional.empty());
+        String key = id.toString();
 
-        assertThatThrownBy(() -> service.getPublished(id.toString()))
+        assertThatThrownBy(() -> service.getPublished(key))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Job not found");
     }

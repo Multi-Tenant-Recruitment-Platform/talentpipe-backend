@@ -209,10 +209,10 @@ class JobVacancyServiceTest {
 
     @Test
     void get_anotherTenantsVacancy_isNotFound_indistinguishableFromMissing() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
-        when(repository.findByIdAndTenantId(vacancy.getId(), OTHER_TENANT)).thenReturn(Optional.empty());
+        UUID vacancyId = stored(VacancyFixtures.draft(TENANT)).getId();
+        when(repository.findByIdAndTenantId(vacancyId, OTHER_TENANT)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.get(OTHER_TENANT, vacancy.getId()))
+        assertThatThrownBy(() -> service.get(OTHER_TENANT, vacancyId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Vacancy not found");
     }
@@ -317,8 +317,9 @@ class JobVacancyServiceTest {
     void update_withAStaleVersion_isAConflictAndNothingIsStored() {
         JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
         JobVacancyRequest request = VacancyFixtures.complete().title("Lost the race").toRequest(null, 7);
+        UUID vacancyId = vacancy.getId();
 
-        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancy.getId(), request))
+        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancyId, request))
                 .isInstanceOf(ConcurrentUpdateException.class)
                 .hasMessageStartingWith("Someone else saved changes to this vacancy");
 
@@ -339,10 +340,10 @@ class JobVacancyServiceTest {
 
     @Test
     void update_onAPublishedVacancy_thatWouldLeaveItIncomplete_isRefused() {
-        JobVacancy vacancy = stored(VacancyFixtures.published(TENANT));
+        UUID vacancyId = stored(VacancyFixtures.published(TENANT)).getId();
         JobVacancyRequest request = VacancyFixtures.complete().requiredSkills(List.of()).toRequest(null, 0);
 
-        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancy.getId(), request))
+        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancyId, request))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("A published vacancy has to stay complete: add at least one required skill.");
 
@@ -351,10 +352,10 @@ class JobVacancyServiceTest {
 
     @Test
     void update_onAClosedVacancy_isRefused() {
-        JobVacancy vacancy = stored(VacancyFixtures.closed(TENANT));
+        UUID vacancyId = stored(VacancyFixtures.closed(TENANT)).getId();
         JobVacancyRequest request = VacancyFixtures.complete().toRequest(null, 0);
 
-        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancy.getId(), request))
+        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancyId, request))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("This vacancy is closed and can no longer be edited.");
 
@@ -365,10 +366,10 @@ class JobVacancyServiceTest {
     void update_onAClosedVacancy_reportsClosed_evenWhenTheVersionIsAlsoStale() {
         // Both are true once someone else has closed it; "closed" is the one
         // the recruiter can act on.
-        JobVacancy vacancy = stored(VacancyFixtures.closed(TENANT));
+        UUID vacancyId = stored(VacancyFixtures.closed(TENANT)).getId();
         JobVacancyRequest request = VacancyFixtures.complete().toRequest(null, 99);
 
-        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancy.getId(), request))
+        assertThatThrownBy(() -> service.update(TENANT, ACTOR, vacancyId, request))
                 .isInstanceOf(BusinessRuleException.class);
     }
 
@@ -408,10 +409,10 @@ class JobVacancyServiceTest {
 
     @Test
     void publish_anIncompleteDraft_isRefusedAndNothingIsStored() {
-        JobVacancy vacancy = stored(VacancyFixtures.persisted(
-                new JobVacancy(TENANT, VacancyFixtures.blank().build())));
+        UUID vacancyId = stored(VacancyFixtures.persisted(
+                new JobVacancy(TENANT, VacancyFixtures.blank().build()))).getId();
 
-        assertThatThrownBy(() -> service.publish(TENANT, ACTOR, vacancy.getId()))
+        assertThatThrownBy(() -> service.publish(TENANT, ACTOR, vacancyId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageStartingWith("This vacancy can't be published yet: add a job title,");
 
@@ -430,9 +431,9 @@ class JobVacancyServiceTest {
 
     @Test
     void close_aDraft_isRefusedAndNothingIsStored() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        UUID vacancyId = stored(VacancyFixtures.draft(TENANT)).getId();
 
-        assertThatThrownBy(() -> service.close(TENANT, ACTOR, vacancy.getId()))
+        assertThatThrownBy(() -> service.close(TENANT, ACTOR, vacancyId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Only a published vacancy can be closed. This vacancy is a draft.");
 
@@ -457,9 +458,9 @@ class JobVacancyServiceTest {
 
     @Test
     void archive_aPublishedVacancy_isRefused() {
-        JobVacancy vacancy = stored(VacancyFixtures.published(TENANT));
+        UUID vacancyId = stored(VacancyFixtures.published(TENANT)).getId();
 
-        assertThatThrownBy(() -> service.archive(TENANT, ACTOR, vacancy.getId()))
+        assertThatThrownBy(() -> service.archive(TENANT, ACTOR, vacancyId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Only a closed vacancy can be archived. This vacancy is published.");
     }

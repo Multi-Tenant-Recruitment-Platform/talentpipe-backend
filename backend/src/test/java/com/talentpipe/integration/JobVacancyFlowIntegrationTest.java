@@ -76,20 +76,22 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         Map<String, Object> vacancy = create(acme.adminToken(), completeVacancy("Senior Backend Engineer"));
 
         assertThat(vacancy.get("id")).isNotNull();
-        assertThat(vacancy.get("status")).isEqualTo("DRAFT");
-        assertThat(vacancy.get("version")).isEqualTo(0);
-        assertThat(vacancy.get("title")).isEqualTo("Senior Backend Engineer");
-        assertThat(vacancy.get("requiredSkills")).isEqualTo(List.of("Java", "Spring Boot"));
-        assertThat(vacancy.get("workingDays")).isEqualTo(List.of("MON", "TUE", "WED", "THU", "FRI"));
+        assertThat(vacancy)
+                .containsEntry("status", "DRAFT")
+                .containsEntry("version", 0)
+                .containsEntry("title", "Senior Backend Engineer")
+                .containsEntry("requiredSkills", List.of("Java", "Spring Boot"))
+                .containsEntry("workingDays", List.of("MON", "TUE", "WED", "THU", "FRI"));
         assertThat(vacancy.get("createdAt")).isNotNull();
         assertThat(vacancy.get("updatedAt")).isNotNull();
-        assertThat(vacancy).containsEntry("publishedAt", null)
+        assertThat(vacancy)
+                .containsEntry("publishedAt", null)
                 .containsEntry("closedAt", null)
-                .containsEntry("archivedAt", null);
-        // Null, not zero, until the applications module exists.
-        assertThat(vacancy).containsEntry("applicantCount", null);
-        // The tenant never appears in a response.
-        assertThat(vacancy).doesNotContainKey("tenantId");
+                .containsEntry("archivedAt", null)
+                // Null, not zero, until the applications module exists.
+                .containsEntry("applicantCount", null)
+                // The tenant never appears in a response.
+                .doesNotContainKey("tenantId");
     }
 
     @Test
@@ -99,14 +101,15 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         body.put("jobSummary", "");
         body.put("applicationDeadline", null);
 
-        assertThat(create(acme.adminToken(), body).get("status")).isEqualTo("DRAFT");
+        assertThat(create(acme.adminToken(), body)).containsEntry("status", "DRAFT");
 
         body.put("status", "PUBLISHED");
         ResponseEntity<Map<String, Object>> refused = call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), body);
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(refused.getBody().get("message")).isEqualTo(
-                "This vacancy can't be published yet: add a job title, an application deadline and a job summary.");
+        assertThat(refused.getBody())
+                .containsEntry("message", "This vacancy can't be published yet: "
+                        + "add a job title, an application deadline and a job summary.");
     }
 
     @Test
@@ -115,7 +118,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
 
         Map<String, Object> vacancy = createPublished(acme.adminToken(), "Live from the start");
 
-        assertThat(vacancy.get("status")).isEqualTo("PUBLISHED");
+        assertThat(vacancy).containsEntry("status", "PUBLISHED");
         assertThat(vacancy.get("publishedAt")).isNotNull();
         // The detail page treats publishedAt within seconds of createdAt as "never a draft".
         Instant createdAt = Instant.parse((String) vacancy.get("createdAt"));
@@ -141,8 +144,9 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
 
         Map<String, Object> vacancy = create(acme.adminToken(), body);
 
-        assertThat(vacancy.get("title")).isEqualTo("Engineer");
-        assertThat(vacancy.get("jobDescription")).isEqualTo("Own the service.");
+        assertThat(vacancy)
+                .containsEntry("title", "Engineer")
+                .containsEntry("jobDescription", "Own the service.");
     }
 
     @Test
@@ -157,11 +161,11 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         ResponseEntity<Map<String, Object>> refused = call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), body);
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(refused.getBody().get("message"))
-                .isEqualTo("The assigned recruiter must be an active member of your workspace.");
+        assertThat(refused.getBody())
+                .containsEntry("message", "The assigned recruiter must be an active member of your workspace.");
 
         body.put("assignedRecruiterId", acmeAdmin.toString());
-        assertThat(create(acme.adminToken(), body).get("assignedRecruiterId")).isEqualTo(acmeAdmin.toString());
+        assertThat(create(acme.adminToken(), body)).containsEntry("assignedRecruiterId", acmeAdmin.toString());
     }
 
     @Test
@@ -174,7 +178,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         ResponseEntity<Map<String, Object>> refused = call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), body);
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(refused.getBody().get("message")).isEqualTo("Choose a currency for the salary range you entered.");
+        assertThat(refused.getBody()).containsEntry("message", "Choose a currency for the salary range you entered.");
     }
 
     // ------------------------------------------------------------ state machine
@@ -185,22 +189,25 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         Object id = create(acme.adminToken(), completeVacancy("Lifecycle")).get("id");
 
         Map<String, Object> published = move(acme.adminToken(), id, "publish").getBody();
-        assertThat(published.get("status")).isEqualTo("PUBLISHED");
+        assertThat(published)
+                .containsEntry("status", "PUBLISHED")
+                .containsEntry("version", 1);
         assertThat(published.get("publishedAt")).isNotNull();
-        assertThat(published.get("version")).isEqualTo(1);
 
         Map<String, Object> closed = move(acme.adminToken(), id, "close").getBody();
-        assertThat(closed.get("status")).isEqualTo("CLOSED");
+        assertThat(closed)
+                .containsEntry("status", "CLOSED")
+                .containsEntry("publishedAt", published.get("publishedAt"));
         assertThat(closed.get("closedAt")).isNotNull();
-        assertThat(closed.get("publishedAt")).isEqualTo(published.get("publishedAt"));
 
         Map<String, Object> archived = move(acme.adminToken(), id, "archive").getBody();
-        assertThat(archived.get("status")).isEqualTo("ARCHIVED");
+        assertThat(archived)
+                .containsEntry("status", "ARCHIVED")
+                // Retained for reporting: the advert and all three timestamps survive.
+                .containsEntry("publishedAt", published.get("publishedAt"))
+                .containsEntry("closedAt", closed.get("closedAt"))
+                .containsEntry("title", "Lifecycle");
         assertThat(archived.get("archivedAt")).isNotNull();
-        // Retained for reporting: the advert and all three timestamps survive.
-        assertThat(archived.get("publishedAt")).isEqualTo(published.get("publishedAt"));
-        assertThat(archived.get("closedAt")).isEqualTo(closed.get("closedAt"));
-        assertThat(archived.get("title")).isEqualTo("Lifecycle");
         assertThat(Instant.parse((String) archived.get("updatedAt")))
                 .isAfterOrEqualTo(Instant.parse((String) published.get("updatedAt")));
     }
@@ -245,8 +252,9 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         ResponseEntity<Map<String, Object>> refused = move(acme.adminToken(), id, "publish");
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(refused.getBody().get("message")).isEqualTo(
-                "This vacancy can't be published yet: add an application deadline and at least one required skill.");
+        assertThat(refused.getBody())
+                .containsEntry("message", "This vacancy can't be published yet: "
+                        + "add an application deadline and at least one required skill.");
         assertThat(statusOf(acme.adminToken(), id)).isEqualTo("DRAFT");
     }
 
@@ -277,14 +285,16 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         ResponseEntity<Map<String, Object>> saved = call(HttpMethod.PUT, "/api/v1/jobs/" + id, acme.adminToken(), body);
 
         assertThat(saved.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(saved.getBody().get("title")).isEqualTo("Corrected title");
-        assertThat(saved.getBody().get("version")).isEqualTo(1);
-        assertThat(saved.getBody().get("status")).isEqualTo("DRAFT");
+        assertThat(saved.getBody())
+                .containsEntry("title", "Corrected title")
+                .containsEntry("version", 1)
+                .containsEntry("status", "DRAFT");
 
         // The very next read sees it — there is no cache to wait out.
         Map<String, Object> reloaded = call(HttpMethod.GET, "/api/v1/jobs/" + id, acme.adminToken(), null).getBody();
-        assertThat(reloaded.get("title")).isEqualTo("Corrected title");
-        assertThat(reloaded.get("version")).isEqualTo(1);
+        assertThat(reloaded)
+                .containsEntry("title", "Corrected title")
+                .containsEntry("version", 1);
     }
 
     @Test
@@ -306,8 +316,8 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
 
         assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat((String) conflict.getBody().get("message")).startsWith("Someone else saved changes");
-        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + id, acme.adminToken(), null).getBody().get("title"))
-                .isEqualTo("Saved by A");
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + id, acme.adminToken(), null).getBody())
+                .containsEntry("title", "Saved by A");
     }
 
     @Test
@@ -321,7 +331,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         ResponseEntity<Map<String, Object>> saved = call(HttpMethod.PUT, "/api/v1/jobs/" + id, acme.adminToken(), body);
 
         assertThat(saved.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(saved.getBody().get("status")).isEqualTo("DRAFT");
+        assertThat(saved.getBody()).containsEntry("status", "DRAFT");
         assertThat(saved.getBody().get("publishedAt")).isNull();
     }
 
@@ -337,15 +347,15 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         body.put("version", live.get("version"));
         ResponseEntity<Map<String, Object>> saved = call(HttpMethod.PUT, "/api/v1/jobs/" + id, acme.adminToken(), body);
         assertThat(saved.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(saved.getBody().get("status")).isEqualTo("PUBLISHED");
+        assertThat(saved.getBody()).containsEntry("status", "PUBLISHED");
 
         body.put("requiredSkills", List.of());
         body.put("version", saved.getBody().get("version"));
         ResponseEntity<Map<String, Object>> refused =
                 call(HttpMethod.PUT, "/api/v1/jobs/" + id, acme.adminToken(), body);
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(refused.getBody().get("message"))
-                .isEqualTo("A published vacancy has to stay complete: add at least one required skill.");
+        assertThat(refused.getBody())
+                .containsEntry("message", "A published vacancy has to stay complete: add at least one required skill.");
     }
 
     @Test
@@ -360,15 +370,15 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         body.put("version", 2);
         ResponseEntity<Map<String, Object>> closed = call(HttpMethod.PUT, "/api/v1/jobs/" + id, acme.adminToken(), body);
         assertThat(closed.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(closed.getBody().get("message")).isEqualTo("This vacancy is closed and can no longer be edited.");
+        assertThat(closed.getBody()).containsEntry("message", "This vacancy is closed and can no longer be edited.");
 
         advance(acme.adminToken(), id, "archive");
         body.put("version", 3);
         ResponseEntity<Map<String, Object>> archived =
                 call(HttpMethod.PUT, "/api/v1/jobs/" + id, acme.adminToken(), body);
         assertThat(archived.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(archived.getBody().get("message"))
-                .isEqualTo("This vacancy is archived and can no longer be edited.");
+        assertThat(archived.getBody())
+                .containsEntry("message", "This vacancy is archived and can no longer be edited.");
     }
 
     // --------------------------------------------------------------- duplicate
@@ -382,15 +392,16 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         Map<String, Object> copy = response.getBody();
-        assertThat(copy.get("id")).isNotEqualTo(source.get("id"));
-        assertThat(copy.get("status")).isEqualTo("DRAFT");
-        assertThat(copy.get("version")).isEqualTo(0);
-        assertThat(copy.get("title")).isEqualTo("Senior Backend Engineer (copy)");
+        assertThat(copy)
+                .doesNotContainEntry("id", source.get("id"))
+                .containsEntry("status", "DRAFT")
+                .containsEntry("version", 0)
+                .containsEntry("title", "Senior Backend Engineer (copy)")
+                .containsEntry("requiredSkills", source.get("requiredSkills"))
+                .containsEntry("jobDescription", source.get("jobDescription"))
+                .containsEntry("benefits", source.get("benefits"));
         assertThat(copy.get("applicationDeadline")).isNull();
         assertThat(copy.get("publishedAt")).isNull();
-        assertThat(copy.get("requiredSkills")).isEqualTo(source.get("requiredSkills"));
-        assertThat(copy.get("jobDescription")).isEqualTo(source.get("jobDescription"));
-        assertThat(copy.get("benefits")).isEqualTo(source.get("benefits"));
 
         // Editable before publishing: it is an ordinary draft.
         Map<String, Object> edit = completeVacancy("Senior Backend Engineer — Platform");
@@ -402,9 +413,10 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         // The source is exactly as it was.
         Map<String, Object> sourceNow =
                 call(HttpMethod.GET, "/api/v1/jobs/" + source.get("id"), acme.adminToken(), null).getBody();
-        assertThat(sourceNow.get("title")).isEqualTo("Senior Backend Engineer");
-        assertThat(sourceNow.get("status")).isEqualTo("PUBLISHED");
-        assertThat(sourceNow.get("version")).isEqualTo(source.get("version"));
+        assertThat(sourceNow)
+                .containsEntry("title", "Senior Backend Engineer")
+                .containsEntry("status", "PUBLISHED")
+                .containsEntry("version", source.get("version"));
     }
 
     @Test
@@ -416,7 +428,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         ResponseEntity<Map<String, Object>> response = move(acme.adminToken(), id, "duplicate");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody().get("status")).isEqualTo("DRAFT");
+        assertThat(response.getBody()).containsEntry("status", "DRAFT");
         assertThat(statusOf(acme.adminToken(), id)).isEqualTo("ARCHIVED");
     }
 
@@ -435,8 +447,9 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         Map<String, Object> all = call(HttpMethod.GET, "/api/v1/jobs?page=0&size=100", token, null).getBody();
         assertThat(ids((List<Map<String, Object>>) all.get("content")))
                 .containsExactly(published, archived, draft);
-        assertThat(all.get("totalElements")).isEqualTo(3);
-        assertThat(all.get("size")).isEqualTo(100);
+        assertThat(all)
+                .containsEntry("totalElements", 3)
+                .containsEntry("size", 100);
 
         // "Hidden from active lists…"
         Map<String, Object> active = call(HttpMethod.GET, "/api/v1/jobs?status=ACTIVE", token, null).getBody();
@@ -463,10 +476,11 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         Map<String, Object> second = call(HttpMethod.GET, "/api/v1/jobs?page=1&size=2", acme.adminToken(), null).getBody();
 
         assertThat((List<Object>) second.get("content")).hasSize(2);
-        assertThat(second.get("page")).isEqualTo(1);
-        assertThat(second.get("totalElements")).isEqualTo(5);
-        assertThat(second.get("totalPages")).isEqualTo(3);
-        assertThat(((List<Map<String, Object>>) second.get("content")).get(0).get("title")).isEqualTo("Role 3");
+        assertThat(second)
+                .containsEntry("page", 1)
+                .containsEntry("totalElements", 5)
+                .containsEntry("totalPages", 3);
+        assertThat(((List<Map<String, Object>>) second.get("content")).get(0)).containsEntry("title", "Role 3");
     }
 
     @Test
@@ -496,8 +510,9 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         Map<String, Object> row = jdbc.queryForMap(
                 "SELECT status, published_at, closed_at, archived_at, title FROM job_vacancies WHERE id = ?::uuid", id);
 
-        assertThat(row.get("status")).isEqualTo("ARCHIVED");
-        assertThat(row.get("title")).isEqualTo("Kept forever");
+        assertThat(row)
+                .containsEntry("status", "ARCHIVED")
+                .containsEntry("title", "Kept forever");
         assertThat(row.get("published_at")).isNotNull();
         assertThat(row.get("closed_at")).isNotNull();
         assertThat(row.get("archived_at")).isNotNull();
@@ -522,12 +537,13 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
             assertThat(move(intruder, id, move).getStatusCode()).as(move).isEqualTo(HttpStatus.NOT_FOUND);
         }
         // Indistinguishable from an id that was never issued.
-        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + UUID.randomUUID(), intruder, null).getBody().get("message"))
-                .isEqualTo(call(HttpMethod.GET, "/api/v1/jobs/" + id, intruder, null).getBody().get("message"));
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + UUID.randomUUID(), intruder, null).getBody())
+                .containsEntry("message",
+                        call(HttpMethod.GET, "/api/v1/jobs/" + id, intruder, null).getBody().get("message"));
 
         // And nothing was changed or copied.
         assertThat(statusOf(acme.adminToken(), id)).isEqualTo("DRAFT");
-        assertThat(call(HttpMethod.GET, "/api/v1/jobs", intruder, null).getBody().get("totalElements")).isEqualTo(0);
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs", intruder, null).getBody()).containsEntry("totalElements", 0);
     }
 
     // -------------------------------------------- close stops new applications
@@ -590,7 +606,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         // The application committed; now the close goes through.
         ResponseEntity<Map<String, Object>> closed = closing.get().get(15, TimeUnit.SECONDS);
         assertThat(closed.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(closed.getBody().get("status")).isEqualTo("CLOSED");
+        assertThat(closed.getBody()).containsEntry("status", "CLOSED");
     }
 
     // ------------------------------------------------------ database backstops
@@ -632,7 +648,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         ResponseEntity<Map<String, Object>> response = move(token, vacancyId, move);
 
         assertThat(response.getStatusCode()).as("%s from %s", move, before).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
-        assertThat(response.getBody().get("message")).isEqualTo(expectedMessage);
+        assertThat(response.getBody()).containsEntry("message", expectedMessage);
         assertThat(statusOf(token, vacancyId)).as("status after refused %s", move).isEqualTo(before);
     }
 

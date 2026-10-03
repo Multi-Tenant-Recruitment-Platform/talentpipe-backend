@@ -94,8 +94,9 @@ class PublicJobSearchQueryTest {
 
         assertThat(query.selectSql()).doesNotContain("DROP TABLE");
         assertThat(query.countSql()).doesNotContain("DROP TABLE");
-        assertThat(query.parameters().get("keyword")).isEqualTo(SQL_INJECTION);
-        assertThat(query.parameters().get("category")).isEqualTo(SQL_INJECTION);
+        assertThat(query.parameters())
+                .containsEntry("keyword", SQL_INJECTION)
+                .containsEntry("category", SQL_INJECTION);
     }
 
     // ----------------------------------------------------------- LIKE patterns

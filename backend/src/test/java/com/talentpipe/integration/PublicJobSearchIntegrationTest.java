@@ -42,15 +42,17 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
 
         assertThat(titles(cards)).containsExactly("Open role");
         Map<String, Object> card = cards.get(0);
-        assertThat(card.get("companyName")).isEqualTo("Acme Robotics");
-        assertThat(card.get("jobSummary")).isEqualTo("Lead the services behind our candidate pipeline.");
-        assertThat(card.get("location")).isEqualTo("Colombo, Sri Lanka");
-        assertThat(card.get("requiredSkills")).isEqualTo(List.of("Java", "Spring Boot"));
+        assertThat(card)
+                .containsEntry("companyName", "Acme Robotics")
+                .containsEntry("jobSummary", "Lead the services behind our candidate pipeline.")
+                .containsEntry("location", "Colombo, Sri Lanka")
+                .containsEntry("requiredSkills", List.of("Java", "Spring Boot"))
+                .containsEntry("acceptingApplications", true)
+                // Nothing internal reaches an anonymous visitor.
+                .doesNotContainKeys(
+                        "tenantId", "status", "version", "assignedRecruiterId", "hiringManagerId",
+                        "screeningQuestions");
         assertThat(card.get("publishedAt")).isNotNull();
-        assertThat(card.get("acceptingApplications")).isEqualTo(true);
-        // Nothing internal reaches an anonymous visitor.
-        assertThat(card).doesNotContainKeys(
-                "tenantId", "status", "version", "assignedRecruiterId", "hiringManagerId", "screeningQuestions");
     }
 
     @Test
@@ -64,7 +66,7 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
 
         advance(acme.adminToken(), id, "close");
         assertThat(content(get(BOARD))).isEmpty();
-        assertThat(get(BOARD).getBody().get("totalElements")).isEqualTo(0);
+        assertThat(get(BOARD).getBody()).containsEntry("totalElements", 0);
     }
 
     @Test
@@ -110,7 +112,7 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
         List<Map<String, Object>> cards = content(get(BOARD));
 
         assertThat(titles(cards)).containsExactly("Deadline gone");
-        assertThat(cards.get(0).get("acceptingApplications")).isEqualTo(false);
+        assertThat(cards.get(0)).containsEntry("acceptingApplications", false);
     }
 
     // ---------------------------------------------------------- keyword search
@@ -198,8 +200,9 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(content(response)).isEmpty();
-        assertThat(response.getBody().get("totalElements")).isEqualTo(0);
-        assertThat(response.getBody().get("totalPages")).isEqualTo(0);
+        assertThat(response.getBody())
+                .containsEntry("totalElements", 0)
+                .containsEntry("totalPages", 0);
     }
 
     @Test
@@ -302,7 +305,7 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
         // Most populated first; "Engineering" and "engineering" are one option.
         assertThat(categories).hasSize(2);
         assertThat((String) categories.get(0).get("value")).isEqualToIgnoringCase("Engineering");
-        assertThat(categories.get(0).get("count")).isEqualTo(2);
+        assertThat(categories.get(0)).containsEntry("count", 2);
         assertThat(categories.get(1)).containsEntry("value", "Design").containsEntry("count", 1);
         assertThat(locations).extracting(option -> option.get("value") + " x" + option.get("count"))
                 .containsExactly("Colombo, Sri Lanka x2", "Kandy, Sri Lanka x1");
@@ -328,9 +331,10 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
         assertThat(titles(content(first))).containsExactly("Role 5", "Role 4");
         assertThat(titles(content(second))).containsExactly("Role 3", "Role 2");
         assertThat(titles(content(third))).containsExactly("Role 1");
-        assertThat(first.get("totalElements")).isEqualTo(5);
-        assertThat(first.get("totalPages")).isEqualTo(3);
-        assertThat(first.get("size")).isEqualTo(2);
+        assertThat(first)
+                .containsEntry("totalElements", 5)
+                .containsEntry("totalPages", 3)
+                .containsEntry("size", 2);
     }
 
     @Test
@@ -338,11 +342,12 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
         Workspace acme = newWorkspace("Acme");
         createPublished(acme.adminToken(), "Only role");
 
-        assertThat(get(BOARD + "?size=5000").getBody().get("size")).isEqualTo(50);
+        assertThat(get(BOARD + "?size=5000").getBody()).containsEntry("size", 50);
         ResponseEntity<Map<String, Object>> clamped = get(BOARD + "?page=-3&size=0");
         assertThat(clamped.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(clamped.getBody().get("page")).isEqualTo(0);
-        assertThat(clamped.getBody().get("size")).isEqualTo(1);
+        assertThat(clamped.getBody())
+                .containsEntry("page", 0)
+                .containsEntry("size", 1);
     }
 
     // ------------------------------------------------------------------ detail
@@ -358,13 +363,14 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
             ResponseEntity<Map<String, Object>> response = get(BOARD + "/" + key);
             assertThat(response.getStatusCode()).as("key %s", key).isEqualTo(HttpStatus.OK);
             Map<String, Object> advert = response.getBody();
-            assertThat(advert.get("id")).isEqualTo(id);
-            assertThat(advert.get("title")).isEqualTo("Senior Backend Engineer");
-            assertThat(advert.get("companyName")).isEqualTo("Acme Robotics");
+            assertThat(advert)
+                    .containsEntry("id", id)
+                    .containsEntry("title", "Senior Backend Engineer")
+                    .containsEntry("companyName", "Acme Robotics")
+                    .containsEntry("keyResponsibilities", List.of("Own the matching service"))
+                    .containsEntry("benefits", List.of("HEALTH_INSURANCE"))
+                    .doesNotContainKeys("summary", "tenantId", "status", "screeningQuestions");
             assertThat((String) advert.get("jobDescription")).startsWith("You will own the matching service.");
-            assertThat(advert.get("keyResponsibilities")).isEqualTo(List.of("Own the matching service"));
-            assertThat(advert.get("benefits")).isEqualTo(List.of("HEALTH_INSURANCE"));
-            assertThat(advert).doesNotContainKeys("summary", "tenantId", "status", "screeningQuestions");
         }
     }
 
@@ -380,7 +386,7 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
         body.put("version", live.get("version"));
         call(HttpMethod.PUT, "/api/v1/jobs/" + live.get("id"), acme.adminToken(), body);
 
-        assertThat(get(BOARD + "/" + oldSlug).getBody().get("title")).isEqualTo("New title");
+        assertThat(get(BOARD + "/" + oldSlug).getBody()).containsEntry("title", "New title");
     }
 
     @Test
@@ -393,7 +399,7 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
         for (Object key : List.of(draft, closed, "00000000-0000-0000-0000-000000000000", "no-such-job")) {
             ResponseEntity<Map<String, Object>> response = get(BOARD + "/" + key);
             assertThat(response.getStatusCode()).as("key %s", key).isEqualTo(HttpStatus.NOT_FOUND);
-            assertThat(response.getBody().get("message")).isEqualTo("Job not found");
+            assertThat(response.getBody()).containsEntry("message", "Job not found");
         }
     }
 
@@ -440,7 +446,7 @@ class PublicJobSearchIntegrationTest extends AbstractJobIntegrationTest {
         assertThat(titles(search("kotlin", "", ""))).containsExactly("Kotlin Developer");
         assertThat(titles(search("", "quantum research", ""))).containsExactly("Kotlin Developer");
         assertThat(titles(search("", "", "reykjavik"))).containsExactly("Kotlin Developer");
-        assertThat(get(BOARD).getBody().get("totalElements")).isEqualTo(5001);
+        assertThat(get(BOARD).getBody()).containsEntry("totalElements", 5001);
     }
 
     // ----------------------------------------------------------------- helpers

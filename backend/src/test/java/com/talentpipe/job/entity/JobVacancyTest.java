@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.job.VacancyFixtures;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -125,8 +126,9 @@ class JobVacancyTest {
         // deadline has long passed; the recruiter should still be told the
         // real reason, not sent to fix a date on something that cannot reopen.
         JobVacancy vacancy = VacancyFixtures.closed(TENANT);
+        LocalDate aYearOn = TODAY.plusYears(1);
 
-        assertThatThrownBy(() -> vacancy.publish(LATER, TODAY.plusYears(1)))
+        assertThatThrownBy(() -> vacancy.publish(LATER, aYearOn))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Only a draft vacancy can be published. This vacancy is closed.");
     }
