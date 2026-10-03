@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.util.StringUtils;
 
 /**
  * The public URL key of a vacancy:
@@ -37,8 +38,6 @@ public final class JobSlug {
 
     private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}+");
     private static final Pattern NON_ALPHANUMERIC_RUN = Pattern.compile("[^a-z0-9]+");
-    /** Leading hyphens, or trailing ones — grouped so the anchors' scope is unmistakable. */
-    private static final Pattern EDGE_HYPHENS = Pattern.compile("(?:^-+)|(?:-+$)");
 
     /** A slug's final segment: the id, as exactly 32 hex digits. */
     private static final Pattern TRAILING_COMPACT_ID = Pattern.compile("(?:^|-)([0-9a-f]{32})$");
@@ -89,7 +88,8 @@ public final class JobSlug {
     private static String slugify(String text) {
         String folded = COMBINING_MARKS.matcher(Normalizer.normalize(text, Normalizer.Form.NFKD)).replaceAll("");
         String hyphenated = NON_ALPHANUMERIC_RUN.matcher(folded.toLowerCase(Locale.ROOT)).replaceAll("-");
-        String slug = EDGE_HYPHENS.matcher(hyphenated).replaceAll("");
+        // Punctuation at either end of the text has become a hyphen there; drop it.
+        String slug = StringUtils.trimTrailingCharacter(StringUtils.trimLeadingCharacter(hyphenated, '-'), '-');
         if (slug.length() <= MAX_WORDS_LENGTH) {
             return slug;
         }
