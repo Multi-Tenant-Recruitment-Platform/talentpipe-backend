@@ -37,7 +37,8 @@ public final class JobSlug {
 
     private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}+");
     private static final Pattern NON_ALPHANUMERIC_RUN = Pattern.compile("[^a-z0-9]+");
-    private static final Pattern EDGE_HYPHENS = Pattern.compile("^-+|-+$");
+    /** Leading hyphens, or trailing ones — grouped so the anchors' scope is unmistakable. */
+    private static final Pattern EDGE_HYPHENS = Pattern.compile("(?:^-+)|(?:-+$)");
 
     /** A slug's final segment: the id, as exactly 32 hex digits. */
     private static final Pattern TRAILING_COMPACT_ID = Pattern.compile("(?:^|-)([0-9a-f]{32})$");
