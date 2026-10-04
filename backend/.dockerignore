@@ -1,5 +1,7 @@
-target/*
-!target/*.jar
+target
 .git
 .idea
 *.log
+.env
+.env.*
+!.env.example
