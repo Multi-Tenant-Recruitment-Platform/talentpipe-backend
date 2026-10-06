@@ -16,7 +16,7 @@ import java.util.function.Predicate;
  * vacancy", so {@link JobVacancy} has a single way to take content in
  * ({@link JobVacancy#applyContent}) and a single way to hand it out
  * ({@link JobVacancy#content()}), and the publish rules
- * ({@link VacancyPublishRules}) can judge a draft that has not been stored yet
+ * ({@link com.talentpipe.job.validator.JobVacancyPublishValidator}) can judge a draft that has not been stored yet
  * exactly as they judge one that has.</p>
  *
  * <p>Instances are expected to be already normalized (trimmed, HTML-stripped,
