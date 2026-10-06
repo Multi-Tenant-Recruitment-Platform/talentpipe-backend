@@ -148,22 +148,22 @@ public class JobVacancyShapeValidator {
             boolean hasPayPeriod
     ) {
         if (salaryMin != null && salaryMin.compareTo(BigDecimal.ZERO) < 0) {
-            throw new InvalidRequestException("Salary cannot be negative.");
+            throw new InvalidRequestException("A salary can't be negative.");
         }
         if (salaryMax != null && salaryMax.compareTo(BigDecimal.ZERO) < 0) {
-            throw new InvalidRequestException("Salary cannot be negative.");
+            throw new InvalidRequestException("A salary can't be negative.");
         }
         if (salaryMin != null && salaryMax != null && salaryMax.compareTo(salaryMin) < 0) {
-            throw new InvalidRequestException("Maximum salary must be at least the minimum salary.");
+            throw new BusinessRuleException("The maximum salary must be at least the minimum.");
         }
 
         boolean hasSalary = salaryMin != null || salaryMax != null;
         if (hasSalary) {
             if (currency == null || currency.trim().isEmpty()) {
-                throw new InvalidRequestException("Choose a currency for the salary range you entered.");
+                throw new BusinessRuleException("Choose a currency for the salary range you entered.");
             }
             if (!hasPayPeriod) {
-                throw new InvalidRequestException("Choose whether the salary is hourly, monthly or yearly.");
+                throw new BusinessRuleException("Say whether the salary range is hourly, monthly or yearly.");
             }
         }
     }
@@ -177,7 +177,7 @@ public class JobVacancyShapeValidator {
     private void validatePipelineTemplate(String recruitmentPipelineId) {
         if (recruitmentPipelineId != null && !recruitmentPipelineId.trim().isEmpty()
                 && !VALID_PIPELINES.contains(recruitmentPipelineId.trim())) {
-            throw new BusinessRuleException("Unknown recruitment pipeline template.");
+            throw new BusinessRuleException("Choose one of the available recruitment pipelines.");
         }
     }
 }

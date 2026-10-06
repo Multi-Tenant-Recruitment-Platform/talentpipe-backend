@@ -123,7 +123,7 @@ class JobVacancyShapeValidatorTest {
                 .toRequest(VacancyStatus.DRAFT, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Salary cannot be negative.");
+                .hasMessage("A salary can't be negative.");
     }
 
     @Test
@@ -135,43 +135,43 @@ class JobVacancyShapeValidatorTest {
                 .toRequest(VacancyStatus.DRAFT, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Salary cannot be negative.");
+                .hasMessage("A salary can't be negative.");
     }
 
     @Test
-    void validateCreationShape_salaryMaxLessThanMin_throws400() {
+    void validateCreationShape_salaryMaxLessThanMin_throws422() {
         JobVacancyRequest request = VacancyFixtures.blank()
                 .salary("5000", "2000")
                 .currency("USD")
                 .payPeriod(PayPeriod.MONTHLY)
                 .toRequest(VacancyStatus.DRAFT, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Maximum salary must be at least the minimum salary.");
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("The maximum salary must be at least the minimum.");
     }
 
     @Test
-    void validateCreationShape_salaryWithoutCurrency_throws400() {
+    void validateCreationShape_salaryWithoutCurrency_throws422() {
         JobVacancyRequest request = VacancyFixtures.blank()
                 .salary("1000", "2000")
                 .currency(null)
                 .payPeriod(PayPeriod.MONTHLY)
                 .toRequest(VacancyStatus.DRAFT, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
-                .isInstanceOf(InvalidRequestException.class)
+                .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Choose a currency for the salary range you entered.");
     }
 
     @Test
-    void validateCreationShape_salaryWithoutPayPeriod_throws400() {
+    void validateCreationShape_salaryWithoutPayPeriod_throws422() {
         JobVacancyRequest request = VacancyFixtures.blank()
                 .salary("1000", "2000")
                 .currency("USD")
                 .payPeriod(null)
                 .toRequest(VacancyStatus.DRAFT, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Choose whether the salary is hourly, monthly or yearly.");
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Say whether the salary range is hourly, monthly or yearly.");
     }
 
     @Test
@@ -181,7 +181,7 @@ class JobVacancyShapeValidatorTest {
                 .toRequest(VacancyStatus.DRAFT, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessage("Unknown recruitment pipeline template.");
+                .hasMessage("Choose one of the available recruitment pipelines.");
     }
 
     @Test
