@@ -23,6 +23,9 @@ import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
+import com.talentpipe.job.validator.JobVacancyMemberValidator;
+import com.talentpipe.job.validator.JobVacancyPublishValidator;
+import com.talentpipe.job.validator.JobVacancyShapeValidator;
 import com.talentpipe.job.repository.JobVacancyRepository;
 import com.talentpipe.job.repository.VacancyStatusCount;
 import java.util.Collection;
@@ -84,7 +87,9 @@ class JobVacancyServiceTest {
         service = new JobVacancyService(
                 repository,
                 new VacancyContentNormalizer(new HtmlSanitizer()),
-                new VacancyContentRules(userDirectory),
+                new JobVacancyShapeValidator(),
+                new JobVacancyPublishValidator(),
+                new JobVacancyMemberValidator(userDirectory),
                 calendar,
                 userDirectory,
                 new JobVacancyMapper());
