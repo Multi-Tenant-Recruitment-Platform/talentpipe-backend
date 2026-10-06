@@ -2,11 +2,12 @@ package com.talentpipe.job.validator;
 
 import com.talentpipe.auth.service.UserDirectoryService;
 import com.talentpipe.common.exception.BusinessRuleException;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
- * Validates that assigned recruiters and hiring managers are active members of the tenant.
+ * Validates that assigned recruiters and hiring managers are active members of the workspace.
  */
 @Component
 public class JobVacancyMemberValidator {
@@ -18,11 +19,25 @@ public class JobVacancyMemberValidator {
     }
 
     public void validateMembers(UUID tenantId, UUID assignedRecruiterId, UUID hiringManagerId) {
-        if (assignedRecruiterId != null && !userDirectoryService.isActiveMember(tenantId, assignedRecruiterId)) {
-            throw new BusinessRuleException("The assigned recruiter must be an active member of your organization.");
+        validateMember(tenantId, assignedRecruiterId, null, "The assigned recruiter");
+        validateMember(tenantId, hiringManagerId, null, "The hiring manager");
+    }
+
+    public void validateMembersForUpdate(
+            UUID tenantId,
+            UUID assignedRecruiterId, UUID previousRecruiterId,
+            UUID hiringManagerId, UUID previousManagerId
+    ) {
+        validateMember(tenantId, assignedRecruiterId, previousRecruiterId, "The assigned recruiter");
+        validateMember(tenantId, hiringManagerId, previousManagerId, "The hiring manager");
+    }
+
+    private void validateMember(UUID tenantId, UUID userId, UUID previousUserId, String role) {
+        if (userId == null || Objects.equals(userId, previousUserId)) {
+            return;
         }
-        if (hiringManagerId != null && !userDirectoryService.isActiveMember(tenantId, hiringManagerId)) {
-            throw new BusinessRuleException("The hiring manager must be an active member of your organization.");
+        if (!userDirectoryService.isActiveMember(tenantId, userId)) {
+            throw new BusinessRuleException(role + " must be an active member of your workspace.");
         }
     }
 }

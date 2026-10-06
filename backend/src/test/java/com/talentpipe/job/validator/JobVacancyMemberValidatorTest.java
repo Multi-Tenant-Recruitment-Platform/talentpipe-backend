@@ -53,7 +53,7 @@ class JobVacancyMemberValidatorTest {
 
         assertThatThrownBy(() -> validator.validateMembers(tenantId, recruiterId, null))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessage("The assigned recruiter must be an active member of your organization.");
+                .hasMessage("The assigned recruiter must be an active member of your workspace.");
     }
 
     @Test
@@ -63,7 +63,7 @@ class JobVacancyMemberValidatorTest {
 
         assertThatThrownBy(() -> validator.validateMembers(tenantId, null, managerId))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessage("The hiring manager must be an active member of your organization.");
+                .hasMessage("The hiring manager must be an active member of your workspace.");
     }
 
     @Test
@@ -73,6 +73,17 @@ class JobVacancyMemberValidatorTest {
 
         assertThatThrownBy(() -> validator.validateMembers(tenantId, null, managerId))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessage("The hiring manager must be an active member of your organization.");
+                .hasMessage("The hiring manager must be an active member of your workspace.");
+    }
+
+    @Test
+    void validateMembersForUpdate_unchangedInactiveAssignee_succeeds() {
+        UUID departedRecruiterId = UUID.randomUUID();
+        // Unchanged assignee: not validated against directory
+        assertThatCode(() -> validator.validateMembersForUpdate(
+                tenantId,
+                departedRecruiterId, departedRecruiterId,
+                null, null
+        )).doesNotThrowAnyException();
     }
 }

@@ -8,6 +8,7 @@ import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.VacancyContent;
 import com.talentpipe.job.entity.VacancyStatus;
 import java.time.LocalDate;
 import java.util.List;
@@ -48,7 +49,7 @@ class JobVacancyPublishValidatorTest {
                 .toRequest(VacancyStatus.PUBLISHED, null);
         assertThatThrownBy(() -> validator.validateForPublish(request, today))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessage("This vacancy can't be published yet: add an application deadline.");
+                .hasMessage("This vacancy can't be published yet: add an application deadline that is today or later.");
     }
 
     @Test
@@ -70,6 +71,24 @@ class JobVacancyPublishValidatorTest {
         assertThatThrownBy(() -> validator.validateForPublish(entity, today))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageStartingWith("This vacancy can't be published yet: add ");
+    }
+
+    @Test
+    void validateForStayComplete_incompleteRequest_usesStayCompleteLead() {
+        JobVacancyRequest request = VacancyFixtures.complete()
+                .jobSummary("")
+                .toRequest(VacancyStatus.PUBLISHED, 1);
+
+        assertThatThrownBy(() -> validator.validateForStayComplete(request, today))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("A published vacancy has to stay complete: add a job summary.");
+    }
+
+    @Test
+    void requireComplete_staticMethod_passesWhenComplete() {
+        VacancyContent content = VacancyFixtures.complete().build();
+        assertThatCode(() -> JobVacancyPublishValidator.requireComplete(content, today, JobVacancyPublishValidator.NOT_READY_TO_PUBLISH))
+                .doesNotThrowAnyException();
     }
 
     @Test

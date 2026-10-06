@@ -20,6 +20,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class JobVacancyPublishValidator {
 
+    public static final String NOT_READY_TO_PUBLISH = "This vacancy can't be published yet";
+    public static final String MUST_STAY_COMPLETE = "A published vacancy has to stay complete";
+
     public void validateForPublish(JobVacancyRequest request, LocalDate today) {
         validatePublishFields(
                 request.title(),
@@ -33,13 +36,47 @@ public class JobVacancyPublishValidator {
                 request.jobDescription(),
                 request.keyResponsibilities(),
                 request.requiredSkills(),
-                today
+                today,
+                NOT_READY_TO_PUBLISH
+        );
+    }
+
+    public void validateForStayComplete(JobVacancyRequest request, LocalDate today) {
+        validatePublishFields(
+                request.title(),
+                request.department(),
+                request.openings(),
+                request.employmentType(),
+                request.workplaceType(),
+                request.location(),
+                request.applicationDeadline(),
+                request.jobSummary(),
+                request.jobDescription(),
+                request.keyResponsibilities(),
+                request.requiredSkills(),
+                today,
+                MUST_STAY_COMPLETE
         );
     }
 
     public void validateForPublish(JobVacancy vacancy, LocalDate today) {
         VacancyContent content = vacancy.content();
-        validatePublishFields(
+        validateForPublish(content, today);
+    }
+
+    public void validateForPublish(VacancyContent content, LocalDate today) {
+        requireComplete(content, today, NOT_READY_TO_PUBLISH);
+    }
+
+    public static void requireComplete(VacancyContent content, LocalDate today, String lead) {
+        List<String> missing = missing(content, today);
+        if (!missing.isEmpty()) {
+            throw new BusinessRuleException(lead + ": add " + joinLabels(missing) + ".");
+        }
+    }
+
+    public static List<String> missing(VacancyContent content, LocalDate today) {
+        return findMissing(
                 content.title(),
                 content.department(),
                 content.openings(),
@@ -67,6 +104,32 @@ public class JobVacancyPublishValidator {
             String jobDescription,
             List<String> keyResponsibilities,
             List<String> requiredSkills,
+            LocalDate today,
+            String lead
+    ) {
+        List<String> missing = findMissing(
+                title, department, openings, employmentType, workplaceType,
+                location, applicationDeadline, jobSummary, jobDescription,
+                keyResponsibilities, requiredSkills, today
+        );
+
+        if (!missing.isEmpty()) {
+            throw new BusinessRuleException(lead + ": add " + joinLabels(missing) + ".");
+        }
+    }
+
+    private static List<String> findMissing(
+            String title,
+            String department,
+            Integer openings,
+            EmploymentType employmentType,
+            WorkplaceType workplaceType,
+            String location,
+            LocalDate applicationDeadline,
+            String jobSummary,
+            String jobDescription,
+            List<String> keyResponsibilities,
+            List<String> requiredSkills,
             LocalDate today
     ) {
         List<String> missing = new ArrayList<>();
@@ -77,7 +140,7 @@ public class JobVacancyPublishValidator {
         if (isBlank(department)) {
             missing.add("a department");
         }
-        if (openings == null || openings < 1) {
+        if (openings != null && openings < 1) {
             missing.add("the number of openings");
         }
         if (employmentType == null) {
@@ -89,8 +152,10 @@ public class JobVacancyPublishValidator {
         if (isBlank(location)) {
             missing.add("a location");
         }
-        if (applicationDeadline == null || applicationDeadline.isBefore(today)) {
+        if (applicationDeadline == null) {
             missing.add("an application deadline");
+        } else if (applicationDeadline.isBefore(today)) {
+            missing.add("an application deadline that is today or later");
         }
         if (isBlank(jobSummary)) {
             missing.add("a job summary");
@@ -104,19 +169,14 @@ public class JobVacancyPublishValidator {
         if (isEmptyList(requiredSkills)) {
             missing.add("at least one required skill");
         }
-
-        if (!missing.isEmpty()) {
-            throw new BusinessRuleException(
-                    "This vacancy can't be published yet: add " + joinLabels(missing) + "."
-            );
-        }
+        return missing;
     }
 
-    private boolean isBlank(String value) {
+    private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
 
-    private boolean isEmptyList(List<String> list) {
+    private static boolean isEmptyList(List<String> list) {
         if (list == null || list.isEmpty()) {
             return true;
         }

@@ -35,7 +35,7 @@ class JobVacancyShapeValidatorTest {
         JobVacancyRequest request = VacancyFixtures.blank().toRequest(null, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Status on creation must be DRAFT or PUBLISHED.");
+                .hasMessage("A new vacancy can only be saved as a draft or published.");
     }
 
     @Test
@@ -43,7 +43,7 @@ class JobVacancyShapeValidatorTest {
         JobVacancyRequest request = VacancyFixtures.blank().toRequest(VacancyStatus.CLOSED, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Status on creation must be DRAFT or PUBLISHED.");
+                .hasMessage("A new vacancy can only be saved as a draft or published.");
     }
 
     @Test
@@ -51,7 +51,7 @@ class JobVacancyShapeValidatorTest {
         JobVacancyRequest request = VacancyFixtures.blank().toRequest(VacancyStatus.ARCHIVED, null);
         assertThatThrownBy(() -> validator.validateCreationShape(request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Status on creation must be DRAFT or PUBLISHED.");
+                .hasMessage("A new vacancy can only be saved as a draft or published.");
     }
 
     @Test

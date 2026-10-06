@@ -73,7 +73,7 @@ public class JobVacancyShapeValidator {
 
     private void validateStatusOnCreate(VacancyStatus status) {
         if (status == null || (status != VacancyStatus.DRAFT && status != VacancyStatus.PUBLISHED)) {
-            throw new InvalidRequestException("Status on creation must be DRAFT or PUBLISHED.");
+            throw new InvalidRequestException("A new vacancy can only be saved as a draft or published.");
         }
     }
 
