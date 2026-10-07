@@ -47,7 +47,7 @@ import org.hibernate.type.SqlTypes;
  * save fails rather than silently overwriting the first.</p>
  *
  * <p>Not mapped here: the {@code search_vector} column. PostgreSQL generates it
- * from the content columns (see V11) and only the public search query reads it.</p>
+ * from the content columns (see V12) and only the public search query reads it.</p>
  */
 @Entity
 @Table(name = "job_vacancies")

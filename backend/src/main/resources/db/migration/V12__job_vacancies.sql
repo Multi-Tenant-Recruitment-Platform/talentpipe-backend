@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- V11: Job vacancies — lifecycle (PB-018 → PB-022) and public search (PB-017).
+-- V12: Job vacancies — lifecycle (PB-018 → PB-022) and public search (PB-017).
 --
 -- One row per vacancy. A vacancy moves one way through
 --

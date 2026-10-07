@@ -217,7 +217,7 @@ to forget one.
   the `version` it was based on (`@Version`); a stale one is `409`.
 - Nothing deletes a vacancy. Archiving is a status, which is what keeps the row
   — and its `publishedAt` / `closedAt` / `archivedAt` — available to reporting.
-- CHECK constraints in `V11` restate the invariants (legal statuses, and which
+- CHECK constraints in `V12` restate the invariants (legal statuses, and which
   timestamps a status implies), so a row written outside the application cannot
   hold a state the state machine could never produce.
 - The machine is one-way because the backlog defines no reopen or unarchive.
