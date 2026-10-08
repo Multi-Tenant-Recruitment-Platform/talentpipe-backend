@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import com.talentpipe.job.validator.JobVacancyPublishValidator;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -29,7 +30,7 @@ import org.hibernate.type.SqlTypes;
  * service method (or future caller) reached it:</p>
  * <ol>
  *   <li>status only ever follows the arrows in {@link VacancyStatus};</li>
- *   <li>a PUBLISHED vacancy is always complete ({@link VacancyPublishRules}),
+ *   <li>a PUBLISHED vacancy is always complete ({@link JobVacancyPublishValidator}),
  *       because both ways of becoming or staying published check it.</li>
  * </ol>
  *
@@ -46,7 +47,7 @@ import org.hibernate.type.SqlTypes;
  * save fails rather than silently overwriting the first.</p>
  *
  * <p>Not mapped here: the {@code search_vector} column. PostgreSQL generates it
- * from the content columns (see V11) and only the public search query reads it.</p>
+ * from the content columns (see V12) and only the public search query reads it.</p>
  */
 @Entity
 @Table(name = "job_vacancies")
@@ -223,7 +224,7 @@ public class JobVacancy extends BaseEntity {
     public void applyContent(VacancyContent content, LocalDate today) {
         requireEditable();
         if (status == VacancyStatus.PUBLISHED) {
-            VacancyPublishRules.requireComplete(content, today, VacancyPublishRules.MUST_STAY_COMPLETE);
+            JobVacancyPublishValidator.requireComplete(content, today, JobVacancyPublishValidator.MUST_STAY_COMPLETE);
         }
         copyFrom(content);
     }
@@ -270,7 +271,7 @@ public class JobVacancy extends BaseEntity {
      */
     public void publish(Instant now, LocalDate today) {
         requireTransitionTo(VacancyStatus.PUBLISHED);
-        VacancyPublishRules.requireComplete(content(), today, VacancyPublishRules.NOT_READY_TO_PUBLISH);
+        JobVacancyPublishValidator.requireComplete(content(), today, JobVacancyPublishValidator.NOT_READY_TO_PUBLISH);
         status = VacancyStatus.PUBLISHED;
         publishedAt = now;
     }

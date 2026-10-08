@@ -12,6 +12,10 @@ import com.talentpipe.job.entity.VacancyContent;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.repository.JobVacancyRepository;
+import com.talentpipe.job.validator.JobVacancyMemberValidator;
+import com.talentpipe.job.validator.JobVacancyPublishValidator;
+import com.talentpipe.job.validator.JobVacancyShapeValidator;
+import java.time.LocalDate;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Locale;
@@ -41,11 +45,10 @@ import org.springframework.transaction.annotation.Transactional;
  * service-layer half of the platform's double check (DECISIONS.md); the role
  * half is {@code @PreAuthorize} on the controller.</p>
  *
- * <p><strong>Where the rules live.</strong> This class orchestrates; it decides
- * very little. Which status moves are legal and what a published advert must
- * contain are enforced by {@link JobVacancy} itself, so no method here — or
- * added later — can step around them. Cross-field rules are in
- * {@link VacancyContentRules}.</p>
+ * <p><strong>Where the rules live.</strong> Request shapes, completeness and
+ * membership rules are guarded by dedicated SRP validators:
+ * {@link JobVacancyShapeValidator}, {@link JobVacancyPublishValidator}, and
+ * {@link JobVacancyMemberValidator}.</p>
  *
  * <p><strong>Every write returns the vacancy as now stored.</strong> Writes
  * use {@code saveAndFlush} so the response carries the bumped {@code version}
@@ -67,20 +70,26 @@ public class JobVacancyService {
 
     private final JobVacancyRepository vacancyRepository;
     private final VacancyContentNormalizer normalizer;
-    private final VacancyContentRules contentRules;
+    private final JobVacancyShapeValidator shapeValidator;
+    private final JobVacancyPublishValidator publishValidator;
+    private final JobVacancyMemberValidator memberValidator;
     private final VacancyCalendar calendar;
     private final UserDirectoryService userDirectory;
     private final JobVacancyMapper mapper;
 
     public JobVacancyService(JobVacancyRepository vacancyRepository,
                              VacancyContentNormalizer normalizer,
-                             VacancyContentRules contentRules,
+                             JobVacancyShapeValidator shapeValidator,
+                             JobVacancyPublishValidator publishValidator,
+                             JobVacancyMemberValidator memberValidator,
                              VacancyCalendar calendar,
                              UserDirectoryService userDirectory,
                              JobVacancyMapper mapper) {
         this.vacancyRepository = vacancyRepository;
         this.normalizer = normalizer;
-        this.contentRules = contentRules;
+        this.shapeValidator = shapeValidator;
+        this.publishValidator = publishValidator;
+        this.memberValidator = memberValidator;
         this.calendar = calendar;
         this.userDirectory = userDirectory;
         this.mapper = mapper;
@@ -150,19 +159,20 @@ public class JobVacancyService {
      */
     @Transactional
     public JobVacancyResponse create(UUID tenantId, UUID actorId, JobVacancyRequest request) {
-        VacancyStatus initialStatus = request.status();
-        if (initialStatus != VacancyStatus.DRAFT && initialStatus != VacancyStatus.PUBLISHED) {
-            throw new InvalidRequestException("A new vacancy can only be saved as a draft or published.");
+        shapeValidator.validateCreationShape(request);
+        memberValidator.validateMembers(tenantId, request.assignedRecruiterId(), request.hiringManagerId());
+
+        LocalDate today = calendar.today(tenantId);
+        if (request.status() == VacancyStatus.PUBLISHED) {
+            publishValidator.validateForPublish(request, today);
         }
 
         VacancyContent content = normalizer.normalize(request);
-        contentRules.check(tenantId, content, null);
-
         JobVacancy vacancy = new JobVacancy(tenantId, content);
-        if (initialStatus == VacancyStatus.PUBLISHED) {
-            vacancy.publish(calendar.now(), calendar.today(tenantId));
+        if (request.status() == VacancyStatus.PUBLISHED) {
+            vacancy.publish(calendar.now(), today);
         }
-        return stored(vacancy, tenantId, actorId, "created as " + initialStatus);
+        return stored(vacancy, tenantId, actorId, "created as " + request.status());
     }
 
     /**
@@ -194,9 +204,20 @@ public class JobVacancyService {
                             + "Reload it to see their version, then make your changes again.");
         }
 
+        shapeValidator.validateUpdateShape(request);
+        memberValidator.validateMembersForUpdate(
+                tenantId,
+                request.assignedRecruiterId(), vacancy.content().assignedRecruiterId(),
+                request.hiringManagerId(), vacancy.content().hiringManagerId()
+        );
+
+        LocalDate today = calendar.today(tenantId);
+        if (vacancy.getStatus() == VacancyStatus.PUBLISHED) {
+            publishValidator.validateForStayComplete(request, today);
+        }
+
         VacancyContent content = normalizer.normalize(request);
-        contentRules.check(tenantId, content, vacancy.content());
-        vacancy.applyContent(content, calendar.today(tenantId));
+        vacancy.applyContent(content, today);
         return stored(vacancy, tenantId, actorId, "edited");
     }
 
@@ -211,7 +232,9 @@ public class JobVacancyService {
     @Transactional
     public JobVacancyResponse publish(UUID tenantId, UUID actorId, UUID vacancyId) {
         JobVacancy vacancy = requireOwned(tenantId, vacancyId);
-        vacancy.publish(calendar.now(), calendar.today(tenantId));
+        LocalDate today = calendar.today(tenantId);
+        publishValidator.validateForPublish(vacancy, today);
+        vacancy.publish(calendar.now(), today);
         return stored(vacancy, tenantId, actorId, "published");
     }
 

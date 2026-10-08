@@ -40,9 +40,9 @@ import java.util.UUID;
  * <p>The constraints below are <em>shape</em> rules — lengths, ranges, list
  * sizes — and hold in every state, drafts included. Whether a field is
  * <em>required</em> depends on the vacancy's state and is decided later by
- * {@code VacancyPublishRules}: a draft is a partial vacancy by definition, so
+ * {@code JobVacancyPublishValidator}: a draft is a partial vacancy by definition, so
  * nothing here is {@code @NotBlank}. Rules that span fields (salary pairing,
- * assignees) are business rules and live in {@code VacancyContentRules}.</p>
+ * assignees) are business rules guarded by SRP validators.</p>
  *
  * <p>Messages are sentences, because the frontend shows a 400 to the recruiter
  * as written.</p>

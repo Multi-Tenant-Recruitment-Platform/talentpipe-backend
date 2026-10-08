@@ -19,7 +19,7 @@ import java.util.Map;
  * filters are active from the planner whenever it reuses a plan, and it then
  * has to scan every published row. Here the statement contains only the
  * predicates that apply, so every combination gets a plan that can use the
- * index built for it (the partial indexes in V11):</p>
+ * index built for it (the partial indexes in V12):</p>
  * <ul>
  *   <li>no filter — {@code idx_job_vacancies_public_recent}, already in the
  *       ORDER BY's order, so no sort;</li>
@@ -54,7 +54,7 @@ public final class PublicJobSearchQuery {
     /** Newest first; id makes the order total so paging is stable. */
     private static final String ORDER_BY_RECENT = " ORDER BY v.published_at DESC, v.id";
 
-    /** Best match first: a hit in the title outranks one in the body (weights set in V11). */
+    /** Best match first: a hit in the title outranks one in the body (weights set in V12). */
     private static final String ORDER_BY_RELEVANCE =
             " ORDER BY ts_rank(v.search_vector, " + KEYWORD_QUERY + ") DESC, v.published_at DESC, v.id";
 

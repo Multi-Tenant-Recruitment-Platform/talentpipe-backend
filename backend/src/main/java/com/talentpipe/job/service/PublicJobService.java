@@ -37,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><strong>Nothing is cached</strong>, deliberately. Each request reads the
  * live table, which is what makes a publish, an edit or a close show up on the
  * portal with the very next request rather than after some expiry. The partial
- * indexes in V11 are what keep that affordable.</p>
+ * indexes in V12 are what keep that affordable.</p>
  */
 @Service
 public class PublicJobService {
