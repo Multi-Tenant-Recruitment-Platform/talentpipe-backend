@@ -3,6 +3,7 @@ package com.talentpipe.job.service;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.dto.CreateJobRequest;
 import com.talentpipe.job.dto.JobSummaryResponse;
+import com.talentpipe.job.mapper.JobSlug;
 import com.talentpipe.job.entity.Job;
 import com.talentpipe.job.entity.JobStatus;
 import com.talentpipe.job.repository.JobRepository;
@@ -41,7 +42,26 @@ public class JobService {
     }
 
     private JobSummaryResponse toResponse(Job job) {
-        return new JobSummaryResponse(job.getId(), job.getTenantId(), job.getTitle(),
-                job.getDescription(), job.getStatus().name(), null);
+        return new JobSummaryResponse(
+                job.getId(),
+                JobSlug.of(job.getTitle(), "", job.getId()),
+                job.getTitle(),
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                job.getDescription(),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                job.getCreatedAt(),
+                job.getStatus() == JobStatus.PUBLISHED);
     }
 }

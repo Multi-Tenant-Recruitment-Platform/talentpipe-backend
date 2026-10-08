@@ -1,6 +1,7 @@
 package com.talentpipe.tenant.mapper;
 
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
 import com.talentpipe.tenant.entity.Tenant;
@@ -104,6 +105,19 @@ public class TenantMapper {
                 tenant.getFacebookUrl(),
                 tenant.getCity(),
                 tenant.getCountry());
+    }
+
+    /**
+     * Maps to the compact summary other modules use to label what a company
+     * owns (see {@code TenantService.findCompanySummaries}).
+     */
+    public CompanySummaryResponse toCompanySummary(Tenant tenant) {
+        return new CompanySummaryResponse(
+                tenant.getId(),
+                tenant.getName(),
+                tenant.getSubdomain(),
+                tenant.getLogoUrl(),
+                tenant.getTimezone());
     }
 
     /** Returns the list as-is if non-null, otherwise an empty unmodifiable list. */

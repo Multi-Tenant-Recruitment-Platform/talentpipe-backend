@@ -193,6 +193,112 @@ where nothing is being delivered. The Resend path logs recipient and subject onl
 
 ---
 
+## ADR-7 — The vacancy lifecycle is enforced by the entity, not by its callers
+
+**Date:** 2026-10-03 · **Status:** Accepted
+
+### Context
+
+A vacancy moves `DRAFT → PUBLISHED → CLOSED → ARCHIVED` (PB-018 → PB-022). Three
+rules must hold however the vacancy is reached: status follows only those
+arrows; a published vacancy is always complete; a closed or archived one is
+never edited. Checked in each service method, every new method is a new chance
+to forget one.
+
+### Decision
+
+- `VacancyStatus` owns the transition table; `JobVacancy` has no setters and
+  changes only through `applyContent`, `publish`, `close` and `archive`, each of
+  which refuses an illegal move with a `422`. The service orchestrates and
+  scopes by tenant; it cannot bypass the rules.
+- "Create as published" is a draft published in the same transaction — there is
+  one route into `PUBLISHED`, so one place completeness is checked.
+- Status changes are their own endpoints, never a field on `PUT`. `PUT` carries
+  the `version` it was based on (`@Version`); a stale one is `409`.
+- Nothing deletes a vacancy. Archiving is a status, which is what keeps the row
+  — and its `publishedAt` / `closedAt` / `archivedAt` — available to reporting.
+- CHECK constraints in `V12` restate the invariants (legal statuses, and which
+  timestamps a status implies), so a row written outside the application cannot
+  hold a state the state machine could never produce.
+- The machine is one-way because the backlog defines no reopen or unarchive.
+  Adding one is a change to the table in `VacancyStatus` (and the frontend's
+  `VACANCY_TRANSITIONS`).
+
+### "Closed vacancies stop accepting applications"
+
+The applications module must not read a vacancy's status. It calls
+`VacancyApplicationGate.requireOpen(vacancyId)` inside its submitting
+transaction. The gate takes a shared row lock (`SELECT … FOR SHARE`), so a
+concurrent close waits for in-flight applications and every later application
+sees `CLOSED` — there is no window in which an application lands just after a
+close. Applicants do not block each other. A deadline that has passed refuses
+applications too, without changing the status: auto-closing at the deadline is
+a product decision still open.
+
+### Deadlines are judged in the tenant's timezone
+
+A deadline is a calendar day. "Today" is taken in the timezone on the company
+profile (UTC if unset), so a Colombo company's vacancy is publishable, and
+open, until midnight in Colombo rather than in UTC.
+
+---
+
+## ADR-8 — Public job search runs on PostgreSQL full-text search
+
+**Date:** 2026-10-03 · **Status:** Accepted
+
+### Context
+
+Candidates search published vacancies by keyword and filter by category and
+location (PB-017). The data already lives in PostgreSQL; the volume is thousands
+of live adverts, not millions.
+
+### Decision
+
+No separate search engine. A second system would have to be kept in step with
+the first, and "edits are reflected immediately" would become "eventually".
+
+- **Keyword**: a `tsvector` column that PostgreSQL **generates** from the advert
+  (title A, skills and department B, summary and location C, description D),
+  queried with `websearch_to_tsquery` and ranked with `ts_rank`. Being generated,
+  it is rewritten in the same transaction as the row — there is nothing to
+  reindex and no way for it to drift.
+- **Category** is the vacancy's `department`, matched whole and case-insensitively.
+  **Location** is a case-insensitive "contains", served by a trigram index.
+- **Indexes** are partial on `status = 'PUBLISHED'`: they hold only live adverts,
+  so drafts and the growing archive cost searches nothing.
+- **The SQL is assembled per request** from fixed fragments, containing only the
+  filters in use (`PublicJobSearchQuery`). The one-statement alternative
+  (`:x IS NULL OR …`) hides the active filters from the planner. Every
+  user-supplied value is a bound parameter.
+- **GIN indexes use `fastupdate = off`.** With the default, new entries wait in a
+  pending list until vacuum and the planner avoided the index entirely on a
+  freshly loaded table. Publishes are rare and searches are constant.
+- **Nothing is cached**, so a publish, edit or close is visible on the next request.
+- **Public URLs** use `title-company-<id as 32 hex>`; only the id is looked up.
+  Unique by construction, stable when a title is edited, nothing to store.
+- The job module does not join `tenants`. Company names and logos for a page of
+  results come from `TenantService.findCompanySummaries` in one call.
+
+`PublicJobSearchIntegrationTest` runs `EXPLAIN` on the production statements and
+fails if any stops using its index.
+
+### Known limits
+
+- The text-search configuration is `english`: stemming and stop words are
+  English-only, and a query made only of stop words (including "IT") matches
+  nothing — the category filter covers that case.
+- `C++`, `C#` and `C` all index as `c`. `Node.js` and `CI/CD` are indexed both
+  whole and split, so `node` and `ci` find them.
+- Paging is by offset. Fine at this scale; switch to keyset on
+  `(published_at, id)` if deep paging ever matters.
+- If the function behind the generated column changes, existing rows keep their
+  old vector until rewritten (`UPDATE job_vacancies SET title = title`).
+- Vacancies of suspended tenants are not yet filtered from the board; nothing
+  can suspend a tenant today (`TODO(sprint3)` in `PublicJobService`).
+
+---
+
 ## Standing conventions (not individually numbered)
 
 - **Deferred-work marker:** `// TODO(sprint2): ...` — grep for it at sprint
