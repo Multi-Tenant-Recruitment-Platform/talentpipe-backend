@@ -15,6 +15,7 @@ import com.talentpipe.common.exception.DuplicateResourceException;
 import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.dto.ProfileTaxonomy;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
@@ -26,7 +27,9 @@ import com.talentpipe.tenant.repository.TenantRepository;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -229,6 +232,35 @@ class TenantServiceTest {
         Optional<TenantResponse> result = tenantService.findById(tenantId);
 
         assertThat(result).isEmpty();
+    }
+
+    // ---------------------------------------------------------------- findCompanySummaries
+
+    @Test
+    void findCompanySummaries_returnsEachFoundTenantKeyedById() {
+        CompanySummaryResponse summary =
+                new CompanySummaryResponse(tenantId, "Acme Corp", "acme", null, "Asia/Colombo");
+        when(tenantRepository.findAllById(Set.of(tenantId))).thenReturn(List.of(tenant));
+        when(tenantMapper.toCompanySummary(tenant)).thenReturn(summary);
+
+        Map<UUID, CompanySummaryResponse> result = tenantService.findCompanySummaries(Set.of(tenantId));
+
+        assertThat(result).containsExactly(Map.entry(tenantId, summary));
+    }
+
+    @Test
+    void findCompanySummaries_unknownIds_areSimplyAbsentFromTheResult() {
+        when(tenantRepository.findAllById(Set.of(tenantId))).thenReturn(List.of());
+
+        assertThat(tenantService.findCompanySummaries(Set.of(tenantId))).isEmpty();
+    }
+
+    @Test
+    void findCompanySummaries_emptyOrNullInput_returnsEmptyWithoutQuerying() {
+        assertThat(tenantService.findCompanySummaries(Set.of())).isEmpty();
+        assertThat(tenantService.findCompanySummaries(null)).isEmpty();
+
+        verify(tenantRepository, never()).findAllById(any());
     }
 
     // ---------------------------------------------------------------- getProfile

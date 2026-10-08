@@ -28,7 +28,18 @@ Base path: `/api/v1`. All bodies are JSON.
 | DELETE | `/tenant/cover` | `COMPANY_ADMIN` | Remove cover image. Idempotent — `204`. `422` if the tenant is `SUSPENDED`. |
 | GET | `/public/companies/{subdomain}` | public | Curated public company profile (name, logo, cover, tagline, description, industry, website, socials, city, country). `404` for unknown subdomain. |
 | POST | `/public/candidates/register` | public | Candidate self-registration (no tenant, globally unique email). |
-| GET | `/public/jobs` | public | Public job board — empty page until the Job module lands. |
+| GET | `/jobs` | `COMPANY_ADMIN`, `HR_MANAGER` | The tenant's vacancies, newest first, paged (`page`, `size` ≤ 100). Every status, **archived included**, unless `status` is given: `DRAFT`, `PUBLISHED`, `CLOSED`, `ARCHIVED`, or `ACTIVE` (everything not archived). `400` for any other value. |
+| GET | `/jobs/counts` | `COMPANY_ADMIN`, `HR_MANAGER` | Vacancy totals per status, e.g. `{"DRAFT":3,"PUBLISHED":12,"CLOSED":0,"ARCHIVED":4}`. Always all four keys. |
+| GET | `/jobs/{id}` | `COMPANY_ADMIN`, `HR_MANAGER` | One vacancy. `404` if it does not exist **or belongs to another tenant**. |
+| POST | `/jobs` | `COMPANY_ADMIN`, `HR_MANAGER` | Create a vacancy as `DRAFT` or straight to `PUBLISHED` (`status` in the body; any other value → `400`). `201`. `422` if published and incomplete. |
+| PUT | `/jobs/{id}` | `COMPANY_ADMIN`, `HR_MANAGER` | Replace a vacancy's content. Never changes status. Body carries the `version` being edited: stale → `409`. `422` if the vacancy is closed or archived, or is published and the edit would leave it incomplete. |
+| POST | `/jobs/{id}/publish` | `COMPANY_ADMIN`, `HR_MANAGER` | `DRAFT → PUBLISHED`. `422` if not a draft, or not complete (the message lists what is missing). |
+| POST | `/jobs/{id}/close` | `COMPANY_ADMIN`, `HR_MANAGER` | `PUBLISHED → CLOSED`. Leaves the public board and stops new applications. `422` if not published. |
+| POST | `/jobs/{id}/archive` | `COMPANY_ADMIN`, `HR_MANAGER` | `CLOSED → ARCHIVED`. Leaves the active lists; the record is kept. `422` if not closed. |
+| POST | `/jobs/{id}/duplicate` | `COMPANY_ADMIN`, `HR_MANAGER` | Creates a new `DRAFT` pre-filled from this vacancy, from any status. `201` with the new vacancy; the source is unchanged. |
+| GET | `/public/jobs` | public | Public job board: `PUBLISHED` vacancies across all companies, paged (`page`, `size` ≤ 50). Optional `q` (keywords), `category`, `location` — see [Public job search](#public-job-search). |
+| GET | `/public/jobs/filters` | public | The categories and locations that currently have published vacancies, each with its count — for the board's filter controls. |
+| GET | `/public/jobs/{slugOrId}` | public | One published advert in full, by the `slug` from a board card or by id. `404` unless it is currently published. |
 
 ### Checkbox option sets
 
@@ -44,6 +55,65 @@ Base path: `/api/v1`. All bodies are JSON.
 | `jobLevels` | `Intern`, `Junior`, `Mid-level`, `Senior`, `Lead`, `Manager`, `Director` |
 
 The source of truth is `ProfileTaxonomy`; `ProfileTaxonomyDriftTest` fails the build if this set and the DTO's `@AllowedValues` drift apart.
+
+### Vacancy lifecycle
+
+```
+DRAFT ──publish──▶ PUBLISHED ──close──▶ CLOSED ──archive──▶ ARCHIVED
+```
+
+One-way: there is no reopen, unpublish or unarchive, and no delete. Any other
+move is a `422` whose `message` names the rule and the vacancy's real state, e.g.
+*"Only a published vacancy can be closed. This vacancy is a draft."*
+
+| Status | Dashboard | Public board | New applications | Editable (`PUT`) |
+| --- | --- | --- | --- | --- |
+| `DRAFT` | listed | hidden (`404`) | — | yes; may be incomplete |
+| `PUBLISHED` | listed | **listed** | accepted until the deadline day ends | yes; must stay complete |
+| `CLOSED` | listed | hidden (`404`) | refused | no (`422`) |
+| `ARCHIVED` | only with no `status` filter or `status=ARCHIVED` | hidden (`404`) | refused | no (`422`) |
+
+- **Complete** (required to be `PUBLISHED`): `title`, `department`, `location`,
+  `employmentType`, `workplaceType`, `jobSummary`, `jobDescription`, at least one
+  `keyResponsibilities` and one `requiredSkills`, and an `applicationDeadline` on
+  or after today **in the tenant's timezone** (UTC if the profile has none).
+  Failing this is a `422` with one sentence listing everything missing.
+- **Shape rules** (lengths, ranges, enum values) apply in every state and are `400`.
+  **Cross-field rules** are `422`: salary maximum below minimum; a salary without
+  `currency` and `payPeriod`; an unknown `recruitmentPipelineId`; an
+  `assignedRecruiterId` / `hiringManagerId` that is not an active user of the tenant.
+- `message` on `400`/`422` from these endpoints is written for the recruiter and
+  is safe to show as is.
+- Every write returns the vacancy **as now stored**, with `publishedAt` /
+  `closedAt` / `archivedAt` set on entering each state and never cleared.
+  `version` is the optimistic-lock counter to send back on `PUT`.
+  `applicantCount` is `null` until the applications module exists. `tenantId` is
+  never in a response.
+- All free text is HTML-stripped before storage (the advert is rendered publicly).
+- **Duplicate** copies the content, appends ` (copy)` to the title, clears the
+  deadline, and keeps an assignee only if they are still an active member.
+- **Applications**: other modules must not read a vacancy's status themselves.
+  The job module exposes `VacancyApplicationGate.requireOpen(vacancyId)`, to be
+  called inside the transaction that stores an application.
+
+### Public job search
+
+`GET /public/jobs` — every parameter is optional; they combine with AND.
+
+| Param | Matches | Notes |
+| --- | --- | --- |
+| `q` | title, required and preferred skills, department, summary, location, description, responsibilities | Full-text, ranked: a hit in the title outranks one in the body. Word forms match (`engineers` finds *Engineer*). Supports `"exact phrase"`, `OR`, and `-exclude`. Any input is safe — it can never produce an error. |
+| `category` | the vacancy's `department`, whole value | Case-insensitive. Use a value from `/public/jobs/filters`. |
+| `location` | anywhere in the vacancy's `location` | Case-insensitive: `colombo` finds *Colombo, Sri Lanka*. |
+| `page`, `size` | — | `size` is capped at 50; out-of-range values are clamped, not rejected. |
+
+Ordered by relevance when `q` is given, otherwise newest first. Each card carries
+`slug` (use it in the advert's URL; it keeps resolving after a title edit) and
+`acceptingApplications` (`false` once the deadline has passed). Cards and adverts
+never include tenant ids, status, version, assignees or screening questions.
+
+Results are read live on every request — a publish, edit or close is visible on
+the very next call.
 
 ## Error model
 

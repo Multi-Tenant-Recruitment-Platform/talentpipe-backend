@@ -5,6 +5,7 @@ import com.talentpipe.common.exception.DuplicateResourceException;
 import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.dto.ProfileTaxonomy;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
@@ -13,9 +14,13 @@ import com.talentpipe.tenant.entity.Tenant;
 import com.talentpipe.tenant.entity.TenantStatus;
 import com.talentpipe.tenant.mapper.TenantMapper;
 import com.talentpipe.tenant.repository.TenantRepository;
+import java.util.Collection;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -106,6 +111,24 @@ public class TenantService {
     @Transactional(readOnly = true)
     public Optional<TenantResponse> findById(UUID tenantId) {
         return tenantRepository.findById(tenantId).map(tenantMapper::toResponse);
+    }
+
+    /**
+     * Looks up several companies at once, keyed by tenant id.
+     *
+     * <p>For modules that render a list spanning many tenants — the public job
+     * board shows a page of vacancies from as many companies. One query for
+     * the whole page, instead of one per row. An id that matches no tenant is
+     * simply absent from the result.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, CompanySummaryResponse> findCompanySummaries(Collection<UUID> tenantIds) {
+        if (tenantIds == null || tenantIds.isEmpty()) {
+            return Map.of();
+        }
+        return tenantRepository.findAllById(tenantIds).stream()
+                .map(tenantMapper::toCompanySummary)
+                .collect(Collectors.toMap(CompanySummaryResponse::id, Function.identity()));
     }
 
     // ---------------------------------------------------------- profile API
