@@ -19,18 +19,30 @@ import java.util.UUID;
  */
 public interface FileStorageService {
 
+    default String store(UUID tenantId, String category, String filename, byte[] data, String mimeType) {
+        return store("tenant", tenantId, category, filename, data, mimeType);
+    }
+
     /**
-     * Stores the given file data and returns its public-accessible URL.
+     * Stores file data under a specific namespace and entity id.
      *
-     * @param tenantId  the owning tenant (used to namespace the storage path)
-     * @param category  a short identifier for the file category, e.g. {@code logo}
-     *                  or {@code cover}; used in the storage path
+     * @param namespace storage domain (e.g. "tenant", "candidate")
+     * @param entityId  unique identifier of the owning entity
+     * @param category  file category (e.g. "logo", "cover", "photos", "cvs")
      * @param filename  original filename, used to derive the file extension
      * @param data      raw file bytes
      * @param mimeType  declared MIME type of the file
-     * @return          a publicly accessible URL to the stored file
+     * @return          a publicly accessible URL or reference to the stored file
      */
-    String store(UUID tenantId, String category, String filename, byte[] data, String mimeType);
+    String store(String namespace, UUID entityId, String category, String filename, byte[] data, String mimeType);
+
+    /**
+     * Loads the raw file bytes for a stored URL or key.
+     *
+     * @param storedUrlOrKey the URL or storage key of the file
+     * @return raw file bytes
+     */
+    byte[] load(String storedUrlOrKey);
 
     /**
      * Deletes the file identified by its stored URL or path. Implementations

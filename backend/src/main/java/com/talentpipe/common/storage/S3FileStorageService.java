@@ -1,11 +1,15 @@
 package com.talentpipe.common.storage;
 
+import com.talentpipe.common.exception.ResourceNotFoundException;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -43,8 +47,14 @@ public class S3FileStorageService implements FileStorageService {
     @Override
     public String store(UUID tenantId, String category, String filename,
                         byte[] data, String mimeType) {
+        return store("tenant", tenantId, category, filename, data, mimeType);
+    }
+
+    @Override
+    public String store(String namespace, UUID entityId, String category,
+                        String filename, byte[] data, String mimeType) {
         String ext = extractExtension(filename);
-        String key = "tenant/" + tenantId + "/" + category + "/" + UUID.randomUUID() + ext;
+        String key = namespace + "/" + entityId + "/" + category + "/" + UUID.randomUUID() + ext;
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(properties.s3Bucket())
@@ -56,7 +66,35 @@ public class S3FileStorageService implements FileStorageService {
         s3.putObject(putRequest, RequestBody.fromBytes(data));
         log.debug("Stored S3 object: s3://{}/{}", properties.s3Bucket(), key);
 
+        if ("cvs".equals(category)) {
+            // CVs stay as private keys for controlled access/download
+            return key;
+        }
+
         return buildPublicUrl(key);
+    }
+
+    @Override
+    public byte[] load(String storedUrlOrKey) {
+        if (storedUrlOrKey == null || storedUrlOrKey.isBlank()) {
+            throw new IllegalArgumentException("Storage path or key cannot be blank");
+        }
+        String key = extractKeyFromUrl(storedUrlOrKey);
+        if (key == null) {
+            key = storedUrlOrKey;
+        }
+        try {
+            GetObjectRequest getRequest = GetObjectRequest.builder()
+                    .bucket(properties.s3Bucket())
+                    .key(key)
+                    .build();
+            ResponseBytes<GetObjectResponse> response = s3.getObjectAsBytes(getRequest);
+            return response.asByteArray();
+        } catch (NoSuchKeyException e) {
+            throw new ResourceNotFoundException("File not found in S3: " + key);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load S3 object: " + key, e);
+        }
     }
 
     @Override
@@ -66,8 +104,7 @@ public class S3FileStorageService implements FileStorageService {
         }
         String key = extractKeyFromUrl(storedUrl);
         if (key == null) {
-            log.warn("Could not extract S3 key from URL: {}", storedUrl);
-            return;
+            key = storedUrl;
         }
         try {
             s3.deleteObject(DeleteObjectRequest.builder()
@@ -95,14 +132,18 @@ public class S3FileStorageService implements FileStorageService {
     }
 
     private String extractKeyFromUrl(String url) {
-        // CDN URL: https://cdn.example.com/tenant/...
-        // S3 URL:  https://bucket.s3.region.amazonaws.com/tenant/...
-        // In both cases the key starts with "tenant/".
-        int idx = url.indexOf("/tenant/");
-        if (idx < 0) {
-            return null;
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            return url;
         }
-        return url.substring(idx + 1); // strip leading "/"
+        int tenantIdx = url.indexOf("/tenant/");
+        if (tenantIdx >= 0) {
+            return url.substring(tenantIdx + 1);
+        }
+        int candidateIdx = url.indexOf("/candidate/");
+        if (candidateIdx >= 0) {
+            return url.substring(candidateIdx + 1);
+        }
+        return null;
     }
 
     private String extractExtension(String filename) {

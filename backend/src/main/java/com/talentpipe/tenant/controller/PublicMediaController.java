@@ -65,4 +65,31 @@ public class PublicMediaController {
             throw new ResourceNotFoundException("Could not read media file");
         }
     }
+
+    @GetMapping("/candidate/{candidateId}/photos/{filename:.+}")
+    public ResponseEntity<Resource> getCandidatePhoto(
+            @PathVariable String candidateId,
+            @PathVariable String filename) {
+        Path photoPath = rootDir.resolve("candidate")
+                .resolve(candidateId)
+                .resolve("photos")
+                .resolve(filename);
+
+        if (!Files.exists(photoPath) || !Files.isRegularFile(photoPath)) {
+            throw new ResourceNotFoundException("Candidate photo not found");
+        }
+
+        try {
+            Resource resource = new FileSystemResource(photoPath);
+            String contentType = Files.probeContentType(photoPath);
+            if (contentType == null) {
+                contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+            }
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, contentType)
+                    .body(resource);
+        } catch (IOException e) {
+            throw new ResourceNotFoundException("Could not read candidate photo");
+        }
+    }
 }

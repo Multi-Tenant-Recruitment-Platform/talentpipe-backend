@@ -1,5 +1,6 @@
 package com.talentpipe.common.storage;
 
+import com.talentpipe.common.exception.ResourceNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -42,18 +43,59 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public String store(UUID tenantId, String category, String filename,
                         byte[] data, String mimeType) {
+        return store("tenant", tenantId, category, filename, data, mimeType);
+    }
+
+    @Override
+    public String store(String namespace, UUID entityId, String category,
+                        String filename, byte[] data, String mimeType) {
         String ext = extractExtension(filename);
-        Path dir = rootDir.resolve("tenant").resolve(tenantId.toString()).resolve(category);
+        Path dir = rootDir.resolve(namespace).resolve(entityId.toString()).resolve(category);
         try {
             Files.createDirectories(dir);
             String storedName = UUID.randomUUID() + ext;
             Path target = dir.resolve(storedName);
             Files.write(target, data);
             log.debug("Stored file locally: {}", target);
-            // Return relative URL path compatible with proxy and single-origin frontend.
-            return "/api/v1/public/media/" + category + "/" + storedName;
+
+            if ("tenant".equals(namespace)) {
+                return "/api/v1/public/media/" + category + "/" + storedName;
+            }
+            if ("candidate".equals(namespace) && "photos".equals(category)) {
+                return "/api/v1/public/media/candidate/" + entityId + "/photos/" + storedName;
+            }
+            // For CVs or other protected documents, return relative key
+            return namespace + "/" + entityId + "/" + category + "/" + storedName;
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to store file", e);
+        }
+    }
+
+    @Override
+    public byte[] load(String storedUrlOrKey) {
+        if (storedUrlOrKey == null || storedUrlOrKey.isBlank()) {
+            throw new IllegalArgumentException("Storage path or key cannot be blank");
+        }
+        Path targetPath;
+        if (storedUrlOrKey.startsWith("/api/v1/public/media/candidate/")) {
+            String relative = storedUrlOrKey.substring("/api/v1/public/media/".length());
+            targetPath = rootDir.resolve(relative);
+        } else if (storedUrlOrKey.startsWith("/api/v1/public/media/")) {
+            String[] parts = storedUrlOrKey.split("/");
+            String category = parts[parts.length - 2];
+            String filename = parts[parts.length - 1];
+            targetPath = findLocalFile(rootDir.resolve("tenant"), category, filename);
+        } else {
+            targetPath = rootDir.resolve(storedUrlOrKey);
+        }
+
+        if (targetPath == null || !Files.exists(targetPath) || !Files.isRegularFile(targetPath)) {
+            throw new ResourceNotFoundException("File not found at storage location: " + storedUrlOrKey);
+        }
+        try {
+            return Files.readAllBytes(targetPath);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read file from storage: " + targetPath, e);
         }
     }
 
@@ -62,33 +104,62 @@ public class LocalFileStorageService implements FileStorageService {
         if (storedUrl == null || storedUrl.isBlank()) {
             return;
         }
-        // Extract the filename from the URL and resolve the path.
-        String[] parts = storedUrl.split("/");
+        String path = storedUrl;
+        if (path.contains("://")) {
+            int pathStart = path.indexOf('/', path.indexOf("://") + 3);
+            path = pathStart >= 0 ? path.substring(pathStart) : "";
+        }
+        if (path.startsWith("/api/v1/public/media/candidate/")) {
+            String relative = path.substring("/api/v1/public/media/".length());
+            deleteQuietly(rootDir.resolve(relative));
+            return;
+        }
+        if (!path.startsWith("/") && !storedUrl.contains("://")) {
+            deleteQuietly(rootDir.resolve(storedUrl));
+            return;
+        }
+
+        // Extract category and filename for tenant media legacy deletion
+        String[] parts = path.split("/");
         if (parts.length < 2) {
             return;
         }
         String category = parts[parts.length - 2];
-        String filename  = parts[parts.length - 1];
-        // Walk all tenant subdirectories to find the file (we don't have tenantId here).
-        try {
-            Path categoryPath = rootDir.resolve("tenant");
-            if (!Files.exists(categoryPath)) {
-                return;
-            }
-            try (Stream<Path> walker = Files.walk(categoryPath)) {
-                walker.filter(p -> p.getFileName().toString().equals(filename)
-                                && p.getParent().getFileName().toString().equals(category))
-                        .forEach(p -> {
-                            try {
-                                Files.deleteIfExists(p);
-                                log.debug("Deleted local file: {}", p);
-                            } catch (IOException e) {
-                                log.warn("Could not delete local file: {}", p, e);
-                            }
-                        });
-            }
+        String filename = parts[parts.length - 1];
+
+        Path tenantRootDir = rootDir.resolve("tenant");
+        if (!Files.exists(tenantRootDir)) {
+            return;
+        }
+        try (Stream<Path> walker = Files.walk(tenantRootDir)) {
+            walker.filter(p -> p.getFileName().toString().equals(filename)
+                            && p.getParent().getFileName().toString().equals(category))
+                    .forEach(this::deleteQuietly);
         } catch (IOException e) {
             log.warn("Error during local file deletion for URL: {}", storedUrl, e);
+        }
+    }
+
+    private Path findLocalFile(Path baseDir, String category, String filename) {
+        if (!Files.exists(baseDir)) {
+            return null;
+        }
+        try (Stream<Path> walker = Files.walk(baseDir)) {
+            return walker.filter(p -> p.getFileName().toString().equals(filename)
+                            && p.getParent().getFileName().toString().equals(category))
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+            log.debug("Deleted local file: {}", path);
+        } catch (IOException e) {
+            log.warn("Could not delete local file: {}", path, e);
         }
     }
 
