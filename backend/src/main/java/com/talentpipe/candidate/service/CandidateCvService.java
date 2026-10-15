@@ -146,11 +146,7 @@ public class CandidateCvService {
      */
     @Transactional
     public void removeActiveCv(Candidate candidate) {
-        Optional<CandidateCv> current = findActiveCv(candidate.getId());
-        if (current.isPresent()) {
-            CandidateCv cv = current.get();
-            cv.archive(Instant.now());
-            cvRepository.save(cv);
+        if (archiveActiveCv(candidate)) {
             auditService.recordEvent(candidate.getId(), "REMOVED_CV", true, null);
             log.info("Removed active CV for candidate {}", candidate.getId());
         }
@@ -161,16 +157,22 @@ public class CandidateCvService {
      */
     @Transactional
     public void deactivateForLeavingPool(Candidate candidate) {
+        boolean archived = archiveActiveCv(candidate);
+        auditService.recordEvent(candidate.getId(), "LEFT_POOL", false, null);
+        if (archived) {
+            log.info("Deactivated CV because candidate {} left the talent pool", candidate.getId());
+        }
+    }
+
+    private boolean archiveActiveCv(Candidate candidate) {
         Optional<CandidateCv> current = findActiveCv(candidate.getId());
         if (current.isPresent()) {
             CandidateCv cv = current.get();
             cv.archive(Instant.now());
             cvRepository.save(cv);
-            auditService.recordEvent(candidate.getId(), "LEFT_POOL", false, null);
-            log.info("Deactivated CV because candidate {} left the talent pool", candidate.getId());
-        } else {
-            auditService.recordEvent(candidate.getId(), "LEFT_POOL", false, null);
+            return true;
         }
+        return false;
     }
 
     /**

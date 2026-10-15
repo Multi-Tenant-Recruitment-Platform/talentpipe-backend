@@ -3,8 +3,6 @@ package com.talentpipe.candidate.validator;
 import com.talentpipe.common.exception.UnsupportedMediaException;
 import com.talentpipe.common.storage.StorageProperties;
 import com.talentpipe.common.util.AbstractFileValidator;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Component;
@@ -72,43 +70,19 @@ public class CandidatePhotoValidator extends AbstractFileValidator {
         }
 
         String lower = filename.toLowerCase(Locale.ROOT);
-        try (InputStream in = file.getInputStream()) {
-            byte[] header = in.readNBytes(12);
-            if (lower.endsWith(".png") && !matchesPrefix(header, PNG_MAGIC_BYTES)) {
-                throw new UnsupportedMediaException("The uploaded file does not match a valid PNG image format.");
-            }
-            if ((lower.endsWith(".jpg") || lower.endsWith(".jpeg")) && !matchesPrefix(header, JPEG_MAGIC_BYTES)) {
-                throw new UnsupportedMediaException("The uploaded file does not match a valid JPEG image format.");
-            }
-            if (lower.endsWith(".webp") && (!matchesPrefix(header, RIFF_MAGIC_BYTES) || !matchesWebp(header))) {
-                throw new UnsupportedMediaException("The uploaded file does not match a valid WebP image format.");
-            }
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Could not read photo file header.", e);
+        byte[] header = readHeaderBytes(file, 12);
+        if (lower.endsWith(".png") && !matchesPrefix(header, PNG_MAGIC_BYTES)) {
+            throw new UnsupportedMediaException("The uploaded file does not match a valid PNG image format.");
+        }
+        if ((lower.endsWith(".jpg") || lower.endsWith(".jpeg")) && !matchesPrefix(header, JPEG_MAGIC_BYTES)) {
+            throw new UnsupportedMediaException("The uploaded file does not match a valid JPEG image format.");
+        }
+        if (lower.endsWith(".webp") && !isValidWebp(header)) {
+            throw new UnsupportedMediaException("The uploaded file does not match a valid WebP image format.");
         }
     }
 
-    private boolean matchesPrefix(byte[] data, byte[] prefix) {
-        if (data == null || data.length < prefix.length) {
-            return false;
-        }
-        for (int i = 0; i < prefix.length; i++) {
-            if (data[i] != prefix[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private boolean matchesWebp(byte[] data) {
-        if (data == null || data.length < 12) {
-            return false;
-        }
-        for (int i = 0; i < WEBP_MAGIC_BYTES.length; i++) {
-            if (data[8 + i] != WEBP_MAGIC_BYTES[i]) {
-                return false;
-            }
-        }
-        return true;
+    private boolean isValidWebp(byte[] header) {
+        return matchesPrefix(header, RIFF_MAGIC_BYTES) && matchesBytesAt(header, WEBP_MAGIC_BYTES, 8);
     }
 }

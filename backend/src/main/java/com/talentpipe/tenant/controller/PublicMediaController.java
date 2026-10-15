@@ -52,15 +52,7 @@ public class PublicMediaController {
                     .findFirst()
                     .orElseThrow(() -> new ResourceNotFoundException("Media file not found"));
 
-            Resource resource = new FileSystemResource(matchedFile);
-            String contentType = Files.probeContentType(matchedFile);
-            if (contentType == null) {
-                contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
-            }
-
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_TYPE, contentType)
-                    .body(resource);
+            return toMediaResponse(matchedFile, "Could not read media file");
         } catch (IOException e) {
             throw new ResourceNotFoundException("Could not read media file");
         }
@@ -79,9 +71,13 @@ public class PublicMediaController {
             throw new ResourceNotFoundException("Candidate photo not found");
         }
 
+        return toMediaResponse(photoPath, "Could not read candidate photo");
+    }
+
+    private ResponseEntity<Resource> toMediaResponse(Path filePath, String notFoundMessage) {
         try {
-            Resource resource = new FileSystemResource(photoPath);
-            String contentType = Files.probeContentType(photoPath);
+            Resource resource = new FileSystemResource(filePath);
+            String contentType = Files.probeContentType(filePath);
             if (contentType == null) {
                 contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
             }
@@ -89,7 +85,7 @@ public class PublicMediaController {
                     .header(HttpHeaders.CONTENT_TYPE, contentType)
                     .body(resource);
         } catch (IOException e) {
-            throw new ResourceNotFoundException("Could not read candidate photo");
+            throw new ResourceNotFoundException(notFoundMessage);
         }
     }
 }

@@ -80,4 +80,52 @@ public abstract class AbstractFileValidator {
         String lower = filename.toLowerCase(Locale.ROOT);
         return getAllowedExtensions().stream().anyMatch(lower::endsWith);
     }
+
+    /**
+     * Reads up to {@code count} bytes from the start of the file stream.
+     */
+    protected byte[] readHeaderBytes(MultipartFile file, int count) {
+        try (java.io.InputStream in = file.getInputStream()) {
+            return in.readNBytes(count);
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Could not read " + getDescriptor() + " file header.", e);
+        }
+    }
+
+    /**
+     * Returns {@code true} when {@code data} starts with every byte in {@code prefix}.
+     *
+     * @param data   the header bytes read from the file
+     * @param prefix the magic-byte sequence to check
+     */
+    protected static boolean matchesPrefix(byte[] data, byte[] prefix) {
+        if (data == null || data.length < prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (data[i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Returns {@code true} when {@code data} contains {@code pattern} starting at {@code offset}.
+     *
+     * @param data    the header bytes read from the file
+     * @param pattern the byte sequence to match
+     * @param offset  byte offset within {@code data} at which to start matching
+     */
+    protected static boolean matchesBytesAt(byte[] data, byte[] pattern, int offset) {
+        if (data == null || data.length < offset + pattern.length) {
+            return false;
+        }
+        for (int i = 0; i < pattern.length; i++) {
+            if (data[offset + i] != pattern[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

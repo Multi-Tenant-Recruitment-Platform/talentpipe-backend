@@ -24,6 +24,17 @@ public interface FileStorageService {
     }
 
     /**
+     * Extracts lowercase file extension including the leading dot, or empty string.
+     */
+    static String extractExtension(String filename) {
+        if (filename == null) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        return dot >= 0 ? filename.substring(dot).toLowerCase(java.util.Locale.ROOT) : "";
+    }
+
+    /**
      * Stores file data under a specific namespace and entity id.
      *
      * @param namespace storage domain (e.g. "tenant", "candidate")

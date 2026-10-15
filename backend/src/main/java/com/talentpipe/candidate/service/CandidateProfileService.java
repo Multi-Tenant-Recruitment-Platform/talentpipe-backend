@@ -7,6 +7,7 @@ import com.talentpipe.candidate.dto.UpdateCandidateProfileRequest;
 import com.talentpipe.candidate.entity.Candidate;
 import com.talentpipe.candidate.entity.CandidateCv;
 import com.talentpipe.candidate.repository.CandidateRepository;
+import com.talentpipe.candidate.validator.CandidateNicValidator;
 import com.talentpipe.candidate.validator.CandidatePhotoValidator;
 import com.talentpipe.common.exception.AccountNotVerifiedException;
 import com.talentpipe.common.exception.DuplicateResourceException;
@@ -14,6 +15,7 @@ import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.common.storage.FileStorageService;
 import com.talentpipe.common.util.HtmlSanitizer;
+import com.talentpipe.common.util.PhoneValidator;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Optional;
@@ -148,7 +150,7 @@ public class CandidateProfileService {
     }
 
     private String normalizeAndValidateNic(String nic) {
-        return com.talentpipe.candidate.validator.CandidateNicValidator.normalizeAndValidate(nic);
+        return CandidateNicValidator.normalizeAndValidate(nic);
     }
 
     private String normalizeAndValidatePhone(String phone) {
@@ -156,8 +158,7 @@ public class CandidateProfileService {
             return null;
         }
         String trimmed = phone.trim();
-        String digitsOnly = trimmed.replaceAll("\\D", "");
-        if (digitsOnly.length() < 7 || digitsOnly.length() > 15) {
+        if (!PhoneValidator.isValidPhone(trimmed)) {
             throw new InvalidRequestException("Enter a valid phone number, like +94 77 123 4567.");
         }
         return trimmed;

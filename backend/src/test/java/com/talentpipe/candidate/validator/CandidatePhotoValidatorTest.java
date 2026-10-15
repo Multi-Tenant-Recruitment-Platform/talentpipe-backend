@@ -7,6 +7,8 @@ import com.talentpipe.common.exception.UnsupportedMediaException;
 import com.talentpipe.common.storage.StorageProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockMultipartFile;
 
 class CandidatePhotoValidatorTest {
@@ -21,43 +23,17 @@ class CandidatePhotoValidatorTest {
     }
 
     @Test
-    void acceptsValidImage() {
+    void acceptsValidImageFormats() {
         byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
-        MockMultipartFile file = new MockMultipartFile(
-                "photo",
-                "avatar.png",
-                "image/png",
-                pngBytes);
-
-        assertThatCode(() -> validator.validate(file)).doesNotThrowAnyException();
-    }
-
-    @Test
-    void acceptsValidJpeg() {
         byte[] jpegBytes = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
-        MockMultipartFile file = new MockMultipartFile(
-                "photo",
-                "avatar.jpg",
-                "image/jpeg",
-                jpegBytes);
+        byte[] webpBytes = new byte[]{0x52, 0x49, 0x46, 0x46, 0x20, 0, 0, 0, 0x57, 0x45, 0x42, 0x50};
 
-        assertThatCode(() -> validator.validate(file)).doesNotThrowAnyException();
-    }
-
-    @Test
-    void acceptsValidWebp() {
-        byte[] webpBytes = new byte[]{
-                0x52, 0x49, 0x46, 0x46, // RIFF
-                0x20, 0x00, 0x00, 0x00, // size
-                0x57, 0x45, 0x42, 0x50  // WEBP
-        };
-        MockMultipartFile file = new MockMultipartFile(
-                "photo",
-                "avatar.webp",
-                "image/webp",
-                webpBytes);
-
-        assertThatCode(() -> validator.validate(file)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(new MockMultipartFile("photo", "avatar.png", "image/png", pngBytes)))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(new MockMultipartFile("photo", "avatar.jpg", "image/jpeg", jpegBytes)))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(new MockMultipartFile("photo", "avatar.webp", "image/webp", webpBytes)))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -129,29 +105,21 @@ class CandidatePhotoValidatorTest {
                 .hasMessageContaining("Unsupported file extension");
     }
 
-    @Test
-    void rejectsPngWithFakeHeader() {
+    @ParameterizedTest
+    @CsvSource({
+            "fake.png, image/png, PNG",
+            "fake.jpg, image/jpeg, JPEG",
+            "fake.webp, image/webp, WebP"
+    })
+    void rejectsImageWithFakeHeader(String filename, String mimeType, String expectedFormat) {
         MockMultipartFile file = new MockMultipartFile(
                 "photo",
-                "fake.png",
-                "image/png",
+                filename,
+                mimeType,
                 new byte[]{1, 2, 3, 4});
 
         assertThatThrownBy(() -> validator.validate(file))
                 .isInstanceOf(UnsupportedMediaException.class)
-                .hasMessageContaining("does not match a valid PNG image format");
-    }
-
-    @Test
-    void rejectsJpegWithFakeHeader() {
-        MockMultipartFile file = new MockMultipartFile(
-                "photo",
-                "fake.jpg",
-                "image/jpeg",
-                new byte[]{1, 2, 3, 4});
-
-        assertThatThrownBy(() -> validator.validate(file))
-                .isInstanceOf(UnsupportedMediaException.class)
-                .hasMessageContaining("does not match a valid JPEG image format");
+                .hasMessageContaining("does not match a valid " + expectedFormat + " image format");
     }
 }

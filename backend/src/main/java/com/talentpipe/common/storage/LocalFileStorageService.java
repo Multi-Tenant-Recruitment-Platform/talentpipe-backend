@@ -44,15 +44,9 @@ public class LocalFileStorageService implements FileStorageService {
     }
 
     @Override
-    public String store(UUID tenantId, String category, String filename,
-                        byte[] data, String mimeType) {
-        return store(NAMESPACE_TENANT, tenantId, category, filename, data, mimeType);
-    }
-
-    @Override
     public String store(String namespace, UUID entityId, String category,
                         String filename, byte[] data, String mimeType) {
-        String ext = extractExtension(filename);
+        String ext = FileStorageService.extractExtension(filename);
         Path dir = rootDir.resolve(namespace).resolve(entityId.toString()).resolve(category);
         try {
             Files.createDirectories(dir);
@@ -81,8 +75,7 @@ public class LocalFileStorageService implements FileStorageService {
         }
         Path targetPath;
         if (storedUrlOrKey.startsWith(CANDIDATE_MEDIA_PREFIX)) {
-            String relative = storedUrlOrKey.substring(PUBLIC_MEDIA_PREFIX.length());
-            targetPath = rootDir.resolve(relative);
+            targetPath = resolveCandidatePath(storedUrlOrKey);
         } else if (storedUrlOrKey.startsWith(PUBLIC_MEDIA_PREFIX)) {
             String[] parts = storedUrlOrKey.split("/");
             String category = parts[parts.length - 2];
@@ -113,8 +106,7 @@ public class LocalFileStorageService implements FileStorageService {
             path = pathStart >= 0 ? path.substring(pathStart) : "";
         }
         if (path.startsWith(CANDIDATE_MEDIA_PREFIX)) {
-            String relative = path.substring(PUBLIC_MEDIA_PREFIX.length());
-            deleteQuietly(rootDir.resolve(relative));
+            deleteQuietly(resolveCandidatePath(path));
             return;
         }
         if (!path.startsWith("/") && !storedUrl.contains("://")) {
@@ -166,11 +158,8 @@ public class LocalFileStorageService implements FileStorageService {
         }
     }
 
-    private String extractExtension(String filename) {
-        if (filename == null) {
-            return "";
-        }
-        int dot = filename.lastIndexOf('.');
-        return dot >= 0 ? filename.substring(dot).toLowerCase() : "";
+    private Path resolveCandidatePath(String url) {
+        String relative = url.substring(PUBLIC_MEDIA_PREFIX.length());
+        return rootDir.resolve(relative);
     }
 }

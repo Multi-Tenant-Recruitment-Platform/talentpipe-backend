@@ -8,6 +8,8 @@ import com.talentpipe.common.storage.StorageProperties;
 import java.io.IOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,27 +25,14 @@ class CandidateCvValidatorTest {
     }
 
     @Test
-    void acceptsValidPdf() {
+    void acceptsValidCvFormats() {
         byte[] pdfBytes = new byte[]{0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34}; // "%PDF-1.4"
-        MockMultipartFile file = new MockMultipartFile(
-                "cv",
-                "resume.pdf",
-                "application/pdf",
-                pdfBytes);
-
-        assertThatCode(() -> validator.validate(file)).doesNotThrowAnyException();
-    }
-
-    @Test
-    void acceptsValidDocx() {
         byte[] docxBytes = new byte[]{0x50, 0x4B, 0x03, 0x04, 0x00, 0x00}; // "PK\x03\x04"
-        MockMultipartFile file = new MockMultipartFile(
-                "cv",
-                "resume.docx",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                docxBytes);
 
-        assertThatCode(() -> validator.validate(file)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(new MockMultipartFile(
+                "cv", "resume.pdf", "application/pdf", pdfBytes))).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(new MockMultipartFile(
+                "cv", "resume.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", docxBytes))).doesNotThrowAnyException();
     }
 
     @Test
@@ -76,32 +65,21 @@ class CandidateCvValidatorTest {
                 .hasMessageContaining("exceeds the maximum limit");
     }
 
-    @Test
-    void rejectsPdfWithInvalidMagicBytes() {
-        byte[] fakeBytes = new byte[]{0x00, 0x01, 0x02, 0x03, 0x04};
+    @ParameterizedTest
+    @CsvSource({
+            "fake.pdf, application/pdf, PDF",
+            "fake.docx, application/vnd.openxmlformats-officedocument.wordprocessingml.document, DOCX"
+    })
+    void rejectsCvWithInvalidMagicBytes(String filename, String mimeType, String expectedFormat) {
         MockMultipartFile file = new MockMultipartFile(
                 "cv",
-                "fake.pdf",
-                "application/pdf",
-                fakeBytes);
+                filename,
+                mimeType,
+                new byte[]{0x00, 0x01, 0x02, 0x03, 0x04});
 
         assertThatThrownBy(() -> validator.validate(file))
                 .isInstanceOf(UnsupportedMediaException.class)
-                .hasMessageContaining("does not match a valid PDF format");
-    }
-
-    @Test
-    void rejectsDocxWithInvalidMagicBytes() {
-        byte[] fakeBytes = new byte[]{0x00, 0x01, 0x02, 0x03, 0x04};
-        MockMultipartFile file = new MockMultipartFile(
-                "cv",
-                "fake.docx",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                fakeBytes);
-
-        assertThatThrownBy(() -> validator.validate(file))
-                .isInstanceOf(UnsupportedMediaException.class)
-                .hasMessageContaining("does not match a valid DOCX format");
+                .hasMessageContaining("does not match a valid " + expectedFormat + " format");
     }
 
     @Test

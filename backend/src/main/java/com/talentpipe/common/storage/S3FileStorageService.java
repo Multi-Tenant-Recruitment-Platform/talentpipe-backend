@@ -45,15 +45,9 @@ public class S3FileStorageService implements FileStorageService {
     }
 
     @Override
-    public String store(UUID tenantId, String category, String filename,
-                        byte[] data, String mimeType) {
-        return store("tenant", tenantId, category, filename, data, mimeType);
-    }
-
-    @Override
     public String store(String namespace, UUID entityId, String category,
                         String filename, byte[] data, String mimeType) {
-        String ext = extractExtension(filename);
+        String ext = FileStorageService.extractExtension(filename);
         String key = namespace + "/" + entityId + "/" + category + "/" + UUID.randomUUID() + ext;
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
@@ -144,13 +138,5 @@ public class S3FileStorageService implements FileStorageService {
             return url.substring(candidateIdx + 1);
         }
         return null;
-    }
-
-    private String extractExtension(String filename) {
-        if (filename == null) {
-            return "";
-        }
-        int dot = filename.lastIndexOf('.');
-        return dot >= 0 ? filename.substring(dot).toLowerCase() : "";
     }
 }

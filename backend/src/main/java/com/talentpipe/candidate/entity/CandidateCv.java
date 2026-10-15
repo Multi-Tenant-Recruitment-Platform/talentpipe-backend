@@ -16,6 +16,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "candidate_cvs")
+@SuppressWarnings("java:S2160") // JPA entities inherit identity-based equals/hashCode from BaseEntity
 public class CandidateCv extends BaseEntity {
 
     public static final String DEFAULT_STORAGE_URL = "/api/v1/candidates/me/cv/download";
@@ -70,16 +71,6 @@ public class CandidateCv extends BaseEntity {
         this.version = version;
         this.isActive = true;
         this.uploadedAt = Instant.now();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
     }
 
     public UUID getCandidateId() {

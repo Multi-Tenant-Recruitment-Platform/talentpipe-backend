@@ -60,16 +60,20 @@ class CandidateCvServiceTest {
                 UserStatus.ACTIVE);
     }
 
+    private CandidateCv createCv(String fileName, String key, long size, String hash, int version) {
+        return new CandidateCv(
+                candidate.getId(),
+                fileName,
+                key,
+                "application/pdf",
+                size,
+                hash,
+                version);
+    }
+
     @Test
     void uploadCvArchivesPreviousAndIncrementsVersion() {
-        CandidateCv previousCv = new CandidateCv(
-                candidate.getId(),
-                "old.pdf",
-                "candidate/old.pdf",
-                "application/pdf",
-                1000L,
-                "differenthash",
-                1);
+        CandidateCv previousCv = createCv("old.pdf", "candidate/old.pdf", 1000L, "differenthash", 1);
 
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.of(previousCv));
@@ -105,14 +109,7 @@ class CandidateCvServiceTest {
         java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
         String expectedHash = java.util.HexFormat.of().formatHex(digest.digest(bytes));
 
-        CandidateCv activeCv = new CandidateCv(
-                candidate.getId(),
-                "resume.pdf",
-                "key",
-                "application/pdf",
-                bytes.length,
-                expectedHash,
-                1);
+        CandidateCv activeCv = createCv("resume.pdf", "key", bytes.length, expectedHash, 1);
 
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.of(activeCv));
@@ -126,14 +123,7 @@ class CandidateCvServiceTest {
 
     @Test
     void removeActiveCvArchivesCvAndAudits() {
-        CandidateCv activeCv = new CandidateCv(
-                candidate.getId(),
-                "resume.pdf",
-                "key",
-                "application/pdf",
-                100L,
-                "hash",
-                1);
+        CandidateCv activeCv = createCv("resume.pdf", "key", 100L, "hash", 1);
 
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.of(activeCv));
@@ -147,14 +137,7 @@ class CandidateCvServiceTest {
 
     @Test
     void deactivateForLeavingPoolArchivesCvAndAudits() {
-        CandidateCv activeCv = new CandidateCv(
-                candidate.getId(),
-                "resume.pdf",
-                "key",
-                "application/pdf",
-                100L,
-                "hash",
-                1);
+        CandidateCv activeCv = createCv("resume.pdf", "key", 100L, "hash", 1);
 
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.of(activeCv));
@@ -238,14 +221,7 @@ class CandidateCvServiceTest {
 
     @Test
     void loadActiveCvResourceSuccessReturnsPayload() {
-        CandidateCv activeCv = new CandidateCv(
-                candidate.getId(),
-                "my_cv.pdf",
-                "candidate/key/my_cv.pdf",
-                "application/pdf",
-                500L,
-                "sha256",
-                1);
+        CandidateCv activeCv = createCv("my_cv.pdf", "candidate/key/my_cv.pdf", 500L, "sha256", 1);
 
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.of(activeCv));
@@ -279,5 +255,38 @@ class CandidateCvServiceTest {
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
 
         verify(storageService).delete(storedKey);
+    }
+
+    @Test
+    void cvDownloadPayloadEqualsHashCodeAndToString() {
+        byte[] data1 = new byte[]{1, 2, 3};
+        byte[] data2 = new byte[]{1, 2, 3};
+        byte[] diffData = new byte[]{4, 5};
+
+        CandidateCvService.CvDownloadPayload payload1 =
+                new CandidateCvService.CvDownloadPayload("cv.pdf", "application/pdf", data1);
+        CandidateCvService.CvDownloadPayload payload2 =
+                new CandidateCvService.CvDownloadPayload("cv.pdf", "application/pdf", data2);
+        CandidateCvService.CvDownloadPayload diffFile =
+                new CandidateCvService.CvDownloadPayload("other.pdf", "application/pdf", data1);
+        CandidateCvService.CvDownloadPayload diffMime =
+                new CandidateCvService.CvDownloadPayload("cv.pdf", "application/msword", data1);
+        CandidateCvService.CvDownloadPayload diffBytes =
+                new CandidateCvService.CvDownloadPayload("cv.pdf", "application/pdf", diffData);
+        CandidateCvService.CvDownloadPayload nullBytes =
+                new CandidateCvService.CvDownloadPayload("cv.pdf", "application/pdf", null);
+
+        assertThat(payload1)
+                .isEqualTo(payload1)
+                .isEqualTo(payload2)
+                .isNotEqualTo(null)
+                .isNotEqualTo("string")
+                .isNotEqualTo(diffFile)
+                .isNotEqualTo(diffMime)
+                .isNotEqualTo(diffBytes);
+
+        assertThat(payload1.hashCode()).isEqualTo(payload2.hashCode());
+        assertThat(payload1.toString()).contains("cv.pdf", "application/pdf", "3");
+        assertThat(nullBytes.toString()).contains("0");
     }
 }

@@ -15,10 +15,14 @@ public class PhoneValidator implements ConstraintValidator<ValidPhone, String> {
 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
+        return isValidPhone(value);
+    }
+
+    public static boolean isValidPhone(String value) {
         if (value == null || value.isBlank()) {
             return true; // optional field — @NotBlank enforces mandatory
         }
-        String digitsOnly = value.replaceAll("[^0-9]", "");
+        String digitsOnly = value.replaceAll("\\D", "");
         return digitsOnly.length() >= MIN_DIGITS && digitsOnly.length() <= MAX_DIGITS;
     }
 }

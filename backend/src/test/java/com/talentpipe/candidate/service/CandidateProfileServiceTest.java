@@ -76,6 +76,14 @@ class CandidateProfileServiceTest {
         candidateId = candidate.getId();
     }
 
+    private UpdateCandidateProfileRequest createValidRequest() {
+        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
+        request.setFullName("Kasun Perera");
+        request.setEmail("kasun@example.com");
+        request.setIdentityCardNumber("200012345678");
+        return request;
+    }
+
     @Test
     void getProfileReturnsExpectedResponse() {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
@@ -114,10 +122,8 @@ class CandidateProfileServiceTest {
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
         when(candidateRepository.existsByEmail("other@example.com")).thenReturn(true);
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setEmail("other@example.com");
-        request.setIdentityCardNumber("200012345678");
 
         assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
                 .isInstanceOf(DuplicateResourceException.class)
@@ -135,9 +141,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setIdentityCardNumber(invalidNic);
 
         assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
@@ -152,10 +156,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setRemovePhoto(true);
 
         profileService.updateProfile(candidateId, request);
@@ -170,10 +171,7 @@ class CandidateProfileServiceTest {
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
         MockMultipartFile photo = new MockMultipartFile("photo", "avatar.png", "image/png", new byte[]{1, 2, 3});
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setPhoto(photo);
 
         when(storageService.store(eq("candidate"), eq(candidateId), eq("photos"), eq("avatar.png"), any(), any()))
@@ -191,10 +189,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setAddToTalentPool(false);
 
         profileService.updateProfile(candidateId, request);
@@ -267,10 +262,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setPhone("+94 (77) 123-4567");
 
         profileService.updateProfile(candidateId, request);
@@ -300,10 +292,7 @@ class CandidateProfileServiceTest {
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
         MockMultipartFile cvFile = new MockMultipartFile("cv", "cv.pdf", "application/pdf", new byte[]{1});
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setAddToTalentPool(true);
         request.setCv(cvFile);
 
@@ -320,10 +309,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setAddToTalentPool(true);
         request.setRemoveCv(true);
 
@@ -338,10 +324,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setRemovePhoto(true);
 
         profileService.updateProfile(candidateId, request);
@@ -357,10 +340,7 @@ class CandidateProfileServiceTest {
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
         MockMultipartFile newPhoto = new MockMultipartFile("photo", "new.jpg", "image/jpeg", new byte[]{1, 2, 3});
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setPhoto(newPhoto);
 
         when(storageService.store(eq("candidate"), eq(candidateId), eq("photos"), eq("new.jpg"), any(), any()))
@@ -373,7 +353,7 @@ class CandidateProfileServiceTest {
     }
 
     @Test
-    void updateProfileThrowsIllegalStateExceptionWhenPhotoGetBytesFails() throws Exception {
+    void updateProfileThrowsIllegalStateExceptionWhenPhotoGetBytesFails() throws IOException {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
@@ -382,10 +362,7 @@ class CandidateProfileServiceTest {
         when(mockPhoto.getOriginalFilename()).thenReturn("avatar.png");
         when(mockPhoto.getBytes()).thenThrow(new IOException("File read error"));
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setPhoto(mockPhoto);
 
         assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
@@ -399,10 +376,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setAddToTalentPool(true);
 
         profileService.updateProfile(candidateId, request);
@@ -416,10 +390,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setAddToTalentPool(false);
 
         profileService.updateProfile(candidateId, request);
@@ -432,10 +403,7 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setPhone(null);
 
         profileService.updateProfile(candidateId, request);
@@ -449,10 +417,7 @@ class CandidateProfileServiceTest {
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
         MockMultipartFile cvFile = new MockMultipartFile("cv", "cv.pdf", "application/pdf", new byte[]{1, 2});
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setAddToTalentPool(false);
         request.setCv(cvFile);
 
@@ -468,10 +433,7 @@ class CandidateProfileServiceTest {
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
         MockMultipartFile newPhoto = new MockMultipartFile("photo", "new.jpg", "image/jpeg", new byte[]{1, 2, 3});
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("200012345678");
+        UpdateCandidateProfileRequest request = createValidRequest();
         request.setPhoto(newPhoto);
 
         when(storageService.store(any(), any(), any(), any(), any(), any()))

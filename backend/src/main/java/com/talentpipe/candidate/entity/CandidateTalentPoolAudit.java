@@ -15,6 +15,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "candidate_talent_pool_audits")
+@SuppressWarnings("java:S2160") // JPA entities inherit identity-based equals/hashCode from BaseEntity
 public class CandidateTalentPoolAudit extends BaseEntity {
 
     @Column(name = "candidate_id", nullable = false)

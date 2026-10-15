@@ -111,4 +111,44 @@ class AbstractFileValidatorTest {
         validator.validate(valid);
         org.assertj.core.api.Assertions.assertThat(validator.customCalled.get()).isTrue();
     }
+
+    @Test
+    void matchesPrefix_checksAllBranches() {
+        ConcreteValidator validator = new ConcreteValidator();
+        byte[] prefix = new byte[]{0x01, 0x02};
+
+        org.assertj.core.api.Assertions.assertThat(validator.matchesPrefix(null, prefix)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(validator.matchesPrefix(new byte[]{0x01}, prefix)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(validator.matchesPrefix(new byte[]{0x01, 0x03}, prefix)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(validator.matchesPrefix(new byte[]{0x01, 0x02, 0x03}, prefix)).isTrue();
+    }
+
+    @Test
+    void matchesBytesAt_checksAllBranches() {
+        ConcreteValidator validator = new ConcreteValidator();
+        byte[] pattern = new byte[]{0x0A, 0x0B};
+
+        org.assertj.core.api.Assertions.assertThat(validator.matchesBytesAt(null, pattern, 0)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(validator.matchesBytesAt(new byte[]{0x0A}, pattern, 0)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(validator.matchesBytesAt(new byte[]{0x00, 0x0A, 0x0C}, pattern, 1)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(validator.matchesBytesAt(new byte[]{0x00, 0x0A, 0x0B}, pattern, 1)).isTrue();
+    }
+
+    @Test
+    void readHeaderBytes_returnsExpectedBytesOrThrows() {
+        ConcreteValidator validator = new ConcreteValidator();
+        MockMultipartFile file = new MockMultipartFile("f", "test.png", "image/png", new byte[]{1, 2, 3, 4, 5});
+        byte[] header = validator.readHeaderBytes(file, 3);
+        org.assertj.core.api.Assertions.assertThat(header).containsExactly(1, 2, 3);
+
+        MockMultipartFile faultyFile = new MockMultipartFile("f", "test.png", "image/png", new byte[]{1}) {
+            @Override
+            public java.io.InputStream getInputStream() throws java.io.IOException {
+                throw new java.io.IOException("Stream failure");
+            }
+        };
+        assertThatThrownBy(() -> validator.readHeaderBytes(faultyFile, 4))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Could not read Test file file header");
+    }
 }
