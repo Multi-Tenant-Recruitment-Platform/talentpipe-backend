@@ -33,8 +33,6 @@ import org.springframework.web.multipart.MultipartFile;
 public class CandidateProfileService {
 
     private static final Logger log = LoggerFactory.getLogger(CandidateProfileService.class);
-    private static final Pattern NIC_COMPACT_PATTERN = Pattern.compile("^[A-Za-z0-9]{5,20}$");
-    private static final Pattern NIC_RAW_PATTERN = Pattern.compile("^[A-Za-z0-9\\s-]+$");
     private static final String PHOTO_CATEGORY = "photos";
 
     private final CandidateRepository candidateRepository;
@@ -147,18 +145,7 @@ public class CandidateProfileService {
     }
 
     private String normalizeAndValidateNic(String nic) {
-        if (nic == null || nic.isBlank()) {
-            throw new InvalidRequestException("ID number cannot be blank.");
-        }
-        String trimmed = nic.trim();
-        if (!NIC_RAW_PATTERN.matcher(trimmed).matches()) {
-            throw new InvalidRequestException("ID number contains invalid characters.");
-        }
-        String compact = trimmed.replaceAll("[\\s-]", "");
-        if (!NIC_COMPACT_PATTERN.matcher(compact).matches()) {
-            throw new InvalidRequestException("Enter a valid ID number, like 200012345678 or 912345678V.");
-        }
-        return compact.toUpperCase(Locale.ROOT);
+        return com.talentpipe.candidate.validator.CandidateNicValidator.normalizeAndValidate(nic);
     }
 
     private String normalizeAndValidatePhone(String phone) {

@@ -51,11 +51,14 @@ public class CandidateService {
             throw new DuplicateResourceException("Email '" + email + "' is already registered");
         }
 
+        String normalizedNic = com.talentpipe.candidate.validator.CandidateNicValidator
+                .normalizeAndValidate(request.identityCardNumber());
+
         Candidate candidate = candidateRepository.save(new Candidate(
                 email,
                 passwordEncoder.encode(request.password()),
                 request.fullName().trim(),
-                request.identityCardNumber().trim(),
+                normalizedNic,
                 request.address().trim(),
                 request.contactNumber().trim(),
                 UserStatus.PENDING_VERIFICATION));

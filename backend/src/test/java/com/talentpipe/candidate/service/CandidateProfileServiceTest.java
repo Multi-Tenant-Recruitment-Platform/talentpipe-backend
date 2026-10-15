@@ -131,7 +131,7 @@ class CandidateProfileServiceTest {
 
         assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("Enter a valid ID number");
+                .hasMessageContaining("Format Invalid");
     }
 
     @Test
@@ -279,7 +279,22 @@ class CandidateProfileServiceTest {
 
         assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("ID number contains invalid characters");
+                .hasMessageContaining("Format Invalid");
+    }
+
+    @Test
+    void updateProfileRejectsNicWithInvalidDayRange() {
+        when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
+        when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
+
+        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
+        request.setFullName("Kasun Perera");
+        request.setEmail("kasun@example.com");
+        request.setIdentityCardNumber("729991524V"); // day sequence 999 is invalid
+
+        assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("outside valid calendar day ranges");
     }
 
     @Test
