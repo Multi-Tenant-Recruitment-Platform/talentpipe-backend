@@ -63,4 +63,14 @@ public class CandidateTalentPoolAudit extends BaseEntity {
     public Instant getOccurredAt() {
         return occurredAt;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
 }

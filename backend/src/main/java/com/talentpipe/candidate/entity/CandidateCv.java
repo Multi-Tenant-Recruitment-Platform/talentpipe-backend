@@ -18,6 +18,8 @@ import java.util.UUID;
 @Table(name = "candidate_cvs")
 public class CandidateCv extends BaseEntity {
 
+    public static final String DEFAULT_STORAGE_URL = "/api/v1/candidates/me/cv/download";
+
     @Column(name = "candidate_id", nullable = false)
     private UUID candidateId;
 
@@ -56,18 +58,28 @@ public class CandidateCv extends BaseEntity {
     }
 
     public CandidateCv(UUID candidateId, String fileName, String storageKey,
-                       String storageUrl, String mimeType, long fileSizeBytes,
+                       String mimeType, long fileSizeBytes,
                        String fileHashSha256, int version) {
         this.candidateId = candidateId;
         this.fileName = fileName;
         this.storageKey = storageKey;
-        this.storageUrl = storageUrl;
+        this.storageUrl = DEFAULT_STORAGE_URL;
         this.mimeType = mimeType;
         this.fileSizeBytes = fileSizeBytes;
         this.fileHashSha256 = fileHashSha256;
         this.version = version;
         this.isActive = true;
         this.uploadedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
     }
 
     public UUID getCandidateId() {

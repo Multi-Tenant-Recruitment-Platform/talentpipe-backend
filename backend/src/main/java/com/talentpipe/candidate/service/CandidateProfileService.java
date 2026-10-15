@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -62,21 +61,7 @@ public class CandidateProfileService {
     @Transactional(readOnly = true)
     public MyCandidateProfileResponse getProfile(UUID candidateId) {
         Candidate candidate = findVerifiedCandidate(candidateId);
-        Optional<CandidateCv> activeCv = cvService.getActiveCv(candidateId);
-
-        CandidateCvResponse cvResponse = activeCv
-                .map(cv -> new CandidateCvResponse(cv.getFileName(), cv.getFileSizeBytes(), cv.getStorageUrl()))
-                .orElse(null);
-
-        return new MyCandidateProfileResponse(
-                candidate.getId(),
-                candidate.getFullName(),
-                candidate.getEmail(),
-                candidate.getContactNumber(),
-                candidate.getIdentityCardNumber(),
-                candidate.getPhotoUrl(),
-                candidate.isInTalentPool(),
-                cvResponse);
+        return buildProfileResponse(candidate);
     }
 
     /**
@@ -104,10 +89,28 @@ public class CandidateProfileService {
         candidateRepository.save(candidate);
         log.info("Successfully updated profile for candidate {}", candidateId);
 
-        return getProfile(candidateId);
+        return buildProfileResponse(candidate);
     }
 
     // ---------------------------------------------------------------- private
+
+    private MyCandidateProfileResponse buildProfileResponse(Candidate candidate) {
+        Optional<CandidateCv> activeCv = cvService.getActiveCv(candidate.getId());
+
+        CandidateCvResponse cvResponse = activeCv
+                .map(cv -> new CandidateCvResponse(cv.getFileName(), cv.getFileSizeBytes(), cv.getStorageUrl()))
+                .orElse(null);
+
+        return new MyCandidateProfileResponse(
+                candidate.getId(),
+                candidate.getFullName(),
+                candidate.getEmail(),
+                candidate.getContactNumber(),
+                candidate.getIdentityCardNumber(),
+                candidate.getPhotoUrl(),
+                candidate.isInTalentPool(),
+                cvResponse);
+    }
 
     private Candidate findVerifiedCandidate(UUID candidateId) {
         Candidate candidate = candidateRepository.findById(candidateId)
@@ -153,7 +156,7 @@ public class CandidateProfileService {
             return null;
         }
         String trimmed = phone.trim();
-        String digitsOnly = trimmed.replaceAll("[^0-9]", "");
+        String digitsOnly = trimmed.replaceAll("\\D", "");
         if (digitsOnly.length() < 7 || digitsOnly.length() > 15) {
             throw new InvalidRequestException("Enter a valid phone number, like +94 77 123 4567.");
         }

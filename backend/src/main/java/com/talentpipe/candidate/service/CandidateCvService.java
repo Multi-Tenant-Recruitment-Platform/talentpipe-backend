@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -27,14 +29,35 @@ public class CandidateCvService {
 
     private static final Logger log = LoggerFactory.getLogger(CandidateCvService.class);
     private static final String CV_CATEGORY = "cvs";
-    private static final String DOWNLOAD_URL = "/api/v1/candidates/me/cv/download";
 
     private final CandidateCvRepository cvRepository;
     private final CandidateCvValidator cvValidator;
     private final FileStorageService storageService;
     private final TalentPoolAuditService auditService;
 
-    public record CvDownloadPayload(String fileName, String mimeType, byte[] data) {}
+    public record CvDownloadPayload(String fileName, String mimeType, byte[] data) {
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof CvDownloadPayload that)) return false;
+            return Objects.equals(fileName, that.fileName)
+                    && Objects.equals(mimeType, that.mimeType)
+                    && Arrays.equals(data, that.data);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = Objects.hash(fileName, mimeType);
+            result = 31 * result + Arrays.hashCode(data);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "CvDownloadPayload[fileName=" + fileName + ", mimeType=" + mimeType
+                    + ", dataLength=" + (data != null ? data.length : 0) + "]";
+        }
+    }
 
     public CandidateCvService(CandidateCvRepository cvRepository,
                               CandidateCvValidator cvValidator,
@@ -49,6 +72,10 @@ public class CandidateCvService {
     /** Returns the active CV for the candidate, if one exists. */
     @Transactional(readOnly = true)
     public Optional<CandidateCv> getActiveCv(UUID candidateId) {
+        return findActiveCv(candidateId);
+    }
+
+    private Optional<CandidateCv> findActiveCv(UUID candidateId) {
         return cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidateId);
     }
 
@@ -68,7 +95,7 @@ public class CandidateCvService {
         }
 
         String sha256 = calculateSha256(bytes);
-        Optional<CandidateCv> currentActive = getActiveCv(candidate.getId());
+        Optional<CandidateCv> currentActive = findActiveCv(candidate.getId());
 
         // Idempotency check: identical file content avoids redundant storage
         if (currentActive.isPresent() && sha256.equals(currentActive.get().getFileHashSha256())) {
@@ -99,20 +126,16 @@ public class CandidateCvService {
                     candidate.getId(),
                     file.getOriginalFilename(),
                     storedKey,
-                    DOWNLOAD_URL,
                     file.getContentType(),
                     file.getSize(),
                     sha256,
                     nextVersion);
 
             CandidateCv saved = cvRepository.save(newCv);
-            UUID savedId = saved != null ? saved.getId() : null;
-            auditService.recordEvent(candidate.getId(), "UPDATED_CV", true, savedId);
+            auditService.recordEvent(candidate.getId(), "UPDATED_CV", true, saved.getId());
             log.info("Uploaded version {} CV for candidate {}", nextVersion, candidate.getId());
             return saved;
         } catch (RuntimeException e) {
-            log.warn("Failed to persist CV record for candidate {}, cleaning up stored file {}",
-                    candidate.getId(), storedKey, e);
             storageService.delete(storedKey);
             throw e;
         }
@@ -123,7 +146,7 @@ public class CandidateCvService {
      */
     @Transactional
     public void removeActiveCv(Candidate candidate) {
-        Optional<CandidateCv> current = getActiveCv(candidate.getId());
+        Optional<CandidateCv> current = findActiveCv(candidate.getId());
         if (current.isPresent()) {
             CandidateCv cv = current.get();
             cv.archive(Instant.now());
@@ -138,7 +161,7 @@ public class CandidateCvService {
      */
     @Transactional
     public void deactivateForLeavingPool(Candidate candidate) {
-        Optional<CandidateCv> current = getActiveCv(candidate.getId());
+        Optional<CandidateCv> current = findActiveCv(candidate.getId());
         if (current.isPresent()) {
             CandidateCv cv = current.get();
             cv.archive(Instant.now());
@@ -155,7 +178,7 @@ public class CandidateCvService {
      */
     @Transactional(readOnly = true)
     public CvDownloadPayload loadActiveCvResource(UUID candidateId) {
-        CandidateCv cv = getActiveCv(candidateId)
+        CandidateCv cv = findActiveCv(candidateId)
                 .orElseThrow(() -> new ResourceNotFoundException("No active CV found for candidate"));
 
         byte[] data = storageService.load(cv.getStorageKey());

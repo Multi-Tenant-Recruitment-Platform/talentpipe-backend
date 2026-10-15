@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,15 +22,19 @@ import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.common.storage.FileStorageService;
 import com.talentpipe.common.util.HtmlSanitizer;
+import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 class CandidateProfileServiceTest {
@@ -119,19 +124,25 @@ class CandidateProfileServiceTest {
                 .hasMessageContaining("already in use");
     }
 
-    @Test
-    void updateProfileRejectsInvalidNicFormat() {
+    @ParameterizedTest
+    @CsvSource({
+            "12, Format Invalid",
+            "'   ', ID number cannot be blank",
+            "2000!@#$1234, Format Invalid",
+            "729991524V, outside valid calendar day ranges"
+    })
+    void updateProfileRejectsInvalidNicValues(String invalidNic, String expectedMessage) {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
         UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
         request.setFullName("Kasun Perera");
         request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("12"); // too short
+        request.setIdentityCardNumber(invalidNic);
 
         assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("Format Invalid");
+                .hasMessageContaining(expectedMessage);
     }
 
     @Test
@@ -198,7 +209,6 @@ class CandidateProfileServiceTest {
                 candidateId,
                 "my_cv.pdf",
                 "key",
-                "/download",
                 "application/pdf",
                 5000L,
                 "hash",
@@ -250,51 +260,6 @@ class CandidateProfileServiceTest {
         assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
                 .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("Email cannot be blank");
-    }
-
-    @Test
-    void updateProfileRejectsBlankNic() {
-        when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
-        when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
-
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("   ");
-
-        assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("ID number cannot be blank");
-    }
-
-    @Test
-    void updateProfileRejectsNicWithInvalidCharacters() {
-        when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
-        when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
-
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("2000!@#$1234");
-
-        assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("Format Invalid");
-    }
-
-    @Test
-    void updateProfileRejectsNicWithInvalidDayRange() {
-        when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
-        when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
-
-        UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
-        request.setFullName("Kasun Perera");
-        request.setEmail("kasun@example.com");
-        request.setIdentityCardNumber("729991524V"); // day sequence 999 is invalid
-
-        assertThatThrownBy(() -> profileService.updateProfile(candidateId, request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("outside valid calendar day ranges");
     }
 
     @Test
@@ -386,7 +351,7 @@ class CandidateProfileServiceTest {
     }
 
     @Test
-    void updateProfileReplacesExistingPhotoWhenPhotoUrlNotNull() throws Exception {
+    void updateProfileReplacesExistingPhotoWhenPhotoUrlNotNull() {
         candidate.setPhotoUrl("/api/v1/public/media/candidate/" + candidateId + "/photos/old.png");
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
@@ -412,10 +377,10 @@ class CandidateProfileServiceTest {
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(htmlSanitizer.sanitize("Kasun Perera")).thenReturn("Kasun Perera");
 
-        org.springframework.web.multipart.MultipartFile mockPhoto = org.mockito.Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        MultipartFile mockPhoto = mock(MultipartFile.class);
         when(mockPhoto.isEmpty()).thenReturn(false);
         when(mockPhoto.getOriginalFilename()).thenReturn("avatar.png");
-        when(mockPhoto.getBytes()).thenThrow(new java.io.IOException("File read error"));
+        when(mockPhoto.getBytes()).thenThrow(new IOException("File read error"));
 
         UpdateCandidateProfileRequest request = new UpdateCandidateProfileRequest();
         request.setFullName("Kasun Perera");

@@ -47,7 +47,6 @@ class CandidateEntityTest {
                 candidateId,
                 "resume.pdf",
                 "candidate/" + candidateId + "/cvs/file.pdf",
-                "/download",
                 "application/pdf",
                 2048L,
                 "sha256hash",
@@ -56,7 +55,7 @@ class CandidateEntityTest {
         assertThat(cv.getCandidateId()).isEqualTo(candidateId);
         assertThat(cv.getFileName()).isEqualTo("resume.pdf");
         assertThat(cv.getStorageKey()).contains("file.pdf");
-        assertThat(cv.getStorageUrl()).isEqualTo("/download");
+        assertThat(cv.getStorageUrl()).isEqualTo(CandidateCv.DEFAULT_STORAGE_URL);
         assertThat(cv.getMimeType()).isEqualTo("application/pdf");
         assertThat(cv.getFileSizeBytes()).isEqualTo(2048L);
         assertThat(cv.getFileHashSha256()).isEqualTo("sha256hash");

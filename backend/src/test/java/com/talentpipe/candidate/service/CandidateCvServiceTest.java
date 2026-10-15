@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import com.talentpipe.candidate.repository.CandidateCvRepository;
 import com.talentpipe.candidate.validator.CandidateCvValidator;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.common.storage.FileStorageService;
+import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +26,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 class CandidateCvServiceTest {
@@ -63,7 +66,6 @@ class CandidateCvServiceTest {
                 candidate.getId(),
                 "old.pdf",
                 "candidate/old.pdf",
-                "/download",
                 "application/pdf",
                 1000L,
                 "differenthash",
@@ -107,7 +109,6 @@ class CandidateCvServiceTest {
                 candidate.getId(),
                 "resume.pdf",
                 "key",
-                "url",
                 "application/pdf",
                 bytes.length,
                 expectedHash,
@@ -129,7 +130,6 @@ class CandidateCvServiceTest {
                 candidate.getId(),
                 "resume.pdf",
                 "key",
-                "url",
                 "application/pdf",
                 100L,
                 "hash",
@@ -151,7 +151,6 @@ class CandidateCvServiceTest {
                 candidate.getId(),
                 "resume.pdf",
                 "key",
-                "url",
                 "application/pdf",
                 100L,
                 "hash",
@@ -172,7 +171,8 @@ class CandidateCvServiceTest {
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> cvService.loadActiveCvResource(candidate.getId()))
+        UUID candidateId = candidate.getId();
+        assertThatThrownBy(() -> cvService.loadActiveCvResource(candidateId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("No active CV found");
     }
@@ -206,8 +206,8 @@ class CandidateCvServiceTest {
 
     @Test
     void uploadCvThrowsWhenFileBytesFail() throws Exception {
-        org.springframework.web.multipart.MultipartFile mockFile = org.mockito.Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
-        when(mockFile.getBytes()).thenThrow(new java.io.IOException("Disk read failure"));
+        MultipartFile mockFile = mock(MultipartFile.class);
+        when(mockFile.getBytes()).thenThrow(new IOException("Disk read failure"));
 
         assertThatThrownBy(() -> cvService.uploadCv(candidate, mockFile))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -242,7 +242,6 @@ class CandidateCvServiceTest {
                 candidate.getId(),
                 "my_cv.pdf",
                 "candidate/key/my_cv.pdf",
-                "/download",
                 "application/pdf",
                 500L,
                 "sha256",

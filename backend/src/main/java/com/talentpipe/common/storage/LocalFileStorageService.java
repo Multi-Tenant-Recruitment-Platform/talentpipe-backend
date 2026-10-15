@@ -28,6 +28,9 @@ import org.slf4j.LoggerFactory;
 public class LocalFileStorageService implements FileStorageService {
 
     private static final Logger log = LoggerFactory.getLogger(LocalFileStorageService.class);
+    private static final String NAMESPACE_TENANT = "tenant";
+    private static final String PUBLIC_MEDIA_PREFIX = "/api/v1/public/media/";
+    private static final String CANDIDATE_MEDIA_PREFIX = "/api/v1/public/media/candidate/";
 
     private final Path rootDir;
 
@@ -43,7 +46,7 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public String store(UUID tenantId, String category, String filename,
                         byte[] data, String mimeType) {
-        return store("tenant", tenantId, category, filename, data, mimeType);
+        return store(NAMESPACE_TENANT, tenantId, category, filename, data, mimeType);
     }
 
     @Override
@@ -58,11 +61,11 @@ public class LocalFileStorageService implements FileStorageService {
             Files.write(target, data);
             log.debug("Stored file locally: {}", target);
 
-            if ("tenant".equals(namespace)) {
-                return "/api/v1/public/media/" + category + "/" + storedName;
+            if (NAMESPACE_TENANT.equals(namespace)) {
+                return PUBLIC_MEDIA_PREFIX + category + "/" + storedName;
             }
             if ("candidate".equals(namespace) && "photos".equals(category)) {
-                return "/api/v1/public/media/candidate/" + entityId + "/photos/" + storedName;
+                return CANDIDATE_MEDIA_PREFIX + entityId + "/photos/" + storedName;
             }
             // For CVs or other protected documents, return relative key
             return namespace + "/" + entityId + "/" + category + "/" + storedName;
@@ -77,14 +80,14 @@ public class LocalFileStorageService implements FileStorageService {
             throw new IllegalArgumentException("Storage path or key cannot be blank");
         }
         Path targetPath;
-        if (storedUrlOrKey.startsWith("/api/v1/public/media/candidate/")) {
-            String relative = storedUrlOrKey.substring("/api/v1/public/media/".length());
+        if (storedUrlOrKey.startsWith(CANDIDATE_MEDIA_PREFIX)) {
+            String relative = storedUrlOrKey.substring(PUBLIC_MEDIA_PREFIX.length());
             targetPath = rootDir.resolve(relative);
-        } else if (storedUrlOrKey.startsWith("/api/v1/public/media/")) {
+        } else if (storedUrlOrKey.startsWith(PUBLIC_MEDIA_PREFIX)) {
             String[] parts = storedUrlOrKey.split("/");
             String category = parts[parts.length - 2];
             String filename = parts[parts.length - 1];
-            targetPath = findLocalFile(rootDir.resolve("tenant"), category, filename);
+            targetPath = findLocalFile(rootDir.resolve(NAMESPACE_TENANT), category, filename);
         } else {
             targetPath = rootDir.resolve(storedUrlOrKey);
         }
@@ -109,8 +112,8 @@ public class LocalFileStorageService implements FileStorageService {
             int pathStart = path.indexOf('/', path.indexOf("://") + 3);
             path = pathStart >= 0 ? path.substring(pathStart) : "";
         }
-        if (path.startsWith("/api/v1/public/media/candidate/")) {
-            String relative = path.substring("/api/v1/public/media/".length());
+        if (path.startsWith(CANDIDATE_MEDIA_PREFIX)) {
+            String relative = path.substring(PUBLIC_MEDIA_PREFIX.length());
             deleteQuietly(rootDir.resolve(relative));
             return;
         }
@@ -127,7 +130,7 @@ public class LocalFileStorageService implements FileStorageService {
         String category = parts[parts.length - 2];
         String filename = parts[parts.length - 1];
 
-        Path tenantRootDir = rootDir.resolve("tenant");
+        Path tenantRootDir = rootDir.resolve(NAMESPACE_TENANT);
         if (!Files.exists(tenantRootDir)) {
             return;
         }

@@ -28,8 +28,8 @@ import java.util.regex.Pattern;
  */
 public final class CandidateNicValidator {
 
-    private static final Pattern OLD_NIC_PATTERN = Pattern.compile("^[0-9]{9}[VX]$");
-    private static final Pattern NEW_NIC_PATTERN = Pattern.compile("^[0-9]{12}$");
+    private static final Pattern OLD_NIC_PATTERN = Pattern.compile("^\\d{9}[VX]$");
+    private static final Pattern NEW_NIC_PATTERN = Pattern.compile("^\\d{12}$");
 
     private CandidateNicValidator() {
     }
@@ -43,7 +43,7 @@ public final class CandidateNicValidator {
         if (raw == null) {
             return null;
         }
-        return raw.replaceAll("[\\s\\t-]+", "").toUpperCase(Locale.ROOT);
+        return raw.replaceAll("[\\s-]+", "").toUpperCase(Locale.ROOT);
     }
 
     /**

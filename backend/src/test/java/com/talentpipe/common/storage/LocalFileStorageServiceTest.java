@@ -191,7 +191,7 @@ class LocalFileStorageServiceTest {
     // ---------------------------------------------------------------- candidate storage & load
 
     @Test
-    void store_candidatePhoto_returnsCandidateMediaUrl() throws Exception {
+    void store_candidatePhoto_returnsCandidateMediaUrl() {
         UUID candidateId = UUID.randomUUID();
         byte[] data = "photo-bytes".getBytes();
 

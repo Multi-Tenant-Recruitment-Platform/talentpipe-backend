@@ -7,22 +7,16 @@ import com.talentpipe.common.exception.UnsupportedMediaException;
 import com.talentpipe.common.storage.StorageProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
-@ExtendWith(MockitoExtension.class)
 class CandidatePhotoValidatorTest {
-
-    @Mock
-    private StorageProperties storageProperties;
 
     private CandidatePhotoValidator validator;
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.lenient().when(storageProperties.maxPhotoBytes()).thenReturn(2L * 1024 * 1024);
+        StorageProperties storageProperties = new StorageProperties(
+                "local", "uploads", null, "ap-south-1", null, 0, 0, 2L * 1024 * 1024, 0);
         validator = new CandidatePhotoValidator(storageProperties);
     }
 
