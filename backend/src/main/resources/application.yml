@@ -83,9 +83,11 @@ talentpipe:
     s3-region: ${AWS_S3_REGION:ap-south-1}
     # Optional CDN base URL (CloudFront). If absent, direct S3 URLs are used.
     cdn-base-url: ${AWS_CDN_BASE_URL:}
-    # Per-category size limits (bytes). Defaults: logo 2 MB, cover 4 MB.
+    # Per-category size limits (bytes). Defaults: logo 2 MB, cover 4 MB, photo 2 MB, cv 5 MB.
     max-logo-bytes: ${MAX_LOGO_BYTES:2097152}
     max-cover-bytes: ${MAX_COVER_BYTES:4194304}
+    max-photo-bytes: ${MAX_PHOTO_BYTES:2097152}
+    max-cv-bytes: ${MAX_CV_BYTES:5242880}
 
 logging:
   level:

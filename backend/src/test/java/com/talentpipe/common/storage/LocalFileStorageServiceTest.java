@@ -27,7 +27,7 @@ class LocalFileStorageServiceTest {
     void setUp() {
         StorageProperties props = new StorageProperties(
                 "local", tempDir.toString(), null, "ap-south-1", null,
-                2_097_152L, 4_194_304L);
+                2_097_152L, 4_194_304L, 2_097_152L, 5_242_880L);
         storageService = new LocalFileStorageService(props);
         tenantId = UUID.randomUUID();
     }
@@ -181,10 +181,81 @@ class LocalFileStorageServiceTest {
         Path newDir = tempDir.resolve("auto-created");
         StorageProperties props = new StorageProperties(
                 "local", newDir.toString(), null, "ap-south-1", null,
-                2_097_152L, 4_194_304L);
+                2_097_152L, 4_194_304L, 2_097_152L, 5_242_880L);
 
         new LocalFileStorageService(props);
 
         assertThat(newDir).isDirectory();
+    }
+
+    // ---------------------------------------------------------------- candidate storage & load
+
+    @Test
+    void store_candidatePhoto_returnsCandidateMediaUrl() {
+        UUID candidateId = UUID.randomUUID();
+        byte[] data = "photo-bytes".getBytes();
+
+        String url = storageService.store("candidate", candidateId, "photos", "avatar.jpg", data, "image/jpeg");
+
+        assertThat(url).startsWith("/api/v1/public/media/candidate/" + candidateId + "/photos/").endsWith(".jpg");
+        byte[] loaded = storageService.load(url);
+        assertThat(loaded).isEqualTo(data);
+    }
+
+    @Test
+    void store_candidateCv_returnsRelativeStorageKey() {
+        UUID candidateId = UUID.randomUUID();
+        byte[] data = "cv-pdf-content".getBytes();
+
+        String key = storageService.store("candidate", candidateId, "cvs", "resume.pdf", data, "application/pdf");
+
+        assertThat(key).startsWith("candidate/" + candidateId + "/cvs/").endsWith(".pdf");
+        byte[] loaded = storageService.load(key);
+        assertThat(loaded).isEqualTo(data);
+    }
+
+    @Test
+    void load_tenantMedia_readsBytes() {
+        byte[] data = "logo-bytes".getBytes();
+        String url = storageService.store(tenantId, "logo", "logo.png", data, "image/png");
+
+        byte[] loaded = storageService.load(url);
+        assertThat(loaded).isEqualTo(data);
+    }
+
+    @Test
+    void load_nullOrBlankThrowsIllegalArgumentException() {
+        assertThatThrownBy(() -> storageService.load(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> storageService.load("   "))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void load_nonExistentFileThrowsResourceNotFoundException() {
+        assertThatThrownBy(() -> storageService.load("candidate/missing/cvs/nonexistent.pdf"))
+                .isInstanceOf(com.talentpipe.common.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    void delete_candidatePhoto_removesFile() {
+        UUID candidateId = UUID.randomUUID();
+        String url = storageService.store("candidate", candidateId, "photos", "avatar.jpg", "avatar".getBytes(), "image/jpeg");
+
+        storageService.delete(url);
+
+        assertThatThrownBy(() -> storageService.load(url))
+                .isInstanceOf(com.talentpipe.common.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    void delete_candidateCvByRelativeKey_removesFile() {
+        UUID candidateId = UUID.randomUUID();
+        String key = storageService.store("candidate", candidateId, "cvs", "resume.pdf", "pdf".getBytes(), "application/pdf");
+
+        storageService.delete(key);
+
+        assertThatThrownBy(() -> storageService.load(key))
+                .isInstanceOf(com.talentpipe.common.exception.ResourceNotFoundException.class);
     }
 }

@@ -135,4 +135,19 @@ class CandidateRegistrationFlowIntegrationTest extends AbstractIntegrationTest {
         ResponseEntity<Map> conflictResp = registerCandidate(email, "password123", "Sanduni Herath");
         assertThat(conflictResp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     }
+
+    @Test
+    void registerCandidate_invalidIdentityCardNumber_returns400BadRequest() {
+        Map<String, Object> body = Map.of(
+                "fullName", "Invalid Candidate",
+                "identityCardNumber", "cadidate",
+                "address", "123 Galle Road, Colombo",
+                "contactNumber", "+94 77 123 4567",
+                "email", "invalid-nic@example.com",
+                "password", "password123"
+        );
+        ResponseEntity<Map> resp = rest.postForEntity("/api/v1/public/candidates/register", jsonEntity(body), Map.class);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(resp.getBody().get("message").toString()).contains("identityCardNumber");
+    }
 }

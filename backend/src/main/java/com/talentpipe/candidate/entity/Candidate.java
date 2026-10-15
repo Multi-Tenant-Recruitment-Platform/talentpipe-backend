@@ -43,6 +43,12 @@ public class Candidate extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private UserStatus status = UserStatus.PENDING_VERIFICATION;
 
+    @Column(name = "photo_url")
+    private String photoUrl;
+
+    @Column(name = "in_talent_pool", nullable = false)
+    private boolean inTalentPool = false;
+
     /** Consecutive failed logins; reset to zero on success (brute-force protection). */
     @Column(name = "failed_login_count", nullable = false)
     private short failedLoginCount = 0;
@@ -101,6 +107,50 @@ public class Candidate extends BaseEntity {
 
     public void setStatus(UserStatus status) {
         this.status = status;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public void setIdentityCardNumber(String identityCardNumber) {
+        this.identityCardNumber = identityCardNumber;
+    }
+
+    public void setContactNumber(String contactNumber) {
+        this.contactNumber = contactNumber;
+    }
+
+    public String getPhotoUrl() {
+        return photoUrl;
+    }
+
+    public void setPhotoUrl(String photoUrl) {
+        this.photoUrl = photoUrl;
+    }
+
+    public boolean isInTalentPool() {
+        return inTalentPool;
+    }
+
+    public void setInTalentPool(boolean inTalentPool) {
+        this.inTalentPool = inTalentPool;
+    }
+
+    /**
+     * Updates personal details and talent pool opt-in preference from profile management.
+     */
+    public void updateProfile(String fullName, String email, String identityCardNumber,
+                              String contactNumber, boolean inTalentPool) {
+        this.fullName = fullName;
+        this.email = email;
+        this.identityCardNumber = identityCardNumber;
+        this.contactNumber = contactNumber;
+        this.inTalentPool = inTalentPool;
     }
 
     public short getFailedLoginCount() {

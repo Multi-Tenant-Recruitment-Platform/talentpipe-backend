@@ -47,7 +47,7 @@ class PublicMediaControllerTest {
     private static StorageProperties props(Path uploadDir) {
         return new StorageProperties(
                 "local", uploadDir.toString(), null, "ap-south-1", null,
-                2_097_152L, 4_194_304L);
+                2_097_152L, 4_194_304L, 2_097_152L, 5_242_880L);
     }
 
     /** Writes {@code tenant/{TENANT}/{category}/{filename}} and returns it. */

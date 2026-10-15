@@ -52,17 +52,40 @@ public class PublicMediaController {
                     .findFirst()
                     .orElseThrow(() -> new ResourceNotFoundException("Media file not found"));
 
-            Resource resource = new FileSystemResource(matchedFile);
-            String contentType = Files.probeContentType(matchedFile);
+            return toMediaResponse(matchedFile, "Could not read media file");
+        } catch (IOException e) {
+            throw new ResourceNotFoundException("Could not read media file");
+        }
+    }
+
+    @GetMapping("/candidate/{candidateId}/photos/{filename:.+}")
+    public ResponseEntity<Resource> getCandidatePhoto(
+            @PathVariable String candidateId,
+            @PathVariable String filename) {
+        Path photoPath = rootDir.resolve("candidate")
+                .resolve(candidateId)
+                .resolve("photos")
+                .resolve(filename);
+
+        if (!Files.exists(photoPath) || !Files.isRegularFile(photoPath)) {
+            throw new ResourceNotFoundException("Candidate photo not found");
+        }
+
+        return toMediaResponse(photoPath, "Could not read candidate photo");
+    }
+
+    private ResponseEntity<Resource> toMediaResponse(Path filePath, String notFoundMessage) {
+        try {
+            Resource resource = new FileSystemResource(filePath);
+            String contentType = Files.probeContentType(filePath);
             if (contentType == null) {
                 contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
             }
-
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_TYPE, contentType)
                     .body(resource);
         } catch (IOException e) {
-            throw new ResourceNotFoundException("Could not read media file");
+            throw new ResourceNotFoundException(notFoundMessage);
         }
     }
 }

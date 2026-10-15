@@ -5,6 +5,7 @@ import com.talentpipe.candidate.dto.CandidateProfile;
 import com.talentpipe.candidate.dto.CandidateRegisterRequest;
 import com.talentpipe.candidate.entity.Candidate;
 import com.talentpipe.candidate.repository.CandidateRepository;
+import com.talentpipe.candidate.validator.CandidateNicValidator;
 import com.talentpipe.common.exception.DuplicateResourceException;
 import java.util.Locale;
 import org.slf4j.Logger;
@@ -51,11 +52,13 @@ public class CandidateService {
             throw new DuplicateResourceException("Email '" + email + "' is already registered");
         }
 
+        String normalizedNic = CandidateNicValidator.normalizeAndValidate(request.identityCardNumber());
+
         Candidate candidate = candidateRepository.save(new Candidate(
                 email,
                 passwordEncoder.encode(request.password()),
                 request.fullName().trim(),
-                request.identityCardNumber().trim(),
+                normalizedNic,
                 request.address().trim(),
                 request.contactNumber().trim(),
                 UserStatus.PENDING_VERIFICATION));

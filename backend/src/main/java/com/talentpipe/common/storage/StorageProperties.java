@@ -37,10 +37,18 @@ public record StorageProperties(
         long maxLogoBytes,
 
         /** Maximum allowed cover image file size in bytes (default 4 MB). */
-        long maxCoverBytes
+        long maxCoverBytes,
+
+        /** Maximum allowed candidate profile photo file size in bytes (default 2 MB). */
+        long maxPhotoBytes,
+
+        /** Maximum allowed candidate CV file size in bytes (default 5 MB). */
+        long maxCvBytes
 ) {
     private static final long DEFAULT_MAX_LOGO  = 2L * 1024 * 1024; // 2 MB
     private static final long DEFAULT_MAX_COVER = 4L * 1024 * 1024; // 4 MB
+    private static final long DEFAULT_MAX_PHOTO = 2L * 1024 * 1024; // 2 MB
+    private static final long DEFAULT_MAX_CV    = 5L * 1024 * 1024; // 5 MB
 
     /** Compact constructor supplies defaults for optional fields. */
     public StorageProperties {
@@ -49,5 +57,7 @@ public record StorageProperties(
         if (s3Region  == null || s3Region.isBlank())   s3Region  = "ap-south-1";
         if (maxLogoBytes  <= 0) maxLogoBytes  = DEFAULT_MAX_LOGO;
         if (maxCoverBytes <= 0) maxCoverBytes = DEFAULT_MAX_COVER;
+        if (maxPhotoBytes <= 0) maxPhotoBytes = DEFAULT_MAX_PHOTO;
+        if (maxCvBytes    <= 0) maxCvBytes    = DEFAULT_MAX_CV;
     }
 }

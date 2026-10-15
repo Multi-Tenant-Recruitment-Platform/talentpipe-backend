@@ -27,7 +27,11 @@ Base path: `/api/v1`. All bodies are JSON.
 | DELETE | `/tenant/logo` | `COMPANY_ADMIN` | Remove company logo. Idempotent — `204` even when no logo exists. `422` if the tenant is `SUSPENDED`. |
 | DELETE | `/tenant/cover` | `COMPANY_ADMIN` | Remove cover image. Idempotent — `204`. `422` if the tenant is `SUSPENDED`. |
 | GET | `/public/companies/{subdomain}` | public | Curated public company profile (name, logo, cover, tagline, description, industry, website, socials, city, country). `404` for unknown subdomain. |
-| POST | `/public/candidates/register` | public | Candidate self-registration (no tenant, globally unique email). |
+| POST | `/public/candidates/register` | public | Candidate self-registration (no tenant, globally unique email). Details in [CANDIDATE_API.md](CANDIDATE_API.md). |
+| GET | `/candidates/me` | `CANDIDATE` | Current candidate's full profile and active CV metadata. Details in [CANDIDATE_API.md](CANDIDATE_API.md). |
+| PUT | `/candidates/me` | `CANDIDATE` | Updates candidate details, photo, talent pool status, and versioned CV (`multipart/form-data`). |
+| GET | `/candidates/me/cv/download` | `CANDIDATE` | Downloads the candidate's active CV as a file attachment. |
+| GET | `/public/media/candidate/{candidateId}/photos/{filename}` | public | Publicly streams the candidate's avatar image. |
 | GET | `/jobs` | `COMPANY_ADMIN`, `HR_MANAGER` | The tenant's vacancies, newest first, paged (`page`, `size` ≤ 100). Every status, **archived included**, unless `status` is given: `DRAFT`, `PUBLISHED`, `CLOSED`, `ARCHIVED`, or `ACTIVE` (everything not archived). `400` for any other value. |
 | GET | `/jobs/counts` | `COMPANY_ADMIN`, `HR_MANAGER` | Vacancy totals per status, e.g. `{"DRAFT":3,"PUBLISHED":12,"CLOSED":0,"ARCHIVED":4}`. Always all four keys. |
 | GET | `/jobs/{id}` | `COMPANY_ADMIN`, `HR_MANAGER` | One vacancy. `404` if it does not exist **or belongs to another tenant**. |
