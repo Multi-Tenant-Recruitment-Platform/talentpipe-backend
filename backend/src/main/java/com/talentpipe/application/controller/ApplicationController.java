@@ -34,7 +34,7 @@ public class ApplicationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('CANDIDATE')")
     public ApplicationResponse submit(@AuthenticationPrincipal UserPrincipal principal,
-                                       @PathVariable UUID jobId) {
+                                       @PathVariable String jobId) {
         return applicationService.submit(principal.id(), jobId);
     }
 

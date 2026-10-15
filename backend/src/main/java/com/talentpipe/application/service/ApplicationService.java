@@ -11,9 +11,11 @@ import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.candidate.repository.CandidateRepository;
 import com.talentpipe.common.exception.DuplicateResourceException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
-import com.talentpipe.job.entity.Job;
-import com.talentpipe.job.service.JobService;
-import com.talentpipe.job.repository.JobRepository;
+import com.talentpipe.job.dto.VacancyApplicationTarget;
+import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.mapper.JobSlug;
+import com.talentpipe.job.repository.JobVacancyRepository;
+import com.talentpipe.job.service.VacancyApplicationGate;
 import com.talentpipe.notification.entity.NotificationType;
 import com.talentpipe.notification.event.NotificationRequestedEvent;
 import java.util.List;
@@ -27,49 +29,52 @@ public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
     private final CandidateRepository candidateRepository;
-    private final JobService jobService;
-    private final JobRepository jobRepository;
+    private final VacancyApplicationGate vacancyApplicationGate;
+    private final JobVacancyRepository vacancyRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher events;
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               CandidateRepository candidateRepository,
-                              JobService jobService,
-                              JobRepository jobRepository,
+                              VacancyApplicationGate vacancyApplicationGate,
+                              JobVacancyRepository vacancyRepository,
                               UserRepository userRepository,
                               ApplicationEventPublisher events) {
         this.applicationRepository = applicationRepository;
         this.candidateRepository = candidateRepository;
-        this.jobService = jobService;
-        this.jobRepository = jobRepository;
+        this.vacancyApplicationGate = vacancyApplicationGate;
+        this.vacancyRepository = vacancyRepository;
         this.userRepository = userRepository;
         this.events = events;
     }
 
     @Transactional
-    public ApplicationResponse submit(UUID candidateId, UUID jobId) {
+    public ApplicationResponse submit(UUID candidateId, String slugOrId) {
         if (!candidateRepository.existsById(candidateId)) {
             throw new ResourceNotFoundException("Candidate not found");
         }
-        Job job = jobService.requirePublished(jobId);
+        UUID jobId = JobSlug.resolveId(slugOrId)
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
+        VacancyApplicationTarget vacancy = vacancyApplicationGate.requireOpen(jobId);
         if (applicationRepository.existsByCandidateIdAndJobId(candidateId, jobId)) {
             throw new DuplicateResourceException("You have already applied to this job");
         }
-        Application application = applicationRepository.save(new Application(jobId, candidateId, job.getTenantId()));
-        return toResponse(application, job);
+        Application application = applicationRepository.save(new Application(
+                vacancy.vacancyId(), candidateId, vacancy.tenantId()));
+        return toResponse(application, vacancy.title());
     }
 
     @Transactional(readOnly = true)
     public List<ApplicationResponse> forCandidate(UUID candidateId) {
         return applicationRepository.findAllByCandidateIdOrderByCreatedAtDesc(candidateId)
-                .stream().map(application -> toResponse(application, jobRepository.findById(application.getJobId()).orElse(null))).toList();
+                .stream().map(application -> toResponse(application, vacancyTitle(application.getJobId()))).toList();
     }
 
     @Transactional(readOnly = true)
     public ApplicationResponse getForCandidate(UUID candidateId, UUID applicationId) {
         Application application = applicationRepository.findByIdAndCandidateId(applicationId, candidateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
-        return toResponse(application, jobRepository.findById(application.getJobId()).orElse(null));
+        return toResponse(application, vacancyTitle(application.getJobId()));
     }
 
     @Transactional
@@ -77,7 +82,7 @@ public class ApplicationService {
         Application application = applicationRepository.findByIdAndCandidateId(applicationId, candidateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
         if (application.getStatus() == ApplicationStatus.WITHDRAWN) {
-            return toResponse(application, jobRepository.findById(application.getJobId()).orElse(null));
+            return toResponse(application, vacancyTitle(application.getJobId()));
         }
         if (application.getStatus() == ApplicationStatus.REJECTED) {
             throw new IllegalStateException("Rejected applications cannot be withdrawn");
@@ -85,14 +90,14 @@ public class ApplicationService {
         application.changeStatus(ApplicationStatus.WITHDRAWN);
         Application saved = applicationRepository.save(application);
         notifyHiringTeam(saved);
-        return toResponse(saved, jobRepository.findById(saved.getJobId()).orElse(null));
+        return toResponse(saved, vacancyTitle(saved.getJobId()));
     }
 
     @Transactional(readOnly = true)
     public List<ApplicationResponse> forTenant(UUID tenantId) {
         return applicationRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId)
             .stream().map(application -> toResponse(application,
-                jobRepository.findById(application.getJobId()).orElse(null))).toList();
+                vacancyTitle(application.getJobId()))).toList();
     }
 
     @Transactional
@@ -108,7 +113,7 @@ public class ApplicationService {
         }
         application.changeStatus(request.status());
         Application saved = applicationRepository.save(application);
-        return toResponse(saved, jobRepository.findById(saved.getJobId()).orElse(null));
+        return toResponse(saved, vacancyTitle(saved.getJobId()));
     }
 
     private void notifyHiringTeam(Application application) {
@@ -122,9 +127,13 @@ public class ApplicationService {
         }
     }
 
-    private ApplicationResponse toResponse(Application application, Job job) {
+    private String vacancyTitle(UUID vacancyId) {
+        return vacancyRepository.findById(vacancyId).map(JobVacancy::getTitle).orElse(null);
+    }
+
+    private ApplicationResponse toResponse(Application application, String jobTitle) {
         return new ApplicationResponse(application.getId(), application.getJobId(), application.getCandidateId(),
-                application.getTenantId(), job == null ? null : job.getTitle(), application.getStatus().name(),
+                application.getTenantId(), jobTitle, application.getStatus().name(),
                 application.getCreatedAt(), application.getUpdatedAt(), application.getWithdrawnAt());
     }
 }

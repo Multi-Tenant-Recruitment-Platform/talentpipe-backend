@@ -11,9 +11,9 @@ import com.talentpipe.application.repository.ApplicationRepository;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.candidate.repository.CandidateRepository;
 import com.talentpipe.common.exception.DuplicateResourceException;
-import com.talentpipe.job.entity.Job;
-import com.talentpipe.job.repository.JobRepository;
-import com.talentpipe.job.service.JobService;
+import com.talentpipe.job.dto.VacancyApplicationTarget;
+import com.talentpipe.job.repository.JobVacancyRepository;
+import com.talentpipe.job.service.VacancyApplicationGate;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,32 +27,31 @@ class ApplicationServiceTest {
 
     @Mock private ApplicationRepository applicationRepository;
     @Mock private CandidateRepository candidateRepository;
-    @Mock private JobService jobService;
-    @Mock private JobRepository jobRepository;
+    @Mock private VacancyApplicationGate vacancyApplicationGate;
+    @Mock private JobVacancyRepository vacancyRepository;
     @Mock private UserRepository userRepository;
     @Mock private ApplicationEventPublisher events;
 
     private ApplicationService service;
     private UUID candidateId;
     private UUID jobId;
-    private Job job;
 
     @BeforeEach
     void setUp() {
-        service = new ApplicationService(applicationRepository, candidateRepository, jobService,
-                jobRepository, userRepository, events);
+        service = new ApplicationService(applicationRepository, candidateRepository,
+                vacancyApplicationGate, vacancyRepository, userRepository, events);
         candidateId = UUID.randomUUID();
         jobId = UUID.randomUUID();
-        job = new Job(UUID.randomUUID(), "Backend Engineer", "Build APIs");
     }
 
     @Test
     void submit_rejectsDuplicateBeforeSaving() {
         when(candidateRepository.existsById(candidateId)).thenReturn(true);
-        when(jobService.requirePublished(jobId)).thenReturn(job);
+        when(vacancyApplicationGate.requireOpen(jobId))
+                .thenReturn(new VacancyApplicationTarget(jobId, UUID.randomUUID(), "Backend Engineer"));
         when(applicationRepository.existsByCandidateIdAndJobId(candidateId, jobId)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.submit(candidateId, jobId))
+        assertThatThrownBy(() -> service.submit(candidateId, jobId.toString()))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("already applied");
         verify(applicationRepository, never()).save(any(Application.class));
@@ -61,11 +60,12 @@ class ApplicationServiceTest {
     @Test
     void submit_savesApplicationForPublishedJob() {
         when(candidateRepository.existsById(candidateId)).thenReturn(true);
-        when(jobService.requirePublished(jobId)).thenReturn(job);
+        when(vacancyApplicationGate.requireOpen(jobId))
+                .thenReturn(new VacancyApplicationTarget(jobId, UUID.randomUUID(), "Backend Engineer"));
         when(applicationRepository.existsByCandidateIdAndJobId(candidateId, jobId)).thenReturn(false);
         when(applicationRepository.save(any(Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.submit(candidateId, jobId);
+        service.submit(candidateId, jobId.toString());
 
         verify(applicationRepository).save(any(Application.class));
     }
