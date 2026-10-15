@@ -46,10 +46,7 @@ class CandidateServiceTest {
 
         when(candidateRepository.existsByEmail("kasun@example.com")).thenReturn(false);
         when(passwordEncoder.encode("Password123!")).thenReturn("encoded-secret");
-        when(candidateRepository.save(any(Candidate.class))).thenAnswer(inv -> {
-            Candidate c = inv.getArgument(0);
-            return c;
-        });
+        when(candidateRepository.save(any(Candidate.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CandidateProfile profile = candidateService.register(request);
 

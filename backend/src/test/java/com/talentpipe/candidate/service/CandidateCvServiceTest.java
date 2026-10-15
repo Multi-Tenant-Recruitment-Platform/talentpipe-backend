@@ -285,7 +285,7 @@ class CandidateCvServiceTest {
                 .isNotEqualTo(diffMime)
                 .isNotEqualTo(diffBytes);
 
-        assertThat(payload1.hashCode()).isEqualTo(payload2.hashCode());
+        assertThat(payload1).hasSameHashCodeAs(payload2);
         assertThat(payload1.toString()).contains("cv.pdf", "application/pdf", "3");
         assertThat(nullBytes.toString()).contains("0");
     }
