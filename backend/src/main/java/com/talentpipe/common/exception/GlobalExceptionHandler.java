@@ -9,6 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -68,6 +70,19 @@ public class GlobalExceptionHandler {
                                                              HttpServletRequest request) {
         return envelope(HttpStatus.BAD_REQUEST,
                 "Missing required header: " + ex.getHeaderName(), request);
+    }
+
+    /**
+     * A path variable or query parameter that cannot be converted to its
+     * declared type — {@code /jobs/not-a-uuid}, {@code ?page=abc}. The client
+     * sent a malformed request, so this is a 400; without this handler it
+     * would fall through to the catch-all and be reported as a 500.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
+                                                            HttpServletRequest request) {
+        return envelope(HttpStatus.BAD_REQUEST,
+                "Invalid value for parameter '" + ex.getName() + "'", request);
     }
 
     // ------------------------------------------------------------------ 401
@@ -160,6 +175,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex,
                                                              HttpServletRequest request) {
         return envelope(HttpStatus.CONFLICT, "Request conflicts with existing data", request);
+    }
+
+    /** An update based on a version of the resource that is no longer current. */
+    @ExceptionHandler(ConcurrentUpdateException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrentUpdate(ConcurrentUpdateException ex,
+                                                                HttpServletRequest request) {
+        return envelope(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
+    /**
+     * Backstop for the same situation when it is only detected at flush: two
+     * requests read the same version, both pass the service's own version
+     * check, and the database lets only the first write through. The loser
+     * surfaces here via JPA's {@code @Version} rather than as a 500.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
+                                                              HttpServletRequest request) {
+        return envelope(HttpStatus.CONFLICT,
+                "This record was changed by someone else. Reload it and try again.", request);
     }
 
     // ------------------------------------------------------------------ 413
