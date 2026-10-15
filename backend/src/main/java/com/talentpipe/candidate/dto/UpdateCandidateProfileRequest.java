@@ -1,5 +1,6 @@
 package com.talentpipe.candidate.dto;
 
+import com.talentpipe.candidate.validator.ValidNic;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,6 +18,7 @@ public class UpdateCandidateProfileRequest {
     private String email;
 
     @NotBlank(message = "Identity card number is required")
+    @ValidNic
     private String identityCardNumber;
 
     private String phone;

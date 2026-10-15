@@ -1,5 +1,6 @@
 package com.talentpipe.candidate.dto;
 
+import com.talentpipe.candidate.validator.ValidNic;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -12,7 +13,8 @@ public record CandidateRegisterRequest(
         String fullName,
 
         @NotBlank(message = "identityCardNumber is required")
-        @Size(max = 30)
+        @ValidNic
+        @Size(max = 20)
         String identityCardNumber,
 
         @NotBlank(message = "address is required")
