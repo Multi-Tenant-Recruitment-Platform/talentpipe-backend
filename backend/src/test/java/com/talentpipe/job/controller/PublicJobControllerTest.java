@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.talentpipe.application.service.ApplicationService;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.JobDetailResponse;
@@ -47,6 +48,9 @@ class PublicJobControllerTest {
 
     @MockitoBean
     private PublicJobService publicJobService;
+
+    @MockitoBean
+    private ApplicationService applicationService;
 
     private final JobVacancyMapper mapper = new JobVacancyMapper();
     private final JobVacancy vacancy = VacancyFixtures.published(TENANT);
