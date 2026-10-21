@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.dto.CreateJobRequest;
+import com.talentpipe.job.dto.JobSummaryResponse;
 import com.talentpipe.job.entity.Job;
 import com.talentpipe.job.entity.JobStatus;
 import com.talentpipe.job.repository.JobRepository;
@@ -47,7 +48,7 @@ class JobServiceTest {
                 .thenReturn(new PageImpl<>(List.of(job)));
 
         assertThat(new JobService(repository).listPublished(0, 10).getContent())
-                .singleElement().extracting(summary -> summary.title()).isEqualTo("Title");
+                .singleElement().extracting(JobSummaryResponse::title).isEqualTo("Title");
     }
 
     @Test
@@ -56,8 +57,9 @@ class JobServiceTest {
         Job draft = jobWithId(UUID.randomUUID());
         draft.setStatus(JobStatus.CLOSED);
         when(repository.findById(id)).thenReturn(Optional.of(draft));
+        JobService service = new JobService(repository);
 
-        assertThatThrownBy(() -> new JobService(repository).requirePublished(id))
+        assertThatThrownBy(() -> service.requirePublished(id))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

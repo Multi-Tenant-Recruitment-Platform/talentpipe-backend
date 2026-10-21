@@ -14,8 +14,8 @@ class JobTest {
         assertThat(job.getTitle()).isEqualTo("Title");
         assertThat(job.getDescription()).isEqualTo("Description");
         assertThat(job.getStatus()).isEqualTo(JobStatus.PUBLISHED);
-        assertThat(job).isEqualTo(job);
-        assertThat(job.hashCode()).isEqualTo(job.hashCode());
+        assertThat(job).isSameAs(job);
+        assertThat(job).hasSameHashCodeAs(job);
 
         job.setStatus(JobStatus.CLOSED);
         assertThat(job.getStatus()).isEqualTo(JobStatus.CLOSED);

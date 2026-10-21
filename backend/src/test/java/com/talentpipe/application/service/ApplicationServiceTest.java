@@ -147,19 +147,24 @@ class ApplicationServiceTest {
         Application application = application();
         when(applicationRepository.findById(jobId)).thenReturn(Optional.of(application));
         when(applicationRepository.save(application)).thenReturn(application);
+        UpdateApplicationStatusRequest withdrawRequest =
+                new UpdateApplicationStatusRequest(ApplicationStatus.WITHDRAWN);
+        UpdateApplicationStatusRequest rejectRequest =
+                new UpdateApplicationStatusRequest(ApplicationStatus.REJECTED);
+        UpdateApplicationStatusRequest shortlistRequest =
+                new UpdateApplicationStatusRequest(ApplicationStatus.SHORTLISTED);
 
         assertThatThrownBy(() -> service.updateStatus(candidateId, jobId,
-                new UpdateApplicationStatusRequest(ApplicationStatus.WITHDRAWN)))
+                withdrawRequest))
                 .isInstanceOf(IllegalArgumentException.class);
 
         application.changeStatus(ApplicationStatus.WITHDRAWN);
         assertThatThrownBy(() -> service.updateStatus(candidateId, jobId,
-                new UpdateApplicationStatusRequest(ApplicationStatus.REJECTED)))
+                rejectRequest))
                 .isInstanceOf(IllegalStateException.class);
 
         application.changeStatus(ApplicationStatus.APPLIED);
-        assertThat(service.updateStatus(candidateId, jobId,
-                new UpdateApplicationStatusRequest(ApplicationStatus.SHORTLISTED)).status())
+        assertThat(service.updateStatus(candidateId, jobId, shortlistRequest).status())
                 .isEqualTo(ApplicationStatus.SHORTLISTED.name());
     }
 

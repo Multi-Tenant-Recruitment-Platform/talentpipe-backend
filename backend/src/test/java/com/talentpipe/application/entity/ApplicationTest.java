@@ -12,7 +12,7 @@ class ApplicationTest {
         Application application = new Application(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
 
         assertThat(application.getStatus()).isEqualTo(ApplicationStatus.APPLIED);
-        assertThat(application).isEqualTo(application);
+        assertThat(application).isSameAs(application);
         application.changeStatus(ApplicationStatus.WITHDRAWN);
         assertThat(application.getWithdrawnAt()).isNotNull();
         application.changeStatus(ApplicationStatus.REJECTED);
