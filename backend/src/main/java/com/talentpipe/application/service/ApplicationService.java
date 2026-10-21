@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ApplicationService {
 
+    private static final String APPLICATION_NOT_FOUND = "Application not found";
+
     private final ApplicationRepository applicationRepository;
     private final CandidateRepository candidateRepository;
     private final VacancyApplicationGate vacancyApplicationGate;
@@ -73,14 +75,14 @@ public class ApplicationService {
     @Transactional(readOnly = true)
     public ApplicationResponse getForCandidate(UUID candidateId, UUID applicationId) {
         Application application = applicationRepository.findByIdAndCandidateId(applicationId, candidateId)
-                .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(APPLICATION_NOT_FOUND));
         return toResponse(application, vacancyTitle(application.getJobId()));
     }
 
     @Transactional
     public ApplicationResponse withdraw(UUID candidateId, UUID applicationId) {
         Application application = applicationRepository.findByIdAndCandidateId(applicationId, candidateId)
-                .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(APPLICATION_NOT_FOUND));
         if (application.getStatus() == ApplicationStatus.WITHDRAWN) {
             return toResponse(application, vacancyTitle(application.getJobId()));
         }
@@ -104,7 +106,7 @@ public class ApplicationService {
     public ApplicationResponse updateStatus(UUID tenantId, UUID applicationId, UpdateApplicationStatusRequest request) {
         Application application = applicationRepository.findById(applicationId)
                 .filter(item -> item.getTenantId().equals(tenantId))
-                .orElseThrow(() -> new ResourceNotFoundException("Application not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(APPLICATION_NOT_FOUND));
         if (request.status() == ApplicationStatus.WITHDRAWN) {
             throw new IllegalArgumentException("HR users cannot withdraw a candidate application");
         }

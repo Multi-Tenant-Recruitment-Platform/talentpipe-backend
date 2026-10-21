@@ -50,8 +50,9 @@ class ApplicationServiceTest {
         when(vacancyApplicationGate.requireOpen(jobId))
                 .thenReturn(new VacancyApplicationTarget(jobId, UUID.randomUUID(), "Backend Engineer"));
         when(applicationRepository.existsByCandidateIdAndJobId(candidateId, jobId)).thenReturn(true);
+        String jobSlugOrId = jobId.toString();
 
-        assertThatThrownBy(() -> service.submit(candidateId, jobId.toString()))
+        assertThatThrownBy(() -> service.submit(candidateId, jobSlugOrId))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("already applied");
         verify(applicationRepository, never()).save(any(Application.class));
