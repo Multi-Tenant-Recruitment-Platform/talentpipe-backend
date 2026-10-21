@@ -10,12 +10,13 @@ class JobTest {
     @Test
     void exposesStateAndUsesBaseIdentityEquality() {
         Job job = new Job(UUID.randomUUID(), "Title", "Description");
+        Job anotherJob = new Job(UUID.randomUUID(), "Title", "Description");
 
         assertThat(job.getTitle()).isEqualTo("Title");
         assertThat(job.getDescription()).isEqualTo("Description");
         assertThat(job.getStatus()).isEqualTo(JobStatus.PUBLISHED);
-        assertThat(job).isSameAs(job);
-        assertThat(job).hasSameHashCodeAs(job);
+        assertThat(job).isNotEqualTo(anotherJob);
+        assertThat(job).hasSameHashCodeAs(anotherJob);
 
         job.setStatus(JobStatus.CLOSED);
         assertThat(job.getStatus()).isEqualTo(JobStatus.CLOSED);

@@ -10,9 +10,11 @@ class ApplicationTest {
     @Test
     void changesStatusAndTracksWithdrawalTime() {
         Application application = new Application(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        Application anotherApplication =
+                new Application(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
 
         assertThat(application.getStatus()).isEqualTo(ApplicationStatus.APPLIED);
-        assertThat(application).isSameAs(application);
+        assertThat(application).isNotEqualTo(anotherApplication);
         application.changeStatus(ApplicationStatus.WITHDRAWN);
         assertThat(application.getWithdrawnAt()).isNotNull();
         application.changeStatus(ApplicationStatus.REJECTED);
