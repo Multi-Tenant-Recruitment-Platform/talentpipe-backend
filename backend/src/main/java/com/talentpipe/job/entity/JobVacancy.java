@@ -56,6 +56,10 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private UUID tenantId;
 
+    /** Who filed it; {@code null} for vacancies created before this was recorded. */
+    @Column(name = "created_by", updatable = false)
+    private UUID createdBy;
+
     /** Optimistic-lock counter; starts at 0 and is bumped by every stored change. */
     @Version
     @Column(name = "version", nullable = false)
@@ -72,6 +76,14 @@ public class JobVacancy extends BaseEntity {
 
     @Column(name = "department", nullable = false, length = 120)
     private String department = "";
+
+    /**
+     * One of the company's industries, as a canonical label. Not part of
+     * {@link VacancyContent}: whether a value is allowed depends on the
+     * company's profile, so the service decides it ({@code VacancyIndustryPolicy}).
+     */
+    @Column(name = "industry", length = 100)
+    private String industry;
 
     @Column(name = "openings", nullable = false)
     private int openings = 1;
@@ -181,6 +193,16 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "screening_questions", nullable = false, columnDefinition = "TEXT[]")
     private List<String> screeningQuestions = new ArrayList<>();
 
+    // ------------------------------------------------- feature switches (V20)
+
+    /** Score incoming applications against the vacancy (PB-015). */
+    @Column(name = "ai_screening_enabled", nullable = false)
+    private boolean aiScreeningEnabled;
+
+    /** Suggest people from the talent pool who fit the vacancy (PB-015). */
+    @Column(name = "candidate_matching_enabled", nullable = false)
+    private boolean candidateMatchingEnabled;
+
     // ---------------------------------------------------- lifecycle timestamps
 
     /** Set on entering each state and never cleared, so the history survives archiving. */
@@ -204,9 +226,15 @@ public class JobVacancy extends BaseEntity {
      * a draft that is published in the same transaction — one route into
      * PUBLISHED, so one place the publish rules can be skipped: none.
      */
-    public JobVacancy(UUID tenantId, VacancyContent content) {
+    public JobVacancy(UUID tenantId, UUID createdBy, VacancyContent content) {
         this.tenantId = Objects.requireNonNull(tenantId, "tenantId");
+        this.createdBy = createdBy;
         copyFrom(content);
+    }
+
+    /** A new vacancy whose creator is not recorded. */
+    public JobVacancy(UUID tenantId, VacancyContent content) {
+        this(tenantId, null, content);
     }
 
     // ----------------------------------------------------------------- content
@@ -240,6 +268,49 @@ public class JobVacancy extends BaseEntity {
         if (!status.isEditable()) {
             throw new BusinessRuleException(
                     "This vacancy is " + status.description() + " and can no longer be edited.");
+        }
+    }
+
+    /**
+     * Files the vacancy under an industry already checked against its
+     * company's ({@code VacancyIndustryPolicy}). Changes with the content, so
+     * only while the vacancy is editable.
+     *
+     * @throws BusinessRuleException (422) if the vacancy is closed or archived
+     */
+    public void fileUnder(String industry) {
+        requireEditable();
+        this.industry = industry;
+    }
+
+    /**
+     * Turns the vacancy's features on or off; a {@code null} switch keeps its
+     * value. Only while the vacancy is editable: once it is closed no new
+     * applications arrive to screen or match.
+     *
+     * @throws BusinessRuleException (422) if the vacancy is closed or archived
+     */
+    public void switchFeatures(Boolean aiScreening, Boolean candidateMatching) {
+        requireEditable();
+        if (aiScreening != null) {
+            this.aiScreeningEnabled = aiScreening;
+        }
+        if (candidateMatching != null) {
+            this.candidateMatchingEnabled = candidateMatching;
+        }
+    }
+
+    /**
+     * Refuses a change to who works on the vacancy once it is archived.
+     * A closed vacancy can still change hands: its applicants are still being
+     * interviewed and decided on.
+     *
+     * @throws BusinessRuleException (422) if the vacancy is archived
+     */
+    public void requireTeamEditable() {
+        if (status == VacancyStatus.ARCHIVED) {
+            throw new BusinessRuleException(
+                    "This vacancy is archived, so its hiring team can no longer be changed.");
         }
     }
 
@@ -316,6 +387,22 @@ public class JobVacancy extends BaseEntity {
 
     public UUID getTenantId() {
         return tenantId;
+    }
+
+    public UUID getCreatedBy() {
+        return createdBy;
+    }
+
+    public String getIndustry() {
+        return industry;
+    }
+
+    public boolean isAiScreeningEnabled() {
+        return aiScreeningEnabled;
+    }
+
+    public boolean isCandidateMatchingEnabled() {
+        return candidateMatchingEnabled;
     }
 
     public int getVersion() {

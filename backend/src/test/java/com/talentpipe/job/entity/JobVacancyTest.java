@@ -45,6 +45,20 @@ class JobVacancyTest {
     }
 
     @Test
+    void switchFeatures_changesOnlyWhatIsGiven_andIsRefusedOnceClosed() {
+        JobVacancy vacancy = VacancyFixtures.published(UUID.randomUUID());
+
+        vacancy.switchFeatures(true, null);
+        vacancy.switchFeatures(null, true);
+        vacancy.switchFeatures(null, null);
+
+        assertThat(vacancy.isAiScreeningEnabled()).isTrue();
+        assertThat(vacancy.isCandidateMatchingEnabled()).isTrue();
+        JobVacancy closed = VacancyFixtures.closed(UUID.randomUUID());
+        assertThatThrownBy(() -> closed.switchFeatures(false, false)).isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
     void newVacancy_requiresATenant() {
         VacancyContent content = VacancyFixtures.complete().build();
 

@@ -1,5 +1,7 @@
 package com.talentpipe.tenant.dto;
 
+import java.util.List;
+
 /**
  * Curated company profile for the public company page
  * ({@code GET /api/v1/public/companies/{subdomain}}).
@@ -24,6 +26,8 @@ public record PublicCompanyProfileResponse(
         String instagramUrl,
         String facebookUrl,
         String city,
-        String country
+        String country,
+        /** Industries besides {@code industry}; never null. */
+        List<String> additionalIndustries
 ) {
 }

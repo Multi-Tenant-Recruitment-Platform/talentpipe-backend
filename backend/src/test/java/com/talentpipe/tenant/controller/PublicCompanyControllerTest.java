@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.service.TenantService;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,7 +53,8 @@ class PublicCompanyControllerTest {
                 "https://instagram.com/acme",
                 "https://facebook.com/acme",
                 "Colombo",
-                "Sri Lanka");
+                "Sri Lanka",
+                List.of("Education"));
 
         when(tenantService.getPublicProfile("acme")).thenReturn(Optional.of(pubProfile));
 
@@ -74,7 +76,7 @@ class PublicCompanyControllerTest {
         PublicCompanyProfileResponse pubProfile = new PublicCompanyProfileResponse(
                 "Acme Corp", "acme",
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null);
+                null, null, List.of());
 
         when(tenantService.getPublicProfile("acme")).thenReturn(Optional.of(pubProfile));
 
@@ -110,7 +112,7 @@ class PublicCompanyControllerTest {
         PublicCompanyProfileResponse pub = new PublicCompanyProfileResponse(
                 "Open Corp", "open-corp",
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null);
+                null, null, List.of());
 
         when(tenantService.getPublicProfile("open-corp")).thenReturn(Optional.of(pub));
 

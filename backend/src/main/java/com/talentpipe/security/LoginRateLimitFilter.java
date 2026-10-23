@@ -32,6 +32,7 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     /** Endpoints that either check credentials or trigger an email. */
     private static final Set<String> LIMITED_PATHS = Set.of(
             "/api/v1/auth/login",
+            "/api/v1/auth/login/select",
             "/api/v1/auth/forgot-password",
             "/api/v1/auth/resend-verification");
 

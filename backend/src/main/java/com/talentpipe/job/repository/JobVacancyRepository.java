@@ -1,8 +1,10 @@
 package com.talentpipe.job.repository;
 
 import com.talentpipe.job.dto.JobFilterOption;
+import com.talentpipe.job.entity.EmploymentType;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyStatus;
+import com.talentpipe.job.entity.WorkplaceType;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
@@ -11,6 +13,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,18 +25,40 @@ import org.springframework.data.repository.query.Param;
  * <ul>
  *   <li><strong>Recruiters</strong> — every query takes the tenant id from the
  *       access token as part of its key. A vacancy in another tenant is not
- *       "forbidden", it simply does not match, and the caller answers 404.</li>
+ *       "forbidden", it simply does not match, and the caller answers 404.
+ *       A member whose role lacks {@code jobs.view.all} is narrowed further,
+ *       to the vacancies they work on ({@link #WORKS_ON}); the dashboard list
+ *       builds the same rule from {@link VacancySpecifications}.</li>
  *   <li><strong>Candidates</strong> — cross-tenant by nature, but only ever
  *       over PUBLISHED rows. The keyword search lives in
  *       {@link JobVacancySearchRepository}.</li>
  * </ul>
  */
-public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>, JobVacancySearchRepository {
+public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>,
+        JpaSpecificationExecutor<JobVacancy>, JobVacancySearchRepository {
+
+    /**
+     * JPQL for "the user {@code :userId} works on vacancy {@code v}": created
+     * it, recruits for it, is its hiring manager, or is on its hiring team.
+     * {@link VacancySpecifications#worksOn} is the same rule for the list.
+     */
+    String WORKS_ON = """
+            (v.createdBy = :userId
+             or v.assignedRecruiterId = :userId
+             or v.hiringManagerId = :userId
+             or exists (select 1 from VacancyTeamMember m
+                        where m.vacancyId = v.id and m.userId = :userId))
+            """;
 
     // ------------------------------------------------------- recruiter side
 
     /** The only way recruiter-facing code loads one vacancy: by id <em>and</em> owning tenant. */
     Optional<JobVacancy> findByIdAndTenantId(UUID id, UUID tenantId);
+
+    /** One vacancy in the tenant, only if the user works on it ({@link #WORKS_ON}). */
+    @Query("select v from JobVacancy v where v.id = :id and v.tenantId = :tenantId and " + WORKS_ON)
+    Optional<JobVacancy> findWorkedOnBy(@Param("id") UUID id, @Param("tenantId") UUID tenantId,
+                                        @Param("userId") UUID userId);
 
     /** Every vacancy in the tenant, archived included. */
     Page<JobVacancy> findByTenantId(UUID tenantId, Pageable pageable);
@@ -53,6 +78,12 @@ public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>, J
             group by v.status
             """)
     List<VacancyStatusCount> countByStatus(@Param("tenantId") UUID tenantId);
+
+    /** {@link #countByStatus}, counting only the vacancies the user works on. */
+    @Query("select v.status as status, count(v) as total from JobVacancy v "
+            + "where v.tenantId = :tenantId and " + WORKS_ON + " group by v.status")
+    List<VacancyStatusCount> countWorkedOnByStatus(@Param("tenantId") UUID tenantId,
+                                                   @Param("userId") UUID userId);
 
     // ------------------------------------------------------- candidate side
 
@@ -99,4 +130,56 @@ public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>, J
             order by count(v) desc, min(v.location) asc
             """)
     List<JobFilterOption> findPublishedLocations(Pageable limit);
+
+    /** The industries published vacancies are filed under, with counts, most populated first. */
+    @Query("""
+            select new com.talentpipe.job.dto.JobFilterOption(v.industry, count(v))
+            from JobVacancy v
+            where v.status = com.talentpipe.job.entity.VacancyStatus.PUBLISHED and v.industry is not null
+            group by v.industry
+            order by count(v) desc, v.industry asc
+            """)
+    List<JobFilterOption> findPublishedIndustries();
+
+    /** How many published vacancies offer each employment type, most populated first. */
+    @Query("""
+            select v.employmentType as facet, count(v) as total
+            from JobVacancy v
+            where v.status = com.talentpipe.job.entity.VacancyStatus.PUBLISHED and v.employmentType is not null
+            group by v.employmentType
+            order by count(v) desc, v.employmentType asc
+            """)
+    List<BoardFacetCount<EmploymentType>> countPublishedByEmploymentType();
+
+    /** How many published vacancies offer each workplace type, most populated first. */
+    @Query("""
+            select v.workplaceType as facet, count(v) as total
+            from JobVacancy v
+            where v.status = com.talentpipe.job.entity.VacancyStatus.PUBLISHED and v.workplaceType is not null
+            group by v.workplaceType
+            order by count(v) desc, v.workplaceType asc
+            """)
+    List<BoardFacetCount<WorkplaceType>> countPublishedByWorkplaceType();
+
+    /**
+     * The span of pay published vacancies state, per pay period and currency
+     * code. A one-sided salary counts as a range of one point. Native: the
+     * currency code is the first word of the stored value
+     * ("LKR — Sri Lankan rupee"), which needs {@code split_part}.
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT v.pay_period AS "payPeriod",
+                   upper(split_part(v.currency, ' ', 1)) AS "currency",
+                   min(coalesce(v.salary_min, v.salary_max)) AS "lowest",
+                   max(coalesce(v.salary_max, v.salary_min)) AS "highest",
+                   count(*) AS "total"
+            FROM job_vacancies v
+            WHERE v.status = 'PUBLISHED'
+              AND v.pay_period IS NOT NULL
+              AND v.currency IS NOT NULL
+              AND (v.salary_min IS NOT NULL OR v.salary_max IS NOT NULL)
+            GROUP BY v.pay_period, upper(split_part(v.currency, ' ', 1))
+            ORDER BY count(*) DESC, 1, 2
+            """)
+    List<SalaryRangeRow> findPublishedSalaryRanges();
 }

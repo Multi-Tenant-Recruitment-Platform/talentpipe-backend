@@ -9,6 +9,7 @@ import com.talentpipe.auth.dto.RefreshTokenRequest;
 import com.talentpipe.auth.dto.RegisterRequest;
 import com.talentpipe.auth.dto.RegisterResponse;
 import com.talentpipe.auth.dto.ResendVerificationRequest;
+import com.talentpipe.auth.dto.SelectWorkspaceRequest;
 import com.talentpipe.auth.dto.UserResponse;
 import com.talentpipe.auth.dto.VerifyEmailRequest;
 import com.talentpipe.auth.service.AuthService;
@@ -48,8 +49,9 @@ public class AuthController {
     /**
      * Tenant resolution for login: localhost has no real subdomains, so the SPA
      * sends the company subdomain in this header. Production derives it from the
-     * Host header instead — see docs/DECISIONS.md (ADR-1). Absent header means a
-     * global login (candidate or SUPER_ADMIN).
+     * Host header instead — see docs/DECISIONS.md (ADR-1). Absent header means the
+     * credentials are tried against every account using the email (company
+     * member, candidate or SUPER_ADMIN), with a choice offered when several fit.
      */
     static final String TENANT_SUBDOMAIN_HEADER = "X-Tenant-Subdomain";
 
@@ -90,6 +92,15 @@ public class AuthController {
             @RequestHeader(value = TENANT_SUBDOMAIN_HEADER, required = false) String tenantSubdomain,
             @Valid @RequestBody LoginRequest request) {
         return authService.login(tenantSubdomain, request);
+    }
+
+    /**
+     * Second step of a login whose credentials fit several accounts (the 409
+     * {@code WORKSPACE_SELECTION_REQUIRED} answer): signs in to the chosen one.
+     */
+    @PostMapping("/login/select")
+    public AuthResponse selectWorkspace(@Valid @RequestBody SelectWorkspaceRequest request) {
+        return authService.selectWorkspace(request);
     }
 
     /** Exchanges a valid refresh token for a new pair (rotation). */

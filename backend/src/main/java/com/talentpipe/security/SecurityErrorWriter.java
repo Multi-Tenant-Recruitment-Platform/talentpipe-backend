@@ -1,6 +1,7 @@
 package com.talentpipe.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.talentpipe.common.exception.ErrorCode;
 import com.talentpipe.common.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,8 +26,14 @@ public class SecurityErrorWriter {
         this.objectMapper = objectMapper;
     }
 
+    /** Writes the envelope with the status's default {@link ErrorCode}. */
     public void write(HttpServletRequest request, HttpServletResponse response,
                       HttpStatus status, String message) throws IOException {
+        write(request, response, status, ErrorCode.defaultFor(status), message);
+    }
+
+    public void write(HttpServletRequest request, HttpServletResponse response,
+                      HttpStatus status, ErrorCode code, String message) throws IOException {
         if (response.isCommitted()) {
             return;
         }
@@ -34,6 +41,6 @@ public class SecurityErrorWriter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getWriter(),
-                ErrorResponse.of(status, message, request.getRequestURI()));
+                ErrorResponse.of(status, code, message, request.getRequestURI()));
     }
 }

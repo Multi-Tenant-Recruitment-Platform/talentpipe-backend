@@ -14,12 +14,20 @@ import com.talentpipe.job.dto.JobDetailResponse;
 import com.talentpipe.job.dto.JobFilterOption;
 import com.talentpipe.job.dto.JobFilterOptionsResponse;
 import com.talentpipe.job.dto.JobSummaryResponse;
+import com.talentpipe.job.entity.EmploymentType;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.PayPeriod;
+import com.talentpipe.job.entity.WorkplaceType;
+import com.talentpipe.job.repository.BoardFilters;
+import com.talentpipe.job.repository.BoardSort;
+import com.talentpipe.job.repository.PublicJobSearchCriteria;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.service.PublicJobService;
 import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.testsupport.WebMvcSecurityTestConfig;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +68,7 @@ class PublicJobControllerTest {
 
     @Test
     void list_needsNoAuthentication_andReturnsTheBoardCards() throws Exception {
-        when(publicJobService.search(null, null, null, 0, 20))
+        when(publicJobService.search(PublicJobSearchCriteria.none(), 0, 20))
                 .thenReturn(new PageImpl<>(List.of(card), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/api/v1/public/jobs"))
@@ -78,8 +86,8 @@ class PublicJobControllerTest {
 
     @Test
     void list_passesKeywordCategoryLocationAndPagingToTheService() throws Exception {
-        when(publicJobService.search("java", "Engineering", "Colombo", 2, 10))
-                .thenReturn(new PageImpl<>(List.of()));
+        PublicJobSearchCriteria criteria = PublicJobSearchCriteria.of("java", "Engineering", "Colombo");
+        when(publicJobService.search(criteria, 2, 10)).thenReturn(new PageImpl<>(List.of()));
 
         mockMvc.perform(get("/api/v1/public/jobs")
                         .param("q", "java")
@@ -90,12 +98,66 @@ class PublicJobControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isEmpty());
 
-        verify(publicJobService).search("java", "Engineering", "Colombo", 2, 10);
+        verify(publicJobService).search(criteria, 2, 10);
+    }
+
+    @Test
+    void list_passesEveryStructuredFilterToTheService() throws Exception {
+        PublicJobSearchCriteria criteria = PublicJobSearchCriteria.of(null, null, null,
+                new BoardFilters(
+                        "Finance & Banking",
+                        Set.of(EmploymentType.FULL_TIME, EmploymentType.CONTRACT),
+                        Set.of(WorkplaceType.REMOTE),
+                        0, 2,
+                        new BoardFilters.Salary(true, PayPeriod.MONTHLY, "LKR",
+                                new BigDecimal("100000"), new BigDecimal("200000"))),
+                BoardSort.NEWEST);
+        when(publicJobService.search(criteria, 0, 20)).thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/api/v1/public/jobs")
+                        .param("industry", "finance and banking")
+                        .param("employmentType", "FULL_TIME,CONTRACT")
+                        .param("workplaceType", "REMOTE")
+                        .param("minExperience", "0")
+                        .param("maxExperience", "2")
+                        .param("salaryOnly", "true")
+                        .param("payPeriod", "MONTHLY")
+                        .param("currency", "lkr")
+                        .param("salaryMin", "100000")
+                        .param("salaryMax", "200000")
+                        .param("sort", "newest"))
+                .andExpect(status().isOk());
+
+        verify(publicJobService).search(criteria, 0, 20);
+    }
+
+    @Test
+    void list_withAnUnknownEmploymentType_isRejectedWithoutNamingJavaTypes() throws Exception {
+        mockMvc.perform(get("/api/v1/public/jobs").param("employmentType", "FOREVER"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("employmentType"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("'FOREVER' is not an accepted value."));
+    }
+
+    @Test
+    void list_withNegativeExperience_isRejectedFieldByField() throws Exception {
+        mockMvc.perform(get("/api/v1/public/jobs").param("minExperience", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("minExperience"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("Experience can't be negative."));
+    }
+
+    @Test
+    void list_withASalaryRangeButNoPayPeriod_isABadRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/public/jobs").param("salaryMin", "1000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test
     void list_neverExposesInternalFields() throws Exception {
-        when(publicJobService.search(null, null, null, 0, 20)).thenReturn(new PageImpl<>(List.of(card)));
+        when(publicJobService.search(PublicJobSearchCriteria.none(), 0, 20)).thenReturn(new PageImpl<>(List.of(card)));
 
         mockMvc.perform(get("/api/v1/public/jobs"))
                 .andExpect(status().isOk())
@@ -109,7 +171,7 @@ class PublicJobControllerTest {
 
     @Test
     void list_isTheSameForASignedInUser_theBoardIsNotTenantScoped() throws Exception {
-        when(publicJobService.search(null, null, null, 0, 20)).thenReturn(new PageImpl<>(List.of(card)));
+        when(publicJobService.search(PublicJobSearchCriteria.none(), 0, 20)).thenReturn(new PageImpl<>(List.of(card)));
 
         mockMvc.perform(get("/api/v1/public/jobs").with(asUser(UUID.randomUUID(), UUID.randomUUID(), "HR_MANAGER")))
                 .andExpect(status().isOk())
@@ -129,7 +191,12 @@ class PublicJobControllerTest {
     void filters_returnsCategoriesAndLocationsWithCounts() throws Exception {
         when(publicJobService.filterOptions()).thenReturn(new JobFilterOptionsResponse(
                 List.of(new JobFilterOption("Engineering", 7), new JobFilterOption("Design", 2)),
-                List.of(new JobFilterOption("Colombo, Sri Lanka", 5))));
+                List.of(new JobFilterOption("Colombo, Sri Lanka", 5)),
+                List.of(new JobFilterOption("Healthcare", 4)),
+                List.of(new JobFilterOption("FULL_TIME", 6)),
+                List.of(new JobFilterOption("REMOTE", 3)),
+                List.of(new JobFilterOptionsResponse.SalaryRange(PayPeriod.MONTHLY, "LKR",
+                        new BigDecimal("100000"), new BigDecimal("250000"), 4))));
 
         mockMvc.perform(get("/api/v1/public/jobs/filters"))
                 .andExpect(status().isOk())
@@ -137,6 +204,11 @@ class PublicJobControllerTest {
                 .andExpect(jsonPath("$.categories[0].count").value(7))
                 .andExpect(jsonPath("$.categories[1].value").value("Design"))
                 .andExpect(jsonPath("$.locations[0].value").value("Colombo, Sri Lanka"))
+                .andExpect(jsonPath("$.industries[0].value").value("Healthcare"))
+                .andExpect(jsonPath("$.employmentTypes[0].value").value("FULL_TIME"))
+                .andExpect(jsonPath("$.workplaceTypes[0].count").value(3))
+                .andExpect(jsonPath("$.salaryRanges[0].currency").value("LKR"))
+                .andExpect(jsonPath("$.salaryRanges[0].payPeriod").value("MONTHLY"))
                 .andExpect(jsonPath("$.locations[0].count").value(5));
     }
 
@@ -172,7 +244,7 @@ class PublicJobControllerTest {
 
     @Test
     void theWordFilters_isRoutedToTheFilterEndpoint_notTreatedAsASlug() throws Exception {
-        when(publicJobService.filterOptions()).thenReturn(new JobFilterOptionsResponse(List.of(), List.of()));
+        when(publicJobService.filterOptions()).thenReturn(new JobFilterOptionsResponse(List.of(), List.of(), List.of(), List.of(), List.of(), List.of()));
 
         mockMvc.perform(get("/api/v1/public/jobs/filters"))
                 .andExpect(status().isOk())

@@ -1,15 +1,13 @@
 package com.talentpipe.auth.service;
 
 import com.talentpipe.auth.dto.InviteUserRequest;
-import com.talentpipe.auth.dto.UserResponse;
+import com.talentpipe.auth.dto.TeamMemberResponse;
 import com.talentpipe.auth.entity.InvitationToken;
-import com.talentpipe.auth.entity.Role;
-import com.talentpipe.auth.entity.RoleName;
+import com.talentpipe.auth.entity.TenantRole;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.mapper.UserMapper;
 import com.talentpipe.auth.repository.InvitationTokenRepository;
-import com.talentpipe.auth.repository.RoleRepository;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.DuplicateResourceException;
@@ -24,8 +22,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,11 +35,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Team invitations (PB-003 HR managers, PB-004 interviewers).
+ * Team invitations and the team listing (PB-003, PB-004).
  *
- * <p>Flow: a COMPANY_ADMIN creates an INVITED user in their own tenant with the
- * chosen role → an invitation email goes out with a single-use 7-day link →
- * the invitee sets a password, which flips the account to ACTIVE.</p>
+ * <p>Flow: a member with the {@code team.invite} permission creates an INVITED
+ * user in their own tenant with one of the workspace's roles → an invitation
+ * email goes out with a single-use 7-day link → the invitee sets a password,
+ * which flips the account to ACTIVE. Which roles an inviter may hand out is
+ * decided by {@link TenantRoleService#roleForInvitation}: never Owner, and
+ * never more than the inviter can do themselves.</p>
  *
  * <p>Tenant safety: the invitee's tenant is always the inviter's tenant, read
  * from the caller's token. It is never taken from the request, and every lookup
@@ -52,12 +55,8 @@ public class InvitationService {
     private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
     private static final Duration TOKEN_TTL = Duration.ofDays(7);
 
-    /** Roles a COMPANY_ADMIN may grant — never COMPANY_ADMIN or SUPER_ADMIN. */
-    private static final Set<RoleName> INVITABLE_ROLES =
-            Set.of(RoleName.HR_MANAGER, RoleName.INTERVIEWER);
-
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final TenantRoleService tenantRoleService;
     private final InvitationTokenRepository tokenRepository;
     private final TenantService tenantService;
     private final UserMapper userMapper;
@@ -66,7 +65,7 @@ public class InvitationService {
     private final String frontendBaseUrl;
 
     public InvitationService(UserRepository userRepository,
-                             RoleRepository roleRepository,
+                             TenantRoleService tenantRoleService,
                              InvitationTokenRepository tokenRepository,
                              TenantService tenantService,
                              UserMapper userMapper,
@@ -74,7 +73,7 @@ public class InvitationService {
                              org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
                              @Value("${talentpipe.app.base-url}") String frontendBaseUrl) {
         this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
+        this.tenantRoleService = tenantRoleService;
         this.tokenRepository = tokenRepository;
         this.tenantService = tenantService;
         this.userMapper = userMapper;
@@ -88,11 +87,11 @@ public class InvitationService {
      *
      * @param tenantId the INVITER's tenant, from their access token
      * @throws AccessDeniedException      if the caller has no tenant (SUPER_ADMIN)
-     * @throws BusinessRuleException      if the role is not invitable (422)
+     * @throws BusinessRuleException      if the role cannot be handed out by this inviter (422)
      * @throws DuplicateResourceException if that email already exists here (409)
      */
     @Transactional
-    public UserResponse invite(UUID tenantId, UUID invitedByUserId, InviteUserRequest request) {
+    public TeamMemberResponse invite(UUID tenantId, UUID invitedByUserId, InviteUserRequest request) {
         // Service-layer re-check: the controller's @PreAuthorize proves the
         // ROLE, this proves the SCOPE. A platform admin has no tenant to invite
         // into, so there is no sensible target for the new user.
@@ -100,10 +99,8 @@ public class InvitationService {
             throw new AccessDeniedException("Invitations require a tenant-scoped administrator");
         }
 
-        RoleName roleName = RoleName.valueOf(request.role());
-        if (!INVITABLE_ROLES.contains(roleName)) {
-            throw new BusinessRuleException("Role " + roleName + " cannot be granted by invitation");
-        }
+        TenantRole role = tenantRoleService.roleForInvitation(
+                tenantId, invitedByUserId, request.roleId(), request.role());
 
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByTenantIdAndEmail(tenantId, email)) {
@@ -111,26 +108,24 @@ public class InvitationService {
                     "A user with email '" + email + "' already exists in this workspace");
         }
 
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new IllegalStateException("Role " + roleName + " missing from seed data"));
-
         // A placeholder hash keeps the NOT NULL contract while the account is
         // INVITED. It is unusable: bcrypt never produces this value, so no
         // password can ever match it, and accepting the invite overwrites it.
         User invitee = userRepository.save(new User(
                 tenantId,
                 role,
+                tenantRoleService.legacyRoleFor(role),
                 email,
                 "!invited",
                 request.firstName().trim(),
                 request.lastName().trim(),
                 UserStatus.INVITED));
 
-        issueAndSend(invitee);
+        InvitationToken invitation = issueAndSend(invitee);
 
-        log.info("User {} invited user {} as {} into tenant {}",
-                invitedByUserId, invitee.getId(), roleName, tenantId);
-        return userMapper.toResponse(invitee, resolveTenantName(tenantId));
+        log.info("User {} invited user {} as role {} into tenant {}",
+                invitedByUserId, invitee.getId(), role.getId(), tenantId);
+        return userMapper.toTeamMember(invitee, resolveTenantName(tenantId), invitation);
     }
 
     /**
@@ -167,16 +162,41 @@ public class InvitationService {
         log.info("Invitation revoked for user {} in tenant {}", inviteeUserId, tenantId);
     }
 
-    /** Everyone in the caller's tenant — members and outstanding invitations. */
+    /**
+     * Everyone in the caller's tenant — members and outstanding invitations —
+     * with each person's role and, for invitations, when the current one was
+     * sent and when it expires.
+     */
     @Transactional(readOnly = true)
-    public List<UserResponse> listTeam(UUID tenantId) {
+    public List<TeamMemberResponse> listTeam(UUID tenantId) {
         if (tenantId == null) {
             throw new AccessDeniedException("Team listing requires a tenant-scoped administrator");
         }
         String tenantName = resolveTenantName(tenantId);
-        return userRepository.findAllByTenantIdOrderByCreatedAtAsc(tenantId).stream()
-                .map(user -> userMapper.toResponse(user, tenantName))
+        List<User> members = userRepository.findAllByTenantIdOrderByCreatedAtAsc(tenantId);
+        Map<UUID, InvitationToken> openInvitations = tokenRepository.findAllByUserIdIn(
+                        members.stream().filter(user -> user.getStatus() == UserStatus.INVITED)
+                                .map(User::getId).toList()).stream()
+                .filter(token -> !token.isUsed())
+                .collect(Collectors.toMap(InvitationToken::getUserId, Function.identity(),
+                        (a, b) -> a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b));
+        return members.stream()
+                .map(user -> userMapper.toTeamMember(user, tenantName, openInvitations.get(user.getId())))
                 .toList();
+    }
+
+    /**
+     * Moves a member, or a pending invitee, to another role. All the rules —
+     * last Owner, no escalation — are {@link TenantRoleService#changeMemberRole}'s.
+     */
+    @Transactional
+    public TeamMemberResponse changeRole(UUID tenantId, UUID actorId, UUID memberId, UUID roleId) {
+        User member = tenantRoleService.changeMemberRole(tenantId, actorId, memberId, roleId);
+        InvitationToken invitation = member.getStatus() == UserStatus.INVITED
+                ? tokenRepository.findAllByUserIdIn(List.of(memberId)).stream()
+                        .filter(token -> !token.isUsed()).findFirst().orElse(null)
+                : null;
+        return userMapper.toTeamMember(member, resolveTenantName(tenantId), invitation);
     }
 
     /**
@@ -207,17 +227,18 @@ public class InvitationService {
         invitee.setPasswordHash(passwordEncoder.encode(password));
         invitee.setStatus(UserStatus.ACTIVE);
 
-        log.info("Invitation accepted - user {} activated in tenant {} as {}",
-                invitee.getId(), invitee.getTenantId(), invitee.getRole().getName());
+        log.info("Invitation accepted - user {} activated in tenant {} as role {}",
+                invitee.getId(), invitee.getTenantId(),
+                invitee.getTenantRole() == null ? null : invitee.getTenantRole().getId());
     }
 
     // ------------------------------------------------------------------ util
 
-    private void issueAndSend(User invitee) {
+    private InvitationToken issueAndSend(User invitee) {
         tokenRepository.deleteAllByUserId(invitee.getId());
 
         String rawToken = SecureTokens.generate();
-        tokenRepository.save(new InvitationToken(
+        InvitationToken token = tokenRepository.saveAndFlush(new InvitationToken(
                 invitee.getId(), SecureTokens.sha256(rawToken), Instant.now().plus(TOKEN_TTL)));
 
         events.publishEvent(NotificationRequestedEvent.forUser(
@@ -227,6 +248,7 @@ public class InvitationService {
                 invitee.getEmail(),
                 frontendBaseUrl + "/accept-invite?token=" + rawToken,
                 invitee.getFirstName()));
+        return token;
     }
 
     private String resolveTenantName(UUID tenantId) {
