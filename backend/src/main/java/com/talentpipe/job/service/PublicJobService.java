@@ -2,13 +2,16 @@ package com.talentpipe.job.service;
 
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.dto.JobDetailResponse;
+import com.talentpipe.job.dto.JobFilterOption;
 import com.talentpipe.job.dto.JobFilterOptionsResponse;
 import com.talentpipe.job.dto.JobSummaryResponse;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.PayPeriod;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobSlug;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.repository.JobVacancyRepository;
+import com.talentpipe.job.repository.BoardFacetCount;
 import com.talentpipe.job.repository.PublicJobSearchCriteria;
 import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.service.TenantService;
@@ -64,18 +67,12 @@ public class PublicJobService {
     }
 
     /**
-     * Published vacancies matching the given keyword and filters, a page at a
-     * time. Every argument is optional and they combine with AND.
-     *
-     * @param keyword  matched against title, skills, summary and description;
-     *                 results are ranked by relevance when present
-     * @param category the vacancy's department, matched whole, ignoring case
-     * @param location matched anywhere in the vacancy's location, ignoring case
+     * Published vacancies matching the criteria, a page at a time. Every part
+     * of the criteria is optional and they combine with AND. With a keyword,
+     * results are ranked by relevance unless newest-first was asked for.
      */
     @Transactional(readOnly = true)
-    public Page<JobSummaryResponse> search(String keyword, String category, String location,
-                                           int page, int size) {
-        PublicJobSearchCriteria criteria = PublicJobSearchCriteria.of(keyword, category, location);
+    public Page<JobSummaryResponse> search(PublicJobSearchCriteria criteria, int page, int size) {
         Pageable pageable = Paging.of(page, size, MAX_PAGE_SIZE, Sort.unsorted());
 
         // TODO(sprint3): leave out vacancies of SUSPENDED/CANCELLED tenants once
@@ -101,16 +98,29 @@ public class PublicJobService {
         return mapper.toDetail(vacancy, company, isAcceptingApplications(vacancy, company));
     }
 
-    /** The categories and locations the board can currently be filtered by. */
+    /** Everything the board can currently be filtered by, each value with its count. */
     @Transactional(readOnly = true)
     public JobFilterOptionsResponse filterOptions() {
         Pageable top = PageRequest.of(0, MAX_FILTER_OPTIONS);
         return new JobFilterOptionsResponse(
                 vacancyRepository.findPublishedCategories(top),
-                vacancyRepository.findPublishedLocations(top));
+                vacancyRepository.findPublishedLocations(top),
+                options(vacancyRepository.countPublishedByEmploymentType()),
+                options(vacancyRepository.countPublishedByWorkplaceType()),
+                vacancyRepository.findPublishedSalaryRanges().stream()
+                        .map(row -> new JobFilterOptionsResponse.SalaryRange(
+                                PayPeriod.valueOf(row.getPayPeriod()), row.getCurrency(),
+                                row.getLowest(), row.getHighest(), row.getTotal()))
+                        .toList());
     }
 
     // ---------------------------------------------------------------- private
+
+    private static <E extends Enum<E>> List<JobFilterOption> options(List<BoardFacetCount<E>> counts) {
+        return counts.stream()
+                .map(count -> new JobFilterOption(count.getFacet().name(), count.getTotal()))
+                .toList();
+    }
 
     private JobSummaryResponse summarize(JobVacancy vacancy, CompanySummaryResponse company) {
         return mapper.toSummary(vacancy, company, isAcceptingApplications(vacancy, company));

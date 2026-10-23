@@ -16,6 +16,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -44,7 +45,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex,
                                                           HttpServletRequest request) {
         List<FieldErrorDetail> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
-                .map(fieldError -> new FieldErrorDetail(fieldError.getField(), fieldError.getDefaultMessage()))
+                .map(fieldError -> new FieldErrorDetail(fieldError.getField(), messageFor(fieldError)))
                 .sorted(Comparator.comparing(FieldErrorDetail::field).thenComparing(FieldErrorDetail::message))
                 .toList();
         // message keeps its original "field: message; ..." shape so existing
@@ -263,6 +264,17 @@ public class GlobalExceptionHandler {
     }
 
     // ------------------------------------------------------------------ util
+
+    /**
+     * A value that could not even be converted — {@code FOO} for an enum
+     * query parameter, say — carries Spring's conversion message, which names
+     * Java types. Say what went wrong instead.
+     */
+    private static String messageFor(FieldError fieldError) {
+        return fieldError.isBindingFailure()
+                ? "'" + fieldError.getRejectedValue() + "' is not an accepted value."
+                : fieldError.getDefaultMessage();
+    }
 
     /** An envelope with the status's default {@link ErrorCode}. */
     private ResponseEntity<ErrorResponse> envelope(HttpStatus status, String message,

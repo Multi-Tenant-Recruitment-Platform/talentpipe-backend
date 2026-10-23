@@ -1,8 +1,10 @@
 package com.talentpipe.job.repository;
 
 import com.talentpipe.job.dto.JobFilterOption;
+import com.talentpipe.job.entity.EmploymentType;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyStatus;
+import com.talentpipe.job.entity.WorkplaceType;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
@@ -128,4 +130,46 @@ public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>,
             order by count(v) desc, min(v.location) asc
             """)
     List<JobFilterOption> findPublishedLocations(Pageable limit);
+
+    /** How many published vacancies offer each employment type, most populated first. */
+    @Query("""
+            select v.employmentType as facet, count(v) as total
+            from JobVacancy v
+            where v.status = com.talentpipe.job.entity.VacancyStatus.PUBLISHED and v.employmentType is not null
+            group by v.employmentType
+            order by count(v) desc, v.employmentType asc
+            """)
+    List<BoardFacetCount<EmploymentType>> countPublishedByEmploymentType();
+
+    /** How many published vacancies offer each workplace type, most populated first. */
+    @Query("""
+            select v.workplaceType as facet, count(v) as total
+            from JobVacancy v
+            where v.status = com.talentpipe.job.entity.VacancyStatus.PUBLISHED and v.workplaceType is not null
+            group by v.workplaceType
+            order by count(v) desc, v.workplaceType asc
+            """)
+    List<BoardFacetCount<WorkplaceType>> countPublishedByWorkplaceType();
+
+    /**
+     * The span of pay published vacancies state, per pay period and currency
+     * code. A one-sided salary counts as a range of one point. Native: the
+     * currency code is the first word of the stored value
+     * ("LKR — Sri Lankan rupee"), which needs {@code split_part}.
+     */
+    @Query(nativeQuery = true, value = """
+            SELECT v.pay_period AS "payPeriod",
+                   upper(split_part(v.currency, ' ', 1)) AS "currency",
+                   min(coalesce(v.salary_min, v.salary_max)) AS "lowest",
+                   max(coalesce(v.salary_max, v.salary_min)) AS "highest",
+                   count(*) AS "total"
+            FROM job_vacancies v
+            WHERE v.status = 'PUBLISHED'
+              AND v.pay_period IS NOT NULL
+              AND v.currency IS NOT NULL
+              AND (v.salary_min IS NOT NULL OR v.salary_max IS NOT NULL)
+            GROUP BY v.pay_period, upper(split_part(v.currency, ' ', 1))
+            ORDER BY count(*) DESC, 1, 2
+            """)
+    List<SalaryRangeRow> findPublishedSalaryRanges();
 }

@@ -2,6 +2,12 @@ package com.talentpipe.job.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.talentpipe.job.entity.EmploymentType;
+import com.talentpipe.job.entity.PayPeriod;
+import com.talentpipe.job.entity.WorkplaceType;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -85,6 +91,69 @@ class PublicJobSearchQueryTest {
         assertThat(query.countSql()).doesNotContain("ORDER BY");
     }
 
+    // -------------------------------------------------------- structured filters
+
+    @Test
+    void employmentAndWorkplaceTypes_matchAnyOfTheGivenValues_inAStableOrder() {
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(new BoardFilters(
+                Set.of(EmploymentType.PART_TIME, EmploymentType.CONTRACT),
+                Set.of(WorkplaceType.REMOTE), null, null, null)));
+
+        assertThat(query.selectSql())
+                .contains(" AND v.employment_type IN (:employmentTypes)")
+                .contains(" AND v.workplace_type IN (:workplaceTypes)");
+        assertThat(query.parameters())
+                .containsEntry("employmentTypes", List.of("CONTRACT", "PART_TIME"))
+                .containsEntry("workplaceTypes", List.of("REMOTE"));
+    }
+
+    @Test
+    void experience_treatsAVacancyThatNamesNoneAsAskingForNone() {
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(
+                new BoardFilters(Set.of(), Set.of(), 1, 5, null)));
+
+        assertThat(query.selectSql())
+                .contains(" AND coalesce(v.minimum_experience_years, 0) >= :minExperience")
+                .contains(" AND coalesce(v.minimum_experience_years, 0) <= :maxExperience");
+        assertThat(query.parameters()).containsEntry("minExperience", 1).containsEntry("maxExperience", 5);
+    }
+
+    @Test
+    void salary_matchesStatedPayThatOverlapsTheRange_inOnePeriodAndCurrency() {
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(new BoardFilters(Set.of(), Set.of(),
+                null, null, new BoardFilters.Salary(true, PayPeriod.MONTHLY, "LKR",
+                        new BigDecimal("100000"), new BigDecimal("200000")))));
+
+        assertThat(query.countSql())
+                .contains(" AND (v.salary_min IS NOT NULL OR v.salary_max IS NOT NULL)")
+                .contains(" AND v.pay_period = :payPeriod")
+                .contains(" AND upper(split_part(v.currency, ' ', 1)) = :currency")
+                .contains(" AND coalesce(v.salary_max, v.salary_min) >= :salaryMin")
+                .contains(" AND coalesce(v.salary_min, v.salary_max) <= :salaryMax");
+        assertThat(query.parameters())
+                .containsEntry("payPeriod", "MONTHLY")
+                .containsEntry("currency", "LKR")
+                .containsEntry("salaryMin", new BigDecimal("100000"))
+                .containsEntry("salaryMax", new BigDecimal("200000"));
+    }
+
+    @Test
+    void noStructuredFilters_addNothing() {
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(BoardFilters.NONE));
+
+        assertThat(query.countSql()).isEqualTo("SELECT count(*) FROM job_vacancies v WHERE v.status = 'PUBLISHED'");
+    }
+
+    @Test
+    void newestFirst_overridesRelevance_evenWithAKeyword() {
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(
+                PublicJobSearchCriteria.of("java", null, null, BoardFilters.NONE, BoardSort.NEWEST));
+
+        assertThat(query.selectSql())
+                .contains("v.search_vector @@ websearch_to_tsquery('english', :keyword)")
+                .endsWith(" ORDER BY v.published_at DESC, v.id");
+    }
+
     // --------------------------------------------------------------- injection
 
     @Test
@@ -115,5 +184,9 @@ class PublicJobSearchQueryTest {
     @Test
     void containsPattern_escapesTheEscapeCharacterItself() {
         assertThat(PublicJobSearchQuery.containsPattern("Wow!")).isEqualTo("%Wow!!%");
+    }
+
+    private static PublicJobSearchCriteria filtered(BoardFilters filters) {
+        return PublicJobSearchCriteria.of(null, null, null, filters, BoardSort.RELEVANT);
     }
 }
