@@ -1,5 +1,7 @@
 package com.talentpipe.security;
 
+import org.springframework.security.core.Authentication;
+
 /**
  * The non-permission authorities a request can carry, next to the permission
  * keys of {@link Permission}.
@@ -30,5 +32,14 @@ public final class Authorities {
 
     private Authorities() {
         // constants only
+    }
+
+    /**
+     * Whether the authenticated caller currently holds a permission — for the
+     * rare endpoint whose answer, not just its access, depends on one.
+     */
+    public static boolean has(Authentication authentication, Permission permission) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> permission.key().equals(authority.getAuthority()));
     }
 }

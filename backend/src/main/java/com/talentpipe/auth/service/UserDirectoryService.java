@@ -1,8 +1,15 @@
 package com.talentpipe.auth.service;
 
+import com.talentpipe.auth.dto.MemberSummary;
+import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.repository.UserRepository;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,5 +48,45 @@ public class UserDirectoryService {
                 .filter(user -> tenantId.equals(user.getTenantId()))
                 .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                 .isPresent();
+    }
+
+    /**
+     * Which of {@code userIds} are ACTIVE members of {@code tenantId} — the
+     * bulk form of {@link #isActiveMember}, for checking a whole list at once.
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> activeMembersAmong(UUID tenantId, Collection<UUID> userIds) {
+        if (tenantId == null || userIds == null || userIds.isEmpty()) {
+            return Set.of();
+        }
+        return userRepository.findAllByTenantIdAndIdIn(tenantId, userIds).stream()
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                .map(User::getId)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Name, email, role and status of the given members, keyed by id, for a
+     * screen that shows who works on something. Ids outside the tenant are
+     * simply absent, as are ones that no longer exist.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, MemberSummary> describe(UUID tenantId, Collection<UUID> userIds) {
+        if (tenantId == null || userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        return userRepository.findAllByTenantIdAndIdIn(tenantId, userIds).stream()
+                .map(UserDirectoryService::toSummary)
+                .collect(Collectors.toUnmodifiableMap(MemberSummary::id, Function.identity()));
+    }
+
+    private static MemberSummary toSummary(User user) {
+        return new MemberSummary(
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getTenantRole() == null ? null : user.getTenantRole().getName(),
+                user.getStatus().name());
     }
 }
