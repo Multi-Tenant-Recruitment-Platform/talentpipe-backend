@@ -52,6 +52,8 @@ class AuthServiceTest {
     @Mock
     private LoginAttemptService loginAttemptService;
     @Mock
+    private LoginSelectionService loginSelectionService;
+    @Mock
     private JwtTokenProvider jwtTokenProvider;
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -59,7 +61,7 @@ class AuthServiceTest {
     private AuthService service(UserMapper mapper) {
         return new AuthService(userRepository, tenantRoleService, tenantService,
                 refreshTokenService, emailVerificationService, candidateAuthService, loginAttemptService,
-                jwtTokenProvider, passwordEncoder, mapper);
+                loginSelectionService, jwtTokenProvider, passwordEncoder, mapper);
     }
 
     private static RegisterRequest acmeRequest() {

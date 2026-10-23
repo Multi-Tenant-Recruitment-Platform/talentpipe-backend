@@ -2,10 +2,13 @@ package com.talentpipe.auth.mapper;
 
 import com.talentpipe.auth.dto.TeamMemberResponse;
 import com.talentpipe.auth.dto.UserResponse;
+import com.talentpipe.auth.dto.WorkspaceSelectionResponse.AccountType;
+import com.talentpipe.auth.dto.WorkspaceSelectionResponse.Choice;
 import com.talentpipe.auth.entity.InvitationToken;
 import com.talentpipe.auth.entity.TenantRole;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.security.Permission;
+import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -64,6 +67,24 @@ public class UserMapper {
                 user.getCreatedAt(),
                 invitation == null ? null : invitation.getCreatedAt(),
                 invitation == null ? null : invitation.getExpiresAt());
+    }
+
+    /**
+     * One account offered when a sign-in's credentials fit several.
+     *
+     * @param company the user's company; {@code null} for a platform administrator
+     */
+    public Choice toWorkspaceChoice(User user, CompanySummaryResponse company) {
+        if (user.getTenantId() == null) {
+            return new Choice(user.getId(), AccountType.PLATFORM, null, null, null, roleName(user));
+        }
+        return new Choice(
+                user.getId(),
+                AccountType.COMPANY,
+                company == null ? null : company.name(),
+                company == null ? null : company.subdomain(),
+                company == null ? null : company.logoUrl(),
+                roleName(user));
     }
 
     /** Permission keys in catalogue order, so every response lists them the same way. */

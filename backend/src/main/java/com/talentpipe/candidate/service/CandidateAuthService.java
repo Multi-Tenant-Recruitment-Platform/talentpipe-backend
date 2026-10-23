@@ -1,6 +1,7 @@
 package com.talentpipe.candidate.service;
 
 import com.talentpipe.auth.entity.UserStatus;
+import com.talentpipe.candidate.dto.CandidateCredentialCheck;
 import com.talentpipe.candidate.dto.CandidateProfile;
 import com.talentpipe.candidate.entity.Candidate;
 import com.talentpipe.candidate.repository.CandidateRepository;
@@ -77,18 +78,65 @@ public class CandidateAuthService {
             return Optional.empty();
         }
 
-        if (candidate.getStatus() == UserStatus.PENDING_VERIFICATION) {
-            // Credentials were correct, so naming the real reason leaks nothing.
-            throw new AccountNotVerifiedException(
-                    "Your email address is not verified yet. Check your inbox for the "
-                            + "verification link, or request a new one.");
-        }
-        if (candidate.getStatus() != UserStatus.ACTIVE) {
-            return Optional.empty(); // DISABLED — stays a generic 401
+        return admit(candidate);
+    }
+
+    /**
+     * Checks a password against the candidate account for this email without
+     * acting on the result — for a sign-in that must first see whether the
+     * same credentials also fit a company account. The caller follows up with
+     * {@link #recordFailedSignIn} or {@link #completeSignIn}.
+     *
+     * <p>A locked account is reported as locked and its password is not
+     * checked, so the lock cannot be worked around by guessing here. A
+     * disabled account is reported as no account: it can never be signed
+     * in to.</p>
+     */
+    @Transactional(readOnly = true)
+    public CandidateCredentialCheck checkCredentials(String email, String rawPassword) {
+        Optional<Candidate> candidateOpt = candidateRepository.findByEmail(normalizeEmail(email))
+                .filter(candidate -> candidate.getStatus() != UserStatus.DISABLED);
+        if (candidateOpt.isEmpty()) {
+            return CandidateCredentialCheck.NONE;
         }
 
-        loginAttempts.recordSuccess(candidate.getId());
-        return Optional.of(toProfile(candidate));
+        Candidate candidate = candidateOpt.get();
+        if (candidate.isLocked(Instant.now())) {
+            return CandidateCredentialCheck.locked(candidate.getId(), candidate.getLockedUntil());
+        }
+        return CandidateCredentialCheck.checked(candidate.getId(),
+                passwordEncoder.matches(rawPassword, candidate.getPasswordHash()));
+    }
+
+    /** Counts a wrong password found by {@link #checkCredentials} towards the lock. */
+    public void recordFailedSignIn(UUID candidateId) {
+        loginAttempts.recordFailure(candidateId);
+    }
+
+    /**
+     * Signs in a candidate whose password was already checked by
+     * {@link #checkCredentials}, applying the same lock and verification gates
+     * as {@link #authenticate}. The state is read again: it may have changed
+     * since the check, which is up to two minutes earlier when the person
+     * first had to choose between accounts.
+     *
+     * @return the profile; empty when the account is gone or disabled
+     * @throws AccountLockedException      if the account is temporarily locked
+     * @throws AccountNotVerifiedException if the email has not been verified
+     */
+    @Transactional
+    public Optional<CandidateProfile> completeSignIn(UUID candidateId) {
+        Optional<Candidate> candidateOpt = candidateRepository.findById(candidateId);
+        if (candidateOpt.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Candidate candidate = candidateOpt.get();
+        Instant now = Instant.now();
+        if (candidate.isLocked(now)) {
+            throw new AccountLockedException(candidate.getLockedUntil(), now);
+        }
+        return admit(candidate);
     }
 
     /** Profile lookup by id — used for token refresh and {@code /auth/me}. */
@@ -131,6 +179,26 @@ public class CandidateAuthService {
     }
 
     // ------------------------------------------------------------------ util
+
+    /**
+     * The gates after a correct password: an unverified account is refused
+     * with the reason, a disabled one generically, and anything else is
+     * signed in with its failure count cleared.
+     */
+    private Optional<CandidateProfile> admit(Candidate candidate) {
+        if (candidate.getStatus() == UserStatus.PENDING_VERIFICATION) {
+            // Credentials were correct, so naming the real reason leaks nothing.
+            throw new AccountNotVerifiedException(
+                    "Your email address is not verified yet. Check your inbox for the "
+                            + "verification link, or request a new one.");
+        }
+        if (candidate.getStatus() != UserStatus.ACTIVE) {
+            return Optional.empty(); // DISABLED — stays a generic 401
+        }
+
+        loginAttempts.recordSuccess(candidate.getId());
+        return Optional.of(toProfile(candidate));
+    }
 
     /** Splits a full name once, so every consumer renders it identically. */
     static CandidateProfile toProfile(Candidate candidate) {

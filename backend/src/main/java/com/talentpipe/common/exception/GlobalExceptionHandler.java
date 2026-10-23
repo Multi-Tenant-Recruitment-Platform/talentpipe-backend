@@ -195,6 +195,17 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.CONFLICT, ErrorCode.CONCURRENT_UPDATE, ex.getMessage(), request);
     }
 
+    /** The credentials fit several accounts; {@code details} lists them and carries the token to pick one. */
+    @ExceptionHandler(WorkspaceSelectionRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleWorkspaceSelection(WorkspaceSelectionRequiredException ex,
+                                                                  HttpServletRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+        return ResponseEntity.status(status)
+                .body(ErrorResponse.of(status, ErrorCode.WORKSPACE_SELECTION_REQUIRED,
+                                ex.getMessage(), request.getRequestURI())
+                        .withDetails(ex.getDetails()));
+    }
+
     /**
      * Backstop for the same situation when it is only detected at flush: two
      * requests read the same version, both pass the service's own version
