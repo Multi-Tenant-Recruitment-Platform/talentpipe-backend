@@ -79,6 +79,7 @@ public class JobVacancyService {
     private final JobVacancyRepository vacancyRepository;
     private final VacancyAccess access;
     private final VacancyHiringTeamService hiringTeam;
+    private final VacancyIndustryPolicy industryPolicy;
     private final VacancyContentNormalizer normalizer;
     private final JobVacancyShapeValidator shapeValidator;
     private final JobVacancyPublishValidator publishValidator;
@@ -90,6 +91,7 @@ public class JobVacancyService {
     public JobVacancyService(JobVacancyRepository vacancyRepository,
                              VacancyAccess access,
                              VacancyHiringTeamService hiringTeam,
+                             VacancyIndustryPolicy industryPolicy,
                              VacancyContentNormalizer normalizer,
                              JobVacancyShapeValidator shapeValidator,
                              JobVacancyPublishValidator publishValidator,
@@ -100,6 +102,7 @@ public class JobVacancyService {
         this.vacancyRepository = vacancyRepository;
         this.access = access;
         this.hiringTeam = hiringTeam;
+        this.industryPolicy = industryPolicy;
         this.normalizer = normalizer;
         this.shapeValidator = shapeValidator;
         this.publishValidator = publishValidator;
@@ -200,6 +203,7 @@ public class JobVacancyService {
 
         VacancyContent content = normalizer.normalize(request);
         JobVacancy vacancy = new JobVacancy(tenantId, viewer.userId(), content);
+        vacancy.fileUnder(industryPolicy.resolve(tenantId, request.industry(), null));
         if (request.status() == VacancyStatus.PUBLISHED) {
             vacancy.publish(calendar.now(), today);
         }
@@ -248,8 +252,10 @@ public class JobVacancyService {
             publishValidator.validateForStayComplete(request, today);
         }
 
+        String industry = industryPolicy.resolve(tenantId, request.industry(), vacancy.getIndustry());
         VacancyContent content = normalizer.normalize(request);
         vacancy.applyContent(content, today);
+        vacancy.fileUnder(industry);
         return stored(vacancy, viewer, "edited");
     }
 
@@ -320,8 +326,9 @@ public class JobVacancyService {
         JobVacancy source = access.require(viewer, vacancyId);
         VacancyContent template = source.content()
                 .asDuplicate(userId -> userDirectory.isActiveMember(tenantId, userId));
-        JobVacancy copy = save(new JobVacancy(tenantId, viewer.userId(), template), viewer,
-                "duplicated from " + vacancyId);
+        JobVacancy draft = new JobVacancy(tenantId, viewer.userId(), template);
+        draft.fileUnder(industryPolicy.forDuplicate(tenantId, source.getIndustry()));
+        JobVacancy copy = save(draft, viewer, "duplicated from " + vacancyId);
         hiringTeam.copyTeam(tenantId, source.getId(), copy.getId(), viewer.userId());
         return mapper.toResponse(copy);
     }

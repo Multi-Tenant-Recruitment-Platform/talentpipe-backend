@@ -14,7 +14,9 @@ import com.talentpipe.tenant.entity.Tenant;
 import com.talentpipe.tenant.entity.TenantStatus;
 import com.talentpipe.tenant.mapper.TenantMapper;
 import com.talentpipe.tenant.repository.TenantRepository;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -176,7 +178,7 @@ public class TenantService {
         // ---- single-line fields
         tenant.setName(name);
         tenant.setTagline(normalizer.normalizeLine(request.tagline()));
-        tenant.setIndustry(normalizer.normalizeLine(request.industry()));
+        tenant.setIndustry(normalizer.normalizeOption(request.industry(), ProfileTaxonomy.INDUSTRIES));
         tenant.setCompanyType(normalizer.normalizeLine(request.companyType()));
         tenant.setSize(normalizer.normalizeLine(request.size()));
         tenant.setLegalName(normalizer.normalizeLine(request.legalName()));
@@ -212,6 +214,7 @@ public class TenantService {
         tenant.setBenefits(normalizer.normalizeList(request.benefits(), ProfileTaxonomy.BENEFITS));
         tenant.setOfficeLocations(normalizer.normalizeList(request.officeLocations()));
         tenant.setDepartments(normalizer.normalizeList(request.departments()));
+        tenant.setAdditionalIndustries(additionalIndustries(tenant.getIndustry(), request.additionalIndustries()));
 
         Tenant saved = tenantRepository.save(tenant);
         return tenantMapper.toProfileResponse(saved);
@@ -297,6 +300,25 @@ public class TenantService {
         requireEditableTenant(tenantId);
     }
 
+    /**
+     * The industries a company works in: its main industry first, then the
+     * additional ones in the order it chose them. Other modules file things
+     * under these — the job module, a vacancy's industry. Empty when the
+     * company has not set an industry, or does not exist.
+     */
+    @Transactional(readOnly = true)
+    public List<String> industriesOf(UUID tenantId) {
+        return tenantRepository.findById(tenantId)
+                .filter(tenant -> tenant.getIndustry() != null)
+                .map(tenant -> {
+                    List<String> industries = new ArrayList<>();
+                    industries.add(tenant.getIndustry());
+                    industries.addAll(tenant.getAdditionalIndustries());
+                    return List.copyOf(industries);
+                })
+                .orElse(List.of());
+    }
+
     // ---------------------------------------------------------------- private
 
     /**
@@ -316,6 +338,21 @@ public class TenantService {
                     "Profile updates are not allowed for suspended tenants");
         }
         return tenant;
+    }
+
+    /**
+     * The industries a company lists besides its main one, canonicalized and
+     * with the main industry and repeats left out.
+     *
+     * @throws InvalidRequestException (400) additional industries without a main one
+     */
+    private List<String> additionalIndustries(String mainIndustry, List<String> requested) {
+        List<String> additional = new ArrayList<>(normalizer.normalizeList(requested, ProfileTaxonomy.INDUSTRIES));
+        additional.remove(mainIndustry);
+        if (mainIndustry == null && !additional.isEmpty()) {
+            throw new InvalidRequestException("Choose a main industry before adding more.");
+        }
+        return additional;
     }
 
     /**

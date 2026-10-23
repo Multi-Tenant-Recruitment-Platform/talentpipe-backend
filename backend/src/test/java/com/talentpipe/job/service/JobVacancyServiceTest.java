@@ -80,6 +80,9 @@ class JobVacancyServiceTest {
     @Mock
     private VacancyHiringTeamService hiringTeam;
 
+    @Mock
+    private VacancyIndustryPolicy industryPolicy;
+
     @Captor
     private ArgumentCaptor<JobVacancy> savedVacancy;
 
@@ -94,6 +97,7 @@ class JobVacancyServiceTest {
                 repository,
                 new VacancyAccess(repository),
                 hiringTeam,
+                industryPolicy,
                 new VacancyContentNormalizer(new HtmlSanitizer()),
                 new JobVacancyShapeValidator(),
                 new JobVacancyPublishValidator(),
@@ -604,6 +608,33 @@ class JobVacancyServiceTest {
         JobVacancyResponse response = service.create(VIEWER, request);
 
         assertThat(response.createdBy()).isEqualTo(ACTOR);
+    }
+
+    @Test
+    void create_filesTheVacancyUnderTheIndustryThePolicyResolves() {
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null);
+        when(industryPolicy.resolve(TENANT, null, null)).thenReturn("Information Technology");
+
+        assertThat(service.create(VIEWER, request).industry()).isEqualTo("Information Technology");
+    }
+
+    @Test
+    void update_letsThePolicyKeepTheCurrentIndustry() {
+        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        vacancy.fileUnder("Healthcare");
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, vacancy.getVersion());
+        when(industryPolicy.resolve(TENANT, null, "Healthcare")).thenReturn("Healthcare");
+
+        assertThat(service.update(VIEWER, vacancy.getId(), request).industry()).isEqualTo("Healthcare");
+    }
+
+    @Test
+    void duplicate_asksThePolicyWhetherTheSourcesIndustryStillApplies() {
+        JobVacancy source = stored(VacancyFixtures.draft(TENANT));
+        source.fileUnder("Manufacturing");
+        when(industryPolicy.forDuplicate(TENANT, "Manufacturing")).thenReturn("Education");
+
+        assertThat(service.duplicate(VIEWER, source.getId()).industry()).isEqualTo("Education");
     }
 
     @Test

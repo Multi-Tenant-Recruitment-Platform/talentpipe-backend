@@ -109,6 +109,17 @@ public class ProfileNormalizer {
     }
 
     /**
+     * Normalizes a single fixed-option field, such as the main industry: as
+     * {@link #normalizeLine}, then canonicalized to its spelling in
+     * {@code canonicalOptions} (see {@link #normalizeList(List, List)} for why).
+     * Blank input returns {@code null}.
+     */
+    public String normalizeOption(String value, List<String> canonicalOptions) {
+        String line = normalizeLine(value);
+        return line == null ? null : canonicalize(line, canonicalOptions);
+    }
+
+    /**
      * Normalizes a checkbox-driven list field, additionally canonicalizing
      * every entry to its spelling in {@code canonicalOptions}.
      *

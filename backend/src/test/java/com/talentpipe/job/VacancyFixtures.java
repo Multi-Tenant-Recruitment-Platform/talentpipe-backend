@@ -229,7 +229,7 @@ public final class VacancyFixtures {
         /** The same content as a client would submit it. */
         public JobVacancyRequest toRequest(VacancyStatus status, Integer version) {
             return new JobVacancyRequest(
-                    title, department, openings, employmentType, workplaceType, location, applicationDeadline,
+                    title, department, null, openings, employmentType, workplaceType, location, applicationDeadline,
                     jobSummary, jobDescription, keyResponsibilities,
                     requiredSkills, preferredSkills, 4, "Bachelor’s degree",
                     List.of(), List.of("English"), null,

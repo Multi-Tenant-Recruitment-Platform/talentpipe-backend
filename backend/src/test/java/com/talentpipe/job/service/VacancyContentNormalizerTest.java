@@ -78,7 +78,7 @@ class VacancyContentNormalizerTest {
     @Test
     void missingOpenings_fallBackToOne() {
         JobVacancyRequest withoutOpenings = new JobVacancyRequest(
-                "Title", null, null, null, null, null, null, null, null, null, null, null, null, null,
+                "Title", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 null, VacancyStatus.DRAFT, null);
 

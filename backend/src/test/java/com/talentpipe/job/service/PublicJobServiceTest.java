@@ -234,6 +234,7 @@ class PublicJobServiceTest {
         List<JobFilterOption> locations = List.of(new JobFilterOption("Colombo, Sri Lanka", 5));
         when(repository.findPublishedCategories(any())).thenReturn(categories);
         when(repository.findPublishedLocations(any())).thenReturn(locations);
+        when(repository.findPublishedIndustries()).thenReturn(List.of(new JobFilterOption("Healthcare", 2)));
         when(repository.countPublishedByEmploymentType()).thenReturn(List.of(facet(EmploymentType.FULL_TIME, 6)));
         when(repository.countPublishedByWorkplaceType()).thenReturn(List.of(facet(WorkplaceType.REMOTE, 3)));
         when(repository.findPublishedSalaryRanges()).thenReturn(List.of(salaryRange()));
@@ -242,6 +243,7 @@ class PublicJobServiceTest {
 
         assertThat(options.categories()).isEqualTo(categories);
         assertThat(options.locations()).isEqualTo(locations);
+        assertThat(options.industries()).containsExactly(new JobFilterOption("Healthcare", 2));
         assertThat(options.employmentTypes()).containsExactly(new JobFilterOption("FULL_TIME", 6));
         assertThat(options.workplaceTypes()).containsExactly(new JobFilterOption("REMOTE", 3));
         assertThat(options.salaryRanges()).containsExactly(new JobFilterOptionsResponse.SalaryRange(

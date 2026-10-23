@@ -66,6 +66,8 @@ public record CompanyProfileResponse(
         List<String> benefits,
         List<String> officeLocations,
         List<String> departments,
+        /** Industries besides {@code industry}; never null. Vacancies are filed under one of these or the main one. */
+        List<String> additionalIndustries,
 
         // ---- audit
         Instant updatedAt

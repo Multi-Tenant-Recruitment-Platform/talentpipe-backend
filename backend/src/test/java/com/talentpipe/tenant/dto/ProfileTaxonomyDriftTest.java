@@ -27,7 +27,9 @@ import org.junit.jupiter.api.Test;
 class ProfileTaxonomyDriftTest {
 
     private static final Map<String, List<String>> EXPECTED = Map.of(
-            "benefits", ProfileTaxonomy.BENEFITS);
+            "benefits", ProfileTaxonomy.BENEFITS,
+            "industry", ProfileTaxonomy.INDUSTRIES,
+            "additionalIndustries", ProfileTaxonomy.INDUSTRIES);
 
     @Test
     void everyAllowedValuesFieldMatchesItsProfileTaxonomyCounterpart() throws Exception {
@@ -53,7 +55,7 @@ class ProfileTaxonomyDriftTest {
             checked++;
         }
         assertThat(checked)
-                .as("expected to find the one checkbox-driven field via reflection")
+                .as("expected to find every fixed-option field via reflection")
                 .isEqualTo(EXPECTED.size());
     }
 

@@ -40,6 +40,7 @@ public record JobVacancyResponse(
 
         String title,
         String department,
+        String industry,
         int openings,
         EmploymentType employmentType,
         WorkplaceType workplaceType,

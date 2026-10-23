@@ -11,6 +11,7 @@ import java.util.Set;
  * {@link PublicJobSearchCriteria}. Each part left empty or {@code null} does
  * not filter. Build instances already validated; the query trusts them.
  *
+ * @param industry        this industry, as its canonical label; {@code null} for any
  * @param employmentTypes any of these; empty for any
  * @param workplaceTypes  any of these; empty for any
  * @param minExperience   at least this many years asked for; a vacancy that
@@ -19,6 +20,7 @@ import java.util.Set;
  * @param salary          what the vacancy must say about pay
  */
 public record BoardFilters(
+        String industry,
         Set<EmploymentType> employmentTypes,
         Set<WorkplaceType> workplaceTypes,
         Integer minExperience,
@@ -27,7 +29,7 @@ public record BoardFilters(
 ) {
 
     /** Filters on nothing. */
-    public static final BoardFilters NONE = new BoardFilters(Set.of(), Set.of(), null, null, Salary.ANY);
+    public static final BoardFilters NONE = new BoardFilters(null, Set.of(), Set.of(), null, null, Salary.ANY);
 
     public BoardFilters {
         employmentTypes = employmentTypes == null ? Set.of() : Set.copyOf(employmentTypes);

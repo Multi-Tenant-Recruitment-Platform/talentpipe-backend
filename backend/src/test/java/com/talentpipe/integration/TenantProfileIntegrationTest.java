@@ -104,7 +104,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 "name", name,
                 "email", "admin@acme.io",
                 "tagline", "We hire great people",
-                "industry", "Technology",
+                "industry", "Information Technology",
                 "website", "https://acme.io",
                 "city", "Bangalore",
                 "country", "India");
@@ -150,7 +150,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 "name", "  Profile Test Co  ",      // should be trimmed
                 "email", "admin@acme.io",
                 "tagline", "Great place to work",
-                "industry", "Technology",
+                "industry", "Information Technology",
                 "website", "acme.io",               // should get https:// prepended
                 "departments", List.of("Engineering", "engineering"),  // deduped case-insensitively
                 "foundedYear", 2015,

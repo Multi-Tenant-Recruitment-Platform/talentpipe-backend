@@ -30,6 +30,7 @@ public class JobVacancyMapper {
 
                 content.title(),
                 content.department(),
+                vacancy.getIndustry(),
                 content.openings(),
                 content.employmentType(),
                 content.workplaceType(),
@@ -94,6 +95,7 @@ public class JobVacancyMapper {
                 companyName,
                 company == null ? null : company.logoUrl(),
                 content.department(),
+                vacancy.getIndustry(),
                 content.openings(),
                 content.employmentType(),
                 content.workplaceType(),

@@ -101,6 +101,7 @@ class PublicJobControllerTest {
     void list_passesEveryStructuredFilterToTheService() throws Exception {
         PublicJobSearchCriteria criteria = PublicJobSearchCriteria.of(null, null, null,
                 new BoardFilters(
+                        "Finance & Banking",
                         Set.of(EmploymentType.FULL_TIME, EmploymentType.CONTRACT),
                         Set.of(WorkplaceType.REMOTE),
                         0, 2,
@@ -110,6 +111,7 @@ class PublicJobControllerTest {
         when(publicJobService.search(criteria, 0, 20)).thenReturn(new PageImpl<>(List.of()));
 
         mockMvc.perform(get("/api/v1/public/jobs")
+                        .param("industry", "finance and banking")
                         .param("employmentType", "FULL_TIME,CONTRACT")
                         .param("workplaceType", "REMOTE")
                         .param("minExperience", "0")
@@ -186,6 +188,7 @@ class PublicJobControllerTest {
         when(publicJobService.filterOptions()).thenReturn(new JobFilterOptionsResponse(
                 List.of(new JobFilterOption("Engineering", 7), new JobFilterOption("Design", 2)),
                 List.of(new JobFilterOption("Colombo, Sri Lanka", 5)),
+                List.of(new JobFilterOption("Healthcare", 4)),
                 List.of(new JobFilterOption("FULL_TIME", 6)),
                 List.of(new JobFilterOption("REMOTE", 3)),
                 List.of(new JobFilterOptionsResponse.SalaryRange(PayPeriod.MONTHLY, "LKR",
@@ -197,6 +200,7 @@ class PublicJobControllerTest {
                 .andExpect(jsonPath("$.categories[0].count").value(7))
                 .andExpect(jsonPath("$.categories[1].value").value("Design"))
                 .andExpect(jsonPath("$.locations[0].value").value("Colombo, Sri Lanka"))
+                .andExpect(jsonPath("$.industries[0].value").value("Healthcare"))
                 .andExpect(jsonPath("$.employmentTypes[0].value").value("FULL_TIME"))
                 .andExpect(jsonPath("$.workplaceTypes[0].count").value(3))
                 .andExpect(jsonPath("$.salaryRanges[0].currency").value("LKR"))
@@ -236,7 +240,7 @@ class PublicJobControllerTest {
 
     @Test
     void theWordFilters_isRoutedToTheFilterEndpoint_notTreatedAsASlug() throws Exception {
-        when(publicJobService.filterOptions()).thenReturn(new JobFilterOptionsResponse(List.of(), List.of(), List.of(), List.of(), List.of()));
+        when(publicJobService.filterOptions()).thenReturn(new JobFilterOptionsResponse(List.of(), List.of(), List.of(), List.of(), List.of(), List.of()));
 
         mockMvc.perform(get("/api/v1/public/jobs/filters"))
                 .andExpect(status().isOk())

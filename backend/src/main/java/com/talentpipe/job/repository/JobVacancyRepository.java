@@ -131,6 +131,16 @@ public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>,
             """)
     List<JobFilterOption> findPublishedLocations(Pageable limit);
 
+    /** The industries published vacancies are filed under, with counts, most populated first. */
+    @Query("""
+            select new com.talentpipe.job.dto.JobFilterOption(v.industry, count(v))
+            from JobVacancy v
+            where v.status = com.talentpipe.job.entity.VacancyStatus.PUBLISHED and v.industry is not null
+            group by v.industry
+            order by count(v) desc, v.industry asc
+            """)
+    List<JobFilterOption> findPublishedIndustries();
+
     /** How many published vacancies offer each employment type, most populated first. */
     @Query("""
             select v.employmentType as facet, count(v) as total

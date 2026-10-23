@@ -153,6 +153,11 @@ public class Tenant extends BaseEntity {
     @Column(name = "departments", columnDefinition = "TEXT[]")
     private List<String> departments = new ArrayList<>();
 
+    /** Industries besides the main {@code industry}, in the order chosen; at most three. */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "additional_industries", nullable = false, columnDefinition = "TEXT[]")
+    private List<String> additionalIndustries = new ArrayList<>();
+
     // ---------------------------------------------------------- constructors
 
     protected Tenant() {
@@ -444,5 +449,13 @@ public class Tenant extends BaseEntity {
 
     public void setDepartments(List<String> departments) {
         this.departments = departments != null ? departments : new ArrayList<>();
+    }
+
+    public List<String> getAdditionalIndustries() {
+        return additionalIndustries;
+    }
+
+    public void setAdditionalIndustries(List<String> additionalIndustries) {
+        this.additionalIndustries = additionalIndustries != null ? new ArrayList<>(additionalIndustries) : new ArrayList<>();
     }
 }

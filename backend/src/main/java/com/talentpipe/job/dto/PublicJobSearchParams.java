@@ -7,6 +7,7 @@ import com.talentpipe.job.entity.WorkplaceType;
 import com.talentpipe.job.repository.BoardFilters;
 import com.talentpipe.job.repository.BoardSort;
 import com.talentpipe.job.repository.PublicJobSearchCriteria;
+import com.talentpipe.tenant.dto.ProfileTaxonomy;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -33,6 +34,7 @@ public class PublicJobSearchParams {
     private String q;
     private String category;
     private String location;
+    private String industry;
     private List<EmploymentType> employmentType;
     private List<WorkplaceType> workplaceType;
 
@@ -60,7 +62,8 @@ public class PublicJobSearchParams {
      * The criteria the repository searches with.
      *
      * @throws InvalidRequestException (400) the parameters contradict each
-     *         other, or {@code currency} or {@code sort} is not a known value
+     *         other, or {@code industry}, {@code currency} or {@code sort} is
+     *         not a known value
      */
     public PublicJobSearchCriteria toCriteria() {
         if (minExperience != null && maxExperience != null && minExperience > maxExperience) {
@@ -79,12 +82,22 @@ public class PublicJobSearchParams {
                         new InvalidRequestException("sort must be relevant or newest."));
 
         BoardFilters filters = new BoardFilters(
+                industryLabel(industry),
                 asSet(employmentType, EmploymentType.class),
                 asSet(workplaceType, WorkplaceType.class),
                 minExperience,
                 maxExperience,
                 new BoardFilters.Salary(salaryOnly, payPeriod, currencyCode(currency), salaryMin, salaryMax));
         return PublicJobSearchCriteria.of(q, category, location, filters, order);
+    }
+
+    /** The canonical label of one of the listed industries, matched loosely; blank means any. */
+    private static String industryLabel(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return ProfileTaxonomy.industry(value).orElseThrow(() -> new InvalidRequestException(
+                "industry must be one of: " + String.join(", ", ProfileTaxonomy.INDUSTRIES) + "."));
     }
 
     /** A three-letter code such as {@code LKR}, upper-cased; blank means any. */
@@ -132,6 +145,14 @@ public class PublicJobSearchParams {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public String getIndustry() {
+        return industry;
+    }
+
+    public void setIndustry(String industry) {
+        this.industry = industry;
     }
 
     public List<EmploymentType> getEmploymentType() {

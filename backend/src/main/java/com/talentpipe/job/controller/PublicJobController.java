@@ -52,6 +52,8 @@ public class PublicJobController {
      *       use a value from {@link #filters()}.</li>
      *   <li>{@code location} — matched anywhere in the vacancy's location,
      *       ignoring case: {@code colombo} finds "Colombo, Sri Lanka".</li>
+     *   <li>{@code industry} — one of the listed industries, e.g.
+     *       {@code Information Technology}; spelling and case are forgiven.</li>
      *   <li>{@code employmentType}, {@code workplaceType} — any of the given
      *       values; repeat the parameter or separate values with commas.</li>
      *   <li>{@code minExperience}, {@code maxExperience} — years the vacancy
@@ -74,7 +76,7 @@ public class PublicJobController {
     }
 
     /**
-     * The categories, locations, employment and workplace types that
+     * The categories, locations, industries, employment and workplace types that
      * currently have published vacancies, each with its count, and the span
      * of pay they state: what the board's filter controls are filled from.
      */

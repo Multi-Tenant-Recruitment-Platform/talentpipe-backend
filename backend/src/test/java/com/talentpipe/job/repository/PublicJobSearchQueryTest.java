@@ -95,7 +95,7 @@ class PublicJobSearchQueryTest {
 
     @Test
     void employmentAndWorkplaceTypes_matchAnyOfTheGivenValues_inAStableOrder() {
-        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(new BoardFilters(
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(new BoardFilters(null,
                 Set.of(EmploymentType.PART_TIME, EmploymentType.CONTRACT),
                 Set.of(WorkplaceType.REMOTE), null, null, null)));
 
@@ -110,7 +110,7 @@ class PublicJobSearchQueryTest {
     @Test
     void experience_treatsAVacancyThatNamesNoneAsAskingForNone() {
         PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(
-                new BoardFilters(Set.of(), Set.of(), 1, 5, null)));
+                new BoardFilters(null, Set.of(), Set.of(), 1, 5, null)));
 
         assertThat(query.selectSql())
                 .contains(" AND coalesce(v.minimum_experience_years, 0) >= :minExperience")
@@ -120,7 +120,7 @@ class PublicJobSearchQueryTest {
 
     @Test
     void salary_matchesStatedPayThatOverlapsTheRange_inOnePeriodAndCurrency() {
-        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(new BoardFilters(Set.of(), Set.of(),
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(new BoardFilters(null, Set.of(), Set.of(),
                 null, null, new BoardFilters.Salary(true, PayPeriod.MONTHLY, "LKR",
                         new BigDecimal("100000"), new BigDecimal("200000")))));
 
@@ -135,6 +135,15 @@ class PublicJobSearchQueryTest {
                 .containsEntry("currency", "LKR")
                 .containsEntry("salaryMin", new BigDecimal("100000"))
                 .containsEntry("salaryMax", new BigDecimal("200000"));
+    }
+
+    @Test
+    void industry_isMatchedExactly_onTheCanonicalLabel() {
+        PublicJobSearchQuery query = PublicJobSearchQuery.of(filtered(
+                new BoardFilters("Healthcare", Set.of(), Set.of(), null, null, null)));
+
+        assertThat(query.selectSql()).contains(" AND v.industry = :industry");
+        assertThat(query.parameters()).containsOnlyKeys("industry").containsEntry("industry", "Healthcare");
     }
 
     @Test

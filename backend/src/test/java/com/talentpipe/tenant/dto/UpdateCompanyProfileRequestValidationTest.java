@@ -74,7 +74,7 @@ class UpdateCompanyProfileRequestValidationTest {
                 email, hrEmail, phone, alternativePhone, website,
                 linkedinUrl, facebookUrl, twitterUrl, instagramUrl,
                 city, state, postalCode, country,
-                benefits, officeLocations, departments);
+                benefits, officeLocations, departments, null);
     }
 
     /** The minimal valid request baseline. */
@@ -337,5 +337,40 @@ class UpdateCompanyProfileRequestValidationTest {
                 null, null, null, null,
                 null, null, List.of("Engineering", "Product"));
         assertThat(hasViolationOn(validate(r), "departments")).isFalse();
+    }
+
+    // ---------------------------------------------------------------- industries (@AllowedValues on a String)
+
+    @Test
+    void listedIndustry_inAnySpelling_noViolation() {
+        assertThat(validate(withIndustries("finance and banking", List.of("HEALTHCARE")))).isEmpty();
+    }
+
+    @Test
+    void industryNotOnTheList_producesViolationOnIndustry() {
+        assertThat(hasViolationOn(validate(withIndustries("Space Tourism", null)), "industry")).isTrue();
+    }
+
+    @Test
+    void additionalIndustryNotOnTheList_producesViolation() {
+        var violations = validate(withIndustries("Education", List.of("Healthcare", "Underwater Basket Weaving")));
+        assertThat(hasViolationOn(violations, "additionalIndustries")).isTrue();
+    }
+
+    @Test
+    void moreThanThreeAdditionalIndustries_producesViolation() {
+        var violations = validate(withIndustries("Education",
+                List.of("Healthcare", "Manufacturing", "Other", "Finance & Banking")));
+        assertThat(violations).extracting(ConstraintViolation::getMessage)
+                .contains("Choose at most 3 more industries.");
+    }
+
+    private static UpdateCompanyProfileRequest withIndustries(String industry, List<String> additional) {
+        return new UpdateCompanyProfileRequest(
+                "Acme Corp", null, industry, null, null, null,
+                null, null, null, null, null, null, null, null,
+                "admin@acme.io", null, null, null, null, null, null, null, null,
+                null, null, null, null,
+                null, null, null, additional);
     }
 }

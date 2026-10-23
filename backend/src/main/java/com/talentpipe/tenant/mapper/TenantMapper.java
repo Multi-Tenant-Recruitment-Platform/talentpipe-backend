@@ -78,6 +78,7 @@ public class TenantMapper {
                 safeList(tenant.getBenefits()),
                 safeList(tenant.getOfficeLocations()),
                 safeList(tenant.getDepartments()),
+                safeList(tenant.getAdditionalIndustries()),
 
                 tenant.getUpdatedAt());
     }
@@ -104,7 +105,8 @@ public class TenantMapper {
                 tenant.getInstagramUrl(),
                 tenant.getFacebookUrl(),
                 tenant.getCity(),
-                tenant.getCountry());
+                tenant.getCountry(),
+                safeList(tenant.getAdditionalIndustries()));
     }
 
     /**

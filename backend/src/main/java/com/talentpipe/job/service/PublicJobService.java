@@ -105,6 +105,7 @@ public class PublicJobService {
         return new JobFilterOptionsResponse(
                 vacancyRepository.findPublishedCategories(top),
                 vacancyRepository.findPublishedLocations(top),
+                vacancyRepository.findPublishedIndustries(),
                 options(vacancyRepository.countPublishedByEmploymentType()),
                 options(vacancyRepository.countPublishedByWorkplaceType()),
                 vacancyRepository.findPublishedSalaryRanges().stream()

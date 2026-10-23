@@ -15,6 +15,7 @@ import java.util.List;
  *
  * @param categories      departments with published vacancies, most populated first
  * @param locations       locations with published vacancies, most populated first
+ * @param industries      industries with published vacancies, most populated first
  * @param employmentTypes employment types on offer, e.g. {@code FULL_TIME}, most populated first
  * @param workplaceTypes  workplace types on offer, e.g. {@code REMOTE}, most populated first
  * @param salaryRanges    the pay stated by published vacancies, one entry per
@@ -23,6 +24,7 @@ import java.util.List;
 public record JobFilterOptionsResponse(
         List<JobFilterOption> categories,
         List<JobFilterOption> locations,
+        List<JobFilterOption> industries,
         List<JobFilterOption> employmentTypes,
         List<JobFilterOption> workplaceTypes,
         List<SalaryRange> salaryRanges

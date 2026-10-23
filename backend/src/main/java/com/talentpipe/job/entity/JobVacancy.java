@@ -77,6 +77,14 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "department", nullable = false, length = 120)
     private String department = "";
 
+    /**
+     * One of the company's industries, as a canonical label. Not part of
+     * {@link VacancyContent}: whether a value is allowed depends on the
+     * company's profile, so the service decides it ({@code VacancyIndustryPolicy}).
+     */
+    @Column(name = "industry", length = 100)
+    private String industry;
+
     @Column(name = "openings", nullable = false)
     private int openings = 1;
 
@@ -254,6 +262,18 @@ public class JobVacancy extends BaseEntity {
     }
 
     /**
+     * Files the vacancy under an industry already checked against its
+     * company's ({@code VacancyIndustryPolicy}). Changes with the content, so
+     * only while the vacancy is editable.
+     *
+     * @throws BusinessRuleException (422) if the vacancy is closed or archived
+     */
+    public void fileUnder(String industry) {
+        requireEditable();
+        this.industry = industry;
+    }
+
+    /**
      * Refuses a change to who works on the vacancy once it is archived.
      * A closed vacancy can still change hands: its applicants are still being
      * interviewed and decided on.
@@ -344,6 +364,10 @@ public class JobVacancy extends BaseEntity {
 
     public UUID getCreatedBy() {
         return createdBy;
+    }
+
+    public String getIndustry() {
+        return industry;
     }
 
     public int getVersion() {

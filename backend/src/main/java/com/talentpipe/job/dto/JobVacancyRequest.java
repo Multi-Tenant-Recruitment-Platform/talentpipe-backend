@@ -59,6 +59,14 @@ public record JobVacancyRequest(
         @Size(max = 120, message = "Keep the department to 120 characters or fewer.")
         String department,
 
+        /**
+         * One of the company's industries (its profile lists them). Left out,
+         * a new vacancy takes the company's main industry and an edited one
+         * keeps the industry it has.
+         */
+        @Size(max = 100, message = "Choose one of your company's industries.")
+        String industry,
+
         @NotNull(message = "Enter how many people you are hiring.")
         @Min(value = 1, message = "Enter at least one opening.")
         @Max(value = 999, message = "Enter 999 openings or fewer.")

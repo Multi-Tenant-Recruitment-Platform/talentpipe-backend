@@ -25,6 +25,7 @@ class PublicJobSearchParamsTest {
     void everythingSet_isCarriedOver_withTheCurrencyUpperCased_andRepeatsIgnored() {
         PublicJobSearchParams params = new PublicJobSearchParams();
         params.setQ(" java ");
+        params.setIndustry("information-technology");
         params.setEmploymentType(Arrays.asList(EmploymentType.FULL_TIME, EmploymentType.FULL_TIME, null));
         params.setMinExperience(2);
         params.setSalaryOnly(true);
@@ -38,6 +39,7 @@ class PublicJobSearchParamsTest {
         assertThat(criteria.keyword()).isEqualTo("java");
         assertThat(criteria.sort()).isEqualTo(BoardSort.NEWEST);
         BoardFilters filters = criteria.filters();
+        assertThat(filters.industry()).isEqualTo("Information Technology");
         assertThat(filters.employmentTypes()).containsExactly(EmploymentType.FULL_TIME);
         assertThat(filters.minExperience()).isEqualTo(2);
         assertThat(filters.salary()).isEqualTo(new BoardFilters.Salary(
@@ -81,6 +83,15 @@ class PublicJobSearchParamsTest {
 
         assertThatThrownBy(params::toCriteria).isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("currency");
+    }
+
+    @Test
+    void anIndustryThatIsNotListed_isRefused() {
+        PublicJobSearchParams params = new PublicJobSearchParams();
+        params.setIndustry("Space Tourism");
+
+        assertThatThrownBy(params::toCriteria).isInstanceOf(InvalidRequestException.class)
+                .hasMessageStartingWith("industry must be one of:");
     }
 
     @Test

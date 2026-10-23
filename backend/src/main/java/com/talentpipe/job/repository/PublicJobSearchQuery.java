@@ -28,7 +28,8 @@ import java.util.Map;
  *   <li>keyword — {@code idx_job_vacancies_public_search} (GIN on the
  *       generated {@code search_vector});</li>
  *   <li>category — {@code idx_job_vacancies_public_category};</li>
- *   <li>location — {@code idx_job_vacancies_public_location} (trigram GIN).</li>
+ *   <li>location — {@code idx_job_vacancies_public_location} (trigram GIN);</li>
+ *   <li>industry — {@code idx_job_vacancies_public_industry} (V19).</li>
  * </ul>
  *
  * <p>The structured filters (employment and workplace type, experience, pay)
@@ -58,6 +59,7 @@ public final class PublicJobSearchQuery {
     private static final String MATCHES_KEYWORD = " AND v.search_vector @@ " + KEYWORD_QUERY;
     private static final String MATCHES_CATEGORY = " AND lower(v.department) = lower(:category)";
     private static final String MATCHES_LOCATION = " AND lower(v.location) LIKE lower(:location) ESCAPE '!'";
+    private static final String MATCHES_INDUSTRY = " AND v.industry = :industry";
     private static final String MATCHES_EMPLOYMENT_TYPE = " AND v.employment_type IN (:employmentTypes)";
     private static final String MATCHES_WORKPLACE_TYPE = " AND v.workplace_type IN (:workplaceTypes)";
 
@@ -122,6 +124,7 @@ public final class PublicJobSearchQuery {
     }
 
     private static void appendFilters(BoardFilters filters, StringBuilder where, Map<String, Object> parameters) {
+        appendIfSet(where, parameters, MATCHES_INDUSTRY, "industry", filters.industry());
         if (!filters.employmentTypes().isEmpty()) {
             where.append(MATCHES_EMPLOYMENT_TYPE);
             parameters.put("employmentTypes", names(filters.employmentTypes()));
