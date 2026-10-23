@@ -5,12 +5,13 @@ import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.service.JobVacancyService;
+import com.talentpipe.security.Permission;
+import com.talentpipe.security.RequirePermission;
 import com.talentpipe.security.UserPrincipal;
 import jakarta.validation.groups.Default;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,9 +29,10 @@ import org.springframework.web.bind.annotation.RestController;
  * The frontend's half of this contract is {@code src/api/jobs.ts}.
  *
  * <p><strong>Authorization is enforced twice</strong>, per platform convention
- * (DECISIONS.md). {@code @PreAuthorize} on this class rejects the wrong ROLE
- * with 403 before any work happens: company admins and HR managers manage
- * vacancies; interviewers and candidates do not. {@link JobVacancyService}
+ * (DECISIONS.md). {@code @RequirePermission} on each endpoint rejects a
+ * caller whose role lacks the permission with 403 before any work happens:
+ * {@code jobs.view.all} to read, {@code jobs.manage} to create and edit,
+ * {@code jobs.publish} to publish, close and archive. {@link JobVacancyService}
  * then independently scopes every lookup to the caller's TENANT, so a vacancy
  * in another company answers 404, never 403.</p>
  *
@@ -45,7 +47,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/jobs")
-@PreAuthorize("hasAnyRole('COMPANY_ADMIN', 'HR_MANAGER')")
 public class JobVacancyController {
 
     private final JobVacancyService vacancyService;
@@ -64,6 +65,7 @@ public class JobVacancyController {
      *               vacancy is returned, archived included.
      * @param size   page size, capped at 100
      */
+    @RequirePermission(Permission.Keys.JOBS_VIEW_ALL)
     @GetMapping
     public PageResponse<JobVacancyResponse> list(
             @AuthenticationPrincipal UserPrincipal principal,
@@ -77,12 +79,14 @@ public class JobVacancyController {
      * Vacancy totals per status, e.g. {@code {"DRAFT":3,"PUBLISHED":12,"CLOSED":3,"ARCHIVED":4}}.
      * Archived vacancies are included — this is where reporting sees them.
      */
+    @RequirePermission(Permission.Keys.JOBS_VIEW_ALL)
     @GetMapping("/counts")
     public Map<VacancyStatus, Long> counts(@AuthenticationPrincipal UserPrincipal principal) {
         return vacancyService.countByStatus(principal.tenantId());
     }
 
     /** One vacancy. 404 when it does not exist or belongs to another workspace. */
+    @RequirePermission(Permission.Keys.JOBS_VIEW_ALL)
     @GetMapping("/{id}")
     public JobVacancyResponse get(@AuthenticationPrincipal UserPrincipal principal,
                                   @PathVariable UUID id) {
@@ -92,6 +96,7 @@ public class JobVacancyController {
     // ----------------------------------------------------------------- writes
 
     /** Files a new vacancy, as a DRAFT or straight to PUBLISHED. */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public JobVacancyResponse create(
@@ -105,6 +110,7 @@ public class JobVacancyController {
      * Replaces a vacancy's content; status is untouched. 409 when the
      * {@code version} sent is stale, 422 when the vacancy is closed or archived.
      */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
     @PutMapping("/{id}")
     public JobVacancyResponse update(
             @AuthenticationPrincipal UserPrincipal principal,
@@ -117,6 +123,7 @@ public class JobVacancyController {
     // -------------------------------------------------------------- lifecycle
 
     /** DRAFT → PUBLISHED. 422 if the vacancy is incomplete or is not a draft. */
+    @RequirePermission(Permission.Keys.JOBS_PUBLISH)
     @PostMapping("/{id}/publish")
     public JobVacancyResponse publish(@AuthenticationPrincipal UserPrincipal principal,
                                       @PathVariable UUID id) {
@@ -124,6 +131,7 @@ public class JobVacancyController {
     }
 
     /** PUBLISHED → CLOSED. New applications stop; received ones are kept. */
+    @RequirePermission(Permission.Keys.JOBS_PUBLISH)
     @PostMapping("/{id}/close")
     public JobVacancyResponse close(@AuthenticationPrincipal UserPrincipal principal,
                                     @PathVariable UUID id) {
@@ -131,6 +139,7 @@ public class JobVacancyController {
     }
 
     /** CLOSED → ARCHIVED. Leaves the active lists; kept for reporting. */
+    @RequirePermission(Permission.Keys.JOBS_PUBLISH)
     @PostMapping("/{id}/archive")
     public JobVacancyResponse archive(@AuthenticationPrincipal UserPrincipal principal,
                                       @PathVariable UUID id) {
@@ -141,6 +150,7 @@ public class JobVacancyController {
      * Creates a new DRAFT pre-filled from this vacancy and returns it — 201,
      * because a new vacancy now exists. The source is not changed.
      */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
     @PostMapping("/{id}/duplicate")
     @ResponseStatus(HttpStatus.CREATED)
     public JobVacancyResponse duplicate(@AuthenticationPrincipal UserPrincipal principal,

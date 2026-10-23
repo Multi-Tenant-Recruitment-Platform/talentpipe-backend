@@ -5,12 +5,12 @@ import com.talentpipe.auth.dto.LoginRequest;
 import com.talentpipe.auth.dto.RegisterRequest;
 import com.talentpipe.auth.dto.RegisterResponse;
 import com.talentpipe.auth.dto.UserResponse;
-import com.talentpipe.auth.entity.Role;
 import com.talentpipe.auth.entity.RoleName;
+import com.talentpipe.auth.entity.SystemRole;
+import com.talentpipe.auth.entity.TenantRole;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.mapper.UserMapper;
-import com.talentpipe.auth.repository.RoleRepository;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.candidate.dto.CandidateProfile;
 import com.talentpipe.candidate.service.CandidateAuthService;
@@ -21,6 +21,7 @@ import com.talentpipe.security.JwtTokenProvider;
 import com.talentpipe.tenant.dto.TenantResponse;
 import com.talentpipe.tenant.service.TenantService;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,8 +57,11 @@ public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
+    /** What a candidate's role is called in responses; candidates hold no company role. */
+    static final String CANDIDATE_ROLE_NAME = "Candidate";
+
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final TenantRoleService tenantRoleService;
     private final TenantService tenantService;
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationService emailVerificationService;
@@ -68,7 +72,7 @@ public class AuthService {
     private final UserMapper userMapper;
 
     public AuthService(UserRepository userRepository,
-                       RoleRepository roleRepository,
+                       TenantRoleService tenantRoleService,
                        TenantService tenantService,
                        RefreshTokenService refreshTokenService,
                        EmailVerificationService emailVerificationService,
@@ -78,7 +82,7 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        UserMapper userMapper) {
         this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
+        this.tenantRoleService = tenantRoleService;
         this.tenantService = tenantService;
         this.refreshTokenService = refreshTokenService;
         this.emailVerificationService = emailVerificationService;
@@ -100,13 +104,14 @@ public class AuthService {
     public RegisterResponse register(RegisterRequest request) {
         TenantResponse tenant = tenantService.createTenant(request.companyName(), request.subdomain());
 
-        Role adminRole = roleRepository.findByName(RoleName.COMPANY_ADMIN)
-                .orElseThrow(() -> new IllegalStateException(
-                        "COMPANY_ADMIN role missing - did Flyway seed V3 run?"));
+        // Every workspace starts with Owner, Recruiter and Interviewer; the
+        // person who registers it is its first Owner.
+        TenantRole owner = tenantRoleService.provisionDefaultRoles(tenant.id()).get(SystemRole.OWNER);
 
         User admin = userRepository.save(new User(
                 tenant.id(),
-                adminRole,
+                owner,
+                tenantRoleService.legacyRoleFor(owner),
                 normalizeEmail(request.admin().email()),
                 passwordEncoder.encode(request.admin().password()),
                 request.admin().firstName().trim(),
@@ -117,7 +122,7 @@ public class AuthService {
 
         log.info("Registered tenant '{}' (id={}) with initial admin {} - verification email queued",
                 tenant.subdomain(), tenant.id(), admin.getId());
-        return new RegisterResponse(tenant, userMapper.toResponse(admin, tenant.name()));
+        return new RegisterResponse(tenant, userMapper.toSessionResponse(admin, tenant.name()));
     }
 
     /**
@@ -216,7 +221,7 @@ public class AuthService {
         Optional<User> userOpt = userRepository.findById(principalId);
         if (userOpt.isPresent()) {
             User user = userOpt.get();
-            return userMapper.toResponse(user, resolveTenantName(user.getTenantId()));
+            return userMapper.toSessionResponse(user, resolveTenantName(user.getTenantId()));
         }
 
         return candidateAuthService.findById(principalId)
@@ -272,7 +277,7 @@ public class AuthService {
                             + "verification link, or request a new one.");
         }
         if (user.getStatus() == UserStatus.INVITED) {
-            throw new AccountNotVerifiedException(
+            throw AccountNotVerifiedException.invitationPending(
                     "This invitation has not been accepted yet. Use the link in your "
                             + "invitation email to set a password.");
         }
@@ -286,13 +291,15 @@ public class AuthService {
     // ---------------------------------------------------------------- tokens
 
     private AuthResponse issueTokens(User user, String tenantName) {
+        // The role claim is informational: what a company member may do is
+        // resolved per request from their current role (RolePermissionResolver).
         String accessToken = jwtTokenProvider.issueAccessToken(
-                user.getId(), user.getTenantId(), user.getRole().getName().name(), user.getEmail());
+                user.getId(), user.getTenantId(), user.legacyRoleName(), user.getEmail());
         return new AuthResponse(
                 accessToken,
                 refreshTokenService.issue(user.getId()),
                 jwtTokenProvider.getAccessTokenTtl().toSeconds(),
-                userMapper.toResponse(user, tenantName));
+                userMapper.toSessionResponse(user, tenantName));
     }
 
     /** Candidate tokens carry role CANDIDATE and no tenant claim. */
@@ -314,6 +321,9 @@ public class AuthService {
                 null,
                 null,
                 RoleName.CANDIDATE.name(),
+                null,
+                CANDIDATE_ROLE_NAME,
+                List.of(),
                 candidate.email(),
                 candidate.firstName(),
                 candidate.lastName(),

@@ -12,17 +12,19 @@ import com.talentpipe.auth.dto.RegisterRequest;
 import com.talentpipe.auth.dto.RegisterResponse;
 import com.talentpipe.auth.entity.Role;
 import com.talentpipe.auth.entity.RoleName;
+import com.talentpipe.auth.entity.SystemRole;
+import com.talentpipe.auth.entity.TenantRole;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.mapper.UserMapper;
-import com.talentpipe.auth.repository.RoleRepository;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.common.exception.DuplicateResourceException;
 import com.talentpipe.security.JwtTokenProvider;
+import com.talentpipe.security.Permission;
 import com.talentpipe.tenant.dto.TenantResponse;
 import com.talentpipe.tenant.service.TenantService;
 import java.time.Instant;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,7 +40,7 @@ class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private RoleRepository roleRepository;
+    private TenantRoleService tenantRoleService;
     @Mock
     private TenantService tenantService;
     @Mock
@@ -55,7 +57,7 @@ class AuthServiceTest {
     private PasswordEncoder passwordEncoder;
 
     private AuthService service(UserMapper mapper) {
-        return new AuthService(userRepository, roleRepository, tenantService,
+        return new AuthService(userRepository, tenantRoleService, tenantService,
                 refreshTokenService, emailVerificationService, candidateAuthService, loginAttemptService,
                 jwtTokenProvider, passwordEncoder, mapper);
     }
@@ -66,14 +68,20 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_createsTenantAndCompanyAdmin_withHashedPassword() {
+    void register_createsTenantAndItsFirstOwner_withHashedPassword() {
         UUID tenantId = UUID.randomUUID();
         when(tenantService.createTenant("Acme Inc", "acme")).thenReturn(new TenantResponse(
                 tenantId, "Acme Inc", "acme", null, "STANDARD", "ACTIVE", Instant.now()));
 
+        // The workspace gets its default roles; the registrant becomes its Owner.
+        TenantRole owner = TenantRole.fromTemplate(tenantId, SystemRole.OWNER);
+        when(tenantRoleService.provisionDefaultRoles(tenantId)).thenReturn(Map.of(
+                SystemRole.OWNER, owner,
+                SystemRole.RECRUITER, TenantRole.fromTemplate(tenantId, SystemRole.RECRUITER),
+                SystemRole.INTERVIEWER, TenantRole.fromTemplate(tenantId, SystemRole.INTERVIEWER)));
         Role adminRole = mock(Role.class);
         when(adminRole.getName()).thenReturn(RoleName.COMPANY_ADMIN);
-        when(roleRepository.findByName(RoleName.COMPANY_ADMIN)).thenReturn(Optional.of(adminRole));
+        when(tenantRoleService.legacyRoleFor(owner)).thenReturn(adminRole);
 
         when(passwordEncoder.encode("s3cret-password")).thenReturn("$2a$12$mocked-hash");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -86,6 +94,7 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getTenantId()).isEqualTo(tenantId);
         assertThat(savedUser.getValue().getEmail()).isEqualTo("ada@acme.io");
         assertThat(savedUser.getValue().getPasswordHash()).isEqualTo("$2a$12$mocked-hash");
+        assertThat(savedUser.getValue().getTenantRole()).isSameAs(owner);
         // PB-001: the account is unusable until the emailed link is followed.
         assertThat(savedUser.getValue().getStatus()).isEqualTo(UserStatus.PENDING_VERIFICATION);
 
@@ -93,7 +102,11 @@ class AuthServiceTest {
         assertThat(response.tenant().subdomain()).isEqualTo("acme");
         assertThat(response.admin().role()).isEqualTo("COMPANY_ADMIN");
         assertThat(response.admin().tenantName()).isEqualTo("Acme Inc");
-        assertThat(response.admin()).hasNoNullFieldsOrPropertiesExcept("id", "createdAt");
+        assertThat(response.admin().roleName()).isEqualTo("Owner");
+        // The Owner can do everything, and the response says so.
+        assertThat(response.admin().permissions()).hasSize(Permission.values().length);
+        // id, createdAt and the role id are assigned by the database.
+        assertThat(response.admin()).hasNoNullFieldsOrPropertiesExcept("id", "createdAt", "roleId");
     }
 
     @Test
