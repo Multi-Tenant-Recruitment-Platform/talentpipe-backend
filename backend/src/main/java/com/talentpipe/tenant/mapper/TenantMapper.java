@@ -4,6 +4,7 @@ import com.talentpipe.tenant.dto.CompanyProfileResponse;
 import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
+import com.talentpipe.tenant.dto.TenantSettingsResponse;
 import com.talentpipe.tenant.entity.Tenant;
 import java.util.Collections;
 import java.util.List;
@@ -107,6 +108,15 @@ public class TenantMapper {
                 tenant.getCity(),
                 tenant.getCountry(),
                 safeList(tenant.getAdditionalIndustries()));
+    }
+
+    /** Maps to the company's feature switches. */
+    public TenantSettingsResponse toSettingsResponse(Tenant tenant) {
+        return new TenantSettingsResponse(
+                tenant.isBlindScreeningEnabled(),
+                tenant.isAiScreeningDefault(),
+                tenant.isCandidateMatchingDefault(),
+                tenant.getUpdatedAt());
     }
 
     /**

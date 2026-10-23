@@ -7,6 +7,7 @@ import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyContent;
 import com.talentpipe.job.entity.VacancyStatus;
@@ -17,6 +18,8 @@ import com.talentpipe.job.repository.VacancyStatusCount;
 import com.talentpipe.job.validator.JobVacancyMemberValidator;
 import com.talentpipe.job.validator.JobVacancyPublishValidator;
 import com.talentpipe.job.validator.JobVacancyShapeValidator;
+import com.talentpipe.tenant.dto.TenantSettingsResponse;
+import com.talentpipe.tenant.service.TenantService;
 import java.time.LocalDate;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -86,6 +89,7 @@ public class JobVacancyService {
     private final JobVacancyMemberValidator memberValidator;
     private final VacancyCalendar calendar;
     private final UserDirectoryService userDirectory;
+    private final TenantService tenantService;
     private final JobVacancyMapper mapper;
 
     public JobVacancyService(JobVacancyRepository vacancyRepository,
@@ -98,6 +102,7 @@ public class JobVacancyService {
                              JobVacancyMemberValidator memberValidator,
                              VacancyCalendar calendar,
                              UserDirectoryService userDirectory,
+                             TenantService tenantService,
                              JobVacancyMapper mapper) {
         this.vacancyRepository = vacancyRepository;
         this.access = access;
@@ -109,6 +114,7 @@ public class JobVacancyService {
         this.memberValidator = memberValidator;
         this.calendar = calendar;
         this.userDirectory = userDirectory;
+        this.tenantService = tenantService;
         this.mapper = mapper;
     }
 
@@ -204,6 +210,7 @@ public class JobVacancyService {
         VacancyContent content = normalizer.normalize(request);
         JobVacancy vacancy = new JobVacancy(tenantId, viewer.userId(), content);
         vacancy.fileUnder(industryPolicy.resolve(tenantId, request.industry(), null));
+        startFeatures(vacancy, tenantId, request.aiScreeningEnabled(), request.candidateMatchingEnabled());
         if (request.status() == VacancyStatus.PUBLISHED) {
             vacancy.publish(calendar.now(), today);
         }
@@ -256,6 +263,7 @@ public class JobVacancyService {
         VacancyContent content = normalizer.normalize(request);
         vacancy.applyContent(content, today);
         vacancy.fileUnder(industry);
+        vacancy.switchFeatures(request.aiScreeningEnabled(), request.candidateMatchingEnabled());
         return stored(vacancy, viewer, "edited");
     }
 
@@ -328,12 +336,40 @@ public class JobVacancyService {
                 .asDuplicate(userId -> userDirectory.isActiveMember(tenantId, userId));
         JobVacancy draft = new JobVacancy(tenantId, viewer.userId(), template);
         draft.fileUnder(industryPolicy.forDuplicate(tenantId, source.getIndustry()));
+        draft.switchFeatures(source.isAiScreeningEnabled(), source.isCandidateMatchingEnabled());
         JobVacancy copy = save(draft, viewer, "duplicated from " + vacancyId);
         hiringTeam.copyTeam(tenantId, source.getId(), copy.getId(), viewer.userId());
         return mapper.toResponse(copy);
     }
 
+    /**
+     * Turns the vacancy's features on or off (PB-015); a switch left out keeps
+     * its value. No version is needed: each switch is a single value, so two
+     * people flipping different ones cannot lose each other's change.
+     *
+     * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see
+     * @throws BusinessRuleException     (422) the vacancy is closed or archived
+     */
+    @Transactional
+    public JobVacancyResponse switchFeatures(VacancyViewer viewer, UUID vacancyId, VacancyFeaturesRequest request) {
+        JobVacancy vacancy = access.require(viewer, vacancyId);
+        vacancy.switchFeatures(request.aiScreeningEnabled(), request.candidateMatchingEnabled());
+        return stored(vacancy, viewer, "features switched");
+    }
+
     // ---------------------------------------------------------------- private
+
+    /** A new vacancy's switches: as requested, or the company's default for any left out. */
+    private void startFeatures(JobVacancy vacancy, UUID tenantId, Boolean aiScreening, Boolean candidateMatching) {
+        if (aiScreening != null && candidateMatching != null) {
+            vacancy.switchFeatures(aiScreening, candidateMatching);
+            return;
+        }
+        TenantSettingsResponse defaults = tenantService.getSettings(tenantId);
+        vacancy.switchFeatures(
+                aiScreening != null ? aiScreening : defaults.aiScreeningDefault(),
+                candidateMatching != null ? candidateMatching : defaults.candidateMatchingDefault());
+    }
 
     /** {@link #save}, answered as the stored vacancy. */
     private JobVacancyResponse stored(JobVacancy vacancy, VacancyViewer viewer, String action) {

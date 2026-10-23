@@ -237,6 +237,7 @@ public final class VacancyFixtures {
                     workingDays, "9:00 AM – 6:00 PM", ShiftType.DAY, new BigDecimal("40"),
                     assignedRecruiterId, hiringManagerId, recruitmentPipelineId,
                     List.of("Do you have the right to work in Sri Lanka?"),
+                    null, null,
                     status, version);
         }
     }

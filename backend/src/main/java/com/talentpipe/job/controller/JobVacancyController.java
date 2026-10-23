@@ -5,6 +5,7 @@ import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.service.JobVacancyService;
 import com.talentpipe.job.service.VacancyHiringTeamService;
@@ -23,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -155,6 +157,18 @@ public class JobVacancyController {
                                                 @PathVariable UUID id,
                                                 @Valid @RequestBody HiringTeamRequest request) {
         return hiringTeamService.replace(viewer(authentication), id, request);
+    }
+
+    /**
+     * Turns AI screening and candidate matching on or off for one vacancy; a
+     * switch left out keeps its value. 422 once the vacancy is closed.
+     */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
+    @PatchMapping("/{id}/features")
+    public JobVacancyResponse switchFeatures(Authentication authentication,
+                                             @PathVariable UUID id,
+                                             @RequestBody VacancyFeaturesRequest request) {
+        return vacancyService.switchFeatures(viewer(authentication), id, request);
     }
 
     // -------------------------------------------------------------- lifecycle

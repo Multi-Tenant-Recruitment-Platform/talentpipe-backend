@@ -9,7 +9,9 @@ import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.dto.ProfileTaxonomy;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
+import com.talentpipe.tenant.dto.TenantSettingsResponse;
 import com.talentpipe.tenant.dto.UpdateCompanyProfileRequest;
+import com.talentpipe.tenant.dto.UpdateTenantSettingsRequest;
 import com.talentpipe.tenant.entity.Tenant;
 import com.talentpipe.tenant.entity.TenantStatus;
 import com.talentpipe.tenant.mapper.TenantMapper;
@@ -298,6 +300,42 @@ public class TenantService {
     @Transactional(readOnly = true)
     public void assertProfileEditable(UUID tenantId) {
         requireEditableTenant(tenantId);
+    }
+
+    // --------------------------------------------------------- settings API
+
+    /**
+     * The company's feature switches. Other modules read them here too: the
+     * job module for the switches a new vacancy starts with.
+     *
+     * @throws ResourceNotFoundException if the tenant does not exist (404)
+     */
+    @Transactional(readOnly = true)
+    public TenantSettingsResponse getSettings(UUID tenantId) {
+        return tenantMapper.toSettingsResponse(requireTenant(tenantId));
+    }
+
+    /**
+     * Changes the switches that are given; one left {@code null} keeps its
+     * value. Saved with a flush so the response carries the new
+     * {@code updatedAt}.
+     *
+     * @throws ResourceNotFoundException if the tenant does not exist (404)
+     * @throws BusinessRuleException     if the tenant is suspended (422)
+     */
+    @Transactional
+    public TenantSettingsResponse updateSettings(UUID tenantId, UpdateTenantSettingsRequest request) {
+        Tenant tenant = requireEditableTenant(tenantId);
+        if (request.blindScreeningEnabled() != null) {
+            tenant.setBlindScreeningEnabled(request.blindScreeningEnabled());
+        }
+        if (request.aiScreeningDefault() != null) {
+            tenant.setAiScreeningDefault(request.aiScreeningDefault());
+        }
+        if (request.candidateMatchingDefault() != null) {
+            tenant.setCandidateMatchingDefault(request.candidateMatchingDefault());
+        }
+        return tenantMapper.toSettingsResponse(tenantRepository.saveAndFlush(tenant));
     }
 
     /**

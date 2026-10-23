@@ -20,6 +20,7 @@ import com.talentpipe.common.util.HtmlSanitizer;
 import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
@@ -28,6 +29,8 @@ import com.talentpipe.job.validator.JobVacancyPublishValidator;
 import com.talentpipe.job.validator.JobVacancyShapeValidator;
 import com.talentpipe.job.repository.JobVacancyRepository;
 import com.talentpipe.job.repository.VacancyStatusCount;
+import com.talentpipe.tenant.dto.TenantSettingsResponse;
+import com.talentpipe.tenant.service.TenantService;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -83,6 +86,9 @@ class JobVacancyServiceTest {
     @Mock
     private VacancyIndustryPolicy industryPolicy;
 
+    @Mock
+    private TenantService tenantService;
+
     @Captor
     private ArgumentCaptor<JobVacancy> savedVacancy;
 
@@ -104,10 +110,12 @@ class JobVacancyServiceTest {
                 new JobVacancyMemberValidator(userDirectory),
                 calendar,
                 userDirectory,
+                tenantService,
                 new JobVacancyMapper());
 
         lenient().when(calendar.now()).thenReturn(NOW);
         lenient().when(calendar.today(TENANT)).thenReturn(TODAY);
+        lenient().when(tenantService.getSettings(TENANT)).thenReturn(companySwitches(false, false));
         // Behave like a real save: hand the entity back, with an id if it is new.
         lenient().when(repository.saveAndFlush(any(JobVacancy.class))).thenAnswer(invocation -> {
             JobVacancy vacancy = invocation.getArgument(0);
@@ -610,6 +618,75 @@ class JobVacancyServiceTest {
         assertThat(response.createdBy()).isEqualTo(ACTOR);
     }
 
+    // -------------------------------------------------------- feature switches
+
+    @Test
+    void create_startsWithTheCompanysDefaults_whenTheRequestLeavesTheSwitchesOut() {
+        when(tenantService.getSettings(TENANT)).thenReturn(companySwitches(true, false));
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null);
+
+        JobVacancyResponse response = service.create(VIEWER, request);
+
+        assertThat(response.aiScreeningEnabled()).isTrue();
+        assertThat(response.candidateMatchingEnabled()).isFalse();
+    }
+
+    @Test
+    void create_withBothSwitchesGiven_doesNotLookAtTheDefaults() {
+        JobVacancyRequest request = withSwitches(VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null),
+                false, true);
+
+        JobVacancyResponse response = service.create(VIEWER, request);
+
+        assertThat(response.candidateMatchingEnabled()).isTrue();
+        verify(tenantService, never()).getSettings(any());
+    }
+
+    @Test
+    void update_keepsTheSwitches_whenTheRequestLeavesThemOut() {
+        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        vacancy.switchFeatures(true, true);
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, vacancy.getVersion());
+
+        JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
+
+        assertThat(response.aiScreeningEnabled()).isTrue();
+        assertThat(response.candidateMatchingEnabled()).isTrue();
+    }
+
+    @Test
+    void switchFeatures_changesOnlyTheSwitchesGiven() {
+        JobVacancy vacancy = stored(VacancyFixtures.published(TENANT));
+        vacancy.switchFeatures(false, true);
+
+        JobVacancyResponse response = service.switchFeatures(VIEWER, vacancy.getId(),
+                new VacancyFeaturesRequest(true, null));
+
+        assertThat(response.aiScreeningEnabled()).isTrue();
+        assertThat(response.candidateMatchingEnabled()).isTrue();
+        verify(repository).saveAndFlush(vacancy);
+    }
+
+    @Test
+    void switchFeatures_onAClosedVacancy_isRefused() {
+        UUID vacancyId = stored(VacancyFixtures.closed(TENANT)).getId();
+        VacancyFeaturesRequest request = new VacancyFeaturesRequest(true, true);
+
+        assertThatThrownBy(() -> service.switchFeatures(VIEWER, vacancyId, request))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void duplicate_copiesTheSourcesSwitches() {
+        JobVacancy source = stored(VacancyFixtures.draft(TENANT));
+        source.switchFeatures(true, false);
+
+        JobVacancyResponse copy = service.duplicate(VIEWER, source.getId());
+
+        assertThat(copy.aiScreeningEnabled()).isTrue();
+        assertThat(copy.candidateMatchingEnabled()).isFalse();
+    }
+
     @Test
     void create_filesTheVacancyUnderTheIndustryThePolicyResolves() {
         JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null);
@@ -648,6 +725,23 @@ class JobVacancyServiceTest {
     }
 
     // ----------------------------------------------------------------- helpers
+
+    private static TenantSettingsResponse companySwitches(boolean aiScreening, boolean candidateMatching) {
+        return new TenantSettingsResponse(false, aiScreening, candidateMatching, null);
+    }
+
+    /** The request with its two feature switches set; everything else as given. */
+    private static JobVacancyRequest withSwitches(JobVacancyRequest r, boolean aiScreening, boolean matching) {
+        return new JobVacancyRequest(
+                r.title(), r.department(), r.industry(), r.openings(), r.employmentType(), r.workplaceType(),
+                r.location(), r.applicationDeadline(), r.jobSummary(), r.jobDescription(), r.keyResponsibilities(),
+                r.requiredSkills(), r.preferredSkills(), r.minimumExperienceYears(), r.education(),
+                r.certifications(), r.languageRequirements(), r.otherRequirements(),
+                r.salaryMin(), r.salaryMax(), r.currency(), r.payPeriod(), r.benefits(),
+                r.workingDays(), r.workingHours(), r.shiftType(), r.expectedHoursPerWeek(),
+                r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
+                aiScreening, matching, r.status(), r.version());
+    }
 
     private static VacancyStatusCount count(VacancyStatus status, long total) {
         return new VacancyStatusCount() {

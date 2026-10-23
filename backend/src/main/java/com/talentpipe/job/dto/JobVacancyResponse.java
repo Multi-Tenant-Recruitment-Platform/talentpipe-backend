@@ -75,6 +75,9 @@ public record JobVacancyResponse(
         String recruitmentPipelineId,
         List<String> screeningQuestions,
 
+        boolean aiScreeningEnabled,
+        boolean candidateMatchingEnabled,
+
         UUID createdBy,
         Instant createdAt,
         Instant updatedAt,

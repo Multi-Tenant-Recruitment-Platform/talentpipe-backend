@@ -1,7 +1,9 @@
 package com.talentpipe.tenant.controller;
 
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.TenantSettingsResponse;
 import com.talentpipe.tenant.dto.UpdateCompanyProfileRequest;
+import com.talentpipe.tenant.dto.UpdateTenantSettingsRequest;
 import com.talentpipe.tenant.service.TenantMediaService;
 import com.talentpipe.tenant.service.TenantService;
 import com.talentpipe.security.Permission;
@@ -64,6 +66,26 @@ public class TenantController {
     @RequireCompanyMember
     public CompanyProfileResponse getProfile(@AuthenticationPrincipal UserPrincipal principal) {
         return tenantService.getProfile(principal.tenantId());
+    }
+
+    // ------------------------------------------------------------- settings
+
+    /** The company's feature switches. Anyone in the company may read them. */
+    @GetMapping("/settings")
+    @RequireCompanyMember
+    public TenantSettingsResponse getSettings(@AuthenticationPrincipal UserPrincipal principal) {
+        return tenantService.getSettings(principal.tenantId());
+    }
+
+    /**
+     * Turns company switches on or off; a switch left out keeps its value.
+     * 422 while the company is suspended.
+     */
+    @PatchMapping("/settings")
+    @RequirePermission(Permission.Keys.SETTINGS_EDIT)
+    public TenantSettingsResponse updateSettings(@AuthenticationPrincipal UserPrincipal principal,
+                                                 @RequestBody UpdateTenantSettingsRequest request) {
+        return tenantService.updateSettings(principal.tenantId(), request);
     }
 
     // ---------------------------------------------------------------- PATCH

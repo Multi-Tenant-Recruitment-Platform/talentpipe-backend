@@ -166,6 +166,12 @@ public record JobVacancyRequest(
                 message = "Ask at most 10 screening questions, each 300 characters or fewer.")
         List<String> screeningQuestions,
 
+        // ---- feature switches (PB-015). Left out: a new vacancy takes the
+        // company's default, an edited one keeps what it has.
+        Boolean aiScreeningEnabled,
+
+        Boolean candidateMatchingEnabled,
+
         // ---- operation-specific
         @NotNull(groups = OnCreate.class,
                 message = "Choose whether to save this vacancy as a draft or publish it.")

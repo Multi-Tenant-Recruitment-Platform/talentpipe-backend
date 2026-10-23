@@ -193,6 +193,16 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "screening_questions", nullable = false, columnDefinition = "TEXT[]")
     private List<String> screeningQuestions = new ArrayList<>();
 
+    // ------------------------------------------------- feature switches (V20)
+
+    /** Score incoming applications against the vacancy (PB-015). */
+    @Column(name = "ai_screening_enabled", nullable = false)
+    private boolean aiScreeningEnabled;
+
+    /** Suggest people from the talent pool who fit the vacancy (PB-015). */
+    @Column(name = "candidate_matching_enabled", nullable = false)
+    private boolean candidateMatchingEnabled;
+
     // ---------------------------------------------------- lifecycle timestamps
 
     /** Set on entering each state and never cleared, so the history survives archiving. */
@@ -271,6 +281,23 @@ public class JobVacancy extends BaseEntity {
     public void fileUnder(String industry) {
         requireEditable();
         this.industry = industry;
+    }
+
+    /**
+     * Turns the vacancy's features on or off; a {@code null} switch keeps its
+     * value. Only while the vacancy is editable: once it is closed no new
+     * applications arrive to screen or match.
+     *
+     * @throws BusinessRuleException (422) if the vacancy is closed or archived
+     */
+    public void switchFeatures(Boolean aiScreening, Boolean candidateMatching) {
+        requireEditable();
+        if (aiScreening != null) {
+            this.aiScreeningEnabled = aiScreening;
+        }
+        if (candidateMatching != null) {
+            this.candidateMatchingEnabled = candidateMatching;
+        }
     }
 
     /**
@@ -368,6 +395,14 @@ public class JobVacancy extends BaseEntity {
 
     public String getIndustry() {
         return industry;
+    }
+
+    public boolean isAiScreeningEnabled() {
+        return aiScreeningEnabled;
+    }
+
+    public boolean isCandidateMatchingEnabled() {
+        return candidateMatchingEnabled;
     }
 
     public int getVersion() {

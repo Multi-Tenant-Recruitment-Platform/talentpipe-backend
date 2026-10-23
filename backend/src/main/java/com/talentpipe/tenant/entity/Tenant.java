@@ -153,6 +153,20 @@ public class Tenant extends BaseEntity {
     @Column(name = "departments", columnDefinition = "TEXT[]")
     private List<String> departments = new ArrayList<>();
 
+    // ---- feature switches (V20); all start off
+
+    /** Reviewers see applications without who sent them. */
+    @Column(name = "blind_screening_enabled", nullable = false)
+    private boolean blindScreeningEnabled;
+
+    /** Whether a new vacancy starts with AI screening on. */
+    @Column(name = "ai_screening_default", nullable = false)
+    private boolean aiScreeningDefault;
+
+    /** Whether a new vacancy starts with talent-pool matching on. */
+    @Column(name = "candidate_matching_default", nullable = false)
+    private boolean candidateMatchingDefault;
+
     /** Industries besides the main {@code industry}, in the order chosen; at most three. */
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "additional_industries", nullable = false, columnDefinition = "TEXT[]")
@@ -449,6 +463,30 @@ public class Tenant extends BaseEntity {
 
     public void setDepartments(List<String> departments) {
         this.departments = departments != null ? departments : new ArrayList<>();
+    }
+
+    public boolean isBlindScreeningEnabled() {
+        return blindScreeningEnabled;
+    }
+
+    public void setBlindScreeningEnabled(boolean blindScreeningEnabled) {
+        this.blindScreeningEnabled = blindScreeningEnabled;
+    }
+
+    public boolean isAiScreeningDefault() {
+        return aiScreeningDefault;
+    }
+
+    public void setAiScreeningDefault(boolean aiScreeningDefault) {
+        this.aiScreeningDefault = aiScreeningDefault;
+    }
+
+    public boolean isCandidateMatchingDefault() {
+        return candidateMatchingDefault;
+    }
+
+    public void setCandidateMatchingDefault(boolean candidateMatchingDefault) {
+        this.candidateMatchingDefault = candidateMatchingDefault;
     }
 
     public List<String> getAdditionalIndustries() {

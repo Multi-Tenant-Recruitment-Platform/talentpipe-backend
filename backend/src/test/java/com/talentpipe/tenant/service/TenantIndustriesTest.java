@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.util.HtmlSanitizer;
 import com.talentpipe.tenant.dto.UpdateCompanyProfileRequest;
+import com.talentpipe.tenant.dto.UpdateTenantSettingsRequest;
 import com.talentpipe.tenant.entity.Tenant;
+import com.talentpipe.tenant.entity.TenantStatus;
 import com.talentpipe.tenant.mapper.TenantMapper;
 import com.talentpipe.tenant.repository.TenantRepository;
 import java.util.List;
@@ -19,11 +22,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * Unit tests for a company's industries: the main one and up to three more,
- * saved in their canonical spelling, and read back by other modules in order.
- * The normalizer is the real one; only persistence is mocked.
+ * Unit tests for the company settings other modules build on: its industries
+ * (the main one and up to three more, saved in their canonical spelling, read
+ * back in order) and its feature switches. The normalizer and mapper are the
+ * real ones; only persistence is mocked.
  */
 @ExtendWith(MockitoExtension.class)
 class TenantIndustriesTest {
@@ -32,15 +37,13 @@ class TenantIndustriesTest {
 
     @Mock
     private TenantRepository tenantRepository;
-    @Mock
-    private TenantMapper tenantMapper;
 
     private TenantService service;
     private Tenant tenant;
 
     @BeforeEach
     void setUp() {
-        service = new TenantService(tenantRepository, tenantMapper, new ProfileNormalizer(new HtmlSanitizer()));
+        service = new TenantService(tenantRepository, new TenantMapper(), new ProfileNormalizer(new HtmlSanitizer()));
         tenant = new Tenant("Acme", "acme");
     }
 
@@ -82,6 +85,43 @@ class TenantIndustriesTest {
 
         assertThat(service.industriesOf(TENANT)).isEmpty();
         assertThat(service.industriesOf(unknown)).isEmpty();
+    }
+
+    // ---------------------------------------------------------- switches
+
+    @Test
+    void updateSettings_changesOnlyTheSwitchesGiven() {
+        tenant.setAiScreeningDefault(true);
+        when(tenantRepository.findById(TENANT)).thenReturn(Optional.of(tenant));
+        when(tenantRepository.saveAndFlush(tenant)).thenReturn(tenant);
+
+        var settings = service.updateSettings(TENANT, new UpdateTenantSettingsRequest(true, null, true));
+
+        assertThat(settings.blindScreeningEnabled()).isTrue();
+        assertThat(settings.aiScreeningDefault()).isTrue();
+        assertThat(settings.candidateMatchingDefault()).isTrue();
+    }
+
+    @Test
+    void updateSettings_ofASuspendedCompany_isRefused() {
+        // Tenant has no status setter (suspension arrives with platform admin).
+        ReflectionTestUtils.setField(tenant, "status", TenantStatus.SUSPENDED);
+        when(tenantRepository.findById(TENANT)).thenReturn(Optional.of(tenant));
+        UpdateTenantSettingsRequest request = new UpdateTenantSettingsRequest(true, null, null);
+
+        assertThatThrownBy(() -> service.updateSettings(TENANT, request))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void getSettings_startsWithEverySwitchOff() {
+        when(tenantRepository.findById(TENANT)).thenReturn(Optional.of(tenant));
+
+        assertThat(service.getSettings(TENANT)).satisfies(settings -> {
+            assertThat(settings.blindScreeningEnabled()).isFalse();
+            assertThat(settings.aiScreeningDefault()).isFalse();
+            assertThat(settings.candidateMatchingDefault()).isFalse();
+        });
     }
 
     private void editable() {

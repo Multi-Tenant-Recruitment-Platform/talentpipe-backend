@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,6 +23,7 @@ import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.service.JobVacancyService;
@@ -388,6 +390,31 @@ class JobVacancyControllerTest {
         mockMvc.perform(post("/api/v1/jobs/{id}/duplicate", VACANCY).with(as("HR_MANAGER")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
+    // -------------------------------------------------------- feature switches
+
+    @Test
+    void features_areSwitchedByAManagerOfVacancies() throws Exception {
+        VacancyFeaturesRequest request = new VacancyFeaturesRequest(true, null);
+        when(vacancyService.switchFeatures(SEES_ALL, VACANCY, request)).thenReturn(draft);
+
+        mockMvc.perform(json(patch("/api/v1/jobs/{id}/features", VACANCY), Map.of("aiScreeningEnabled", true))
+                        .with(as("HR_MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aiScreeningEnabled").isBoolean())
+                .andExpect(jsonPath("$.candidateMatchingEnabled").isBoolean());
+
+        verify(vacancyService).switchFeatures(SEES_ALL, VACANCY, request);
+    }
+
+    @Test
+    void features_cannotBeSwitchedByAnInterviewer() throws Exception {
+        mockMvc.perform(json(patch("/api/v1/jobs/{id}/features", VACANCY), Map.of("aiScreeningEnabled", true))
+                        .with(as("INTERVIEWER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(vacancyService);
     }
 
     // ------------------------------------------------------------ hiring team

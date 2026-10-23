@@ -1,6 +1,8 @@
 package com.talentpipe.tenant.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -11,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.talentpipe.security.UserPrincipal;
 import com.talentpipe.tenant.dto.CompanyProfileResponse;
+import com.talentpipe.tenant.dto.TenantSettingsResponse;
+import com.talentpipe.tenant.dto.UpdateTenantSettingsRequest;
 import com.talentpipe.tenant.dto.UpdateCompanyProfileRequest;
 import com.talentpipe.tenant.service.TenantMediaService;
 import com.talentpipe.tenant.service.TenantService;
@@ -65,6 +69,46 @@ class TenantControllerTest {
     void setUp() {
         tenantId = UUID.randomUUID();
         profileResponse = buildProfileResponse(tenantId);
+    }
+
+    // ---------------------------------------------------------------- /api/v1/tenant/settings
+
+    @Test
+    void getSettings_isOpenToAnyoneInTheCompany() throws Exception {
+        when(tenantService.getSettings(tenantId)).thenReturn(new TenantSettingsResponse(true, false, true, null));
+
+        mockMvc.perform(get("/api/v1/tenant/settings").with(asPrincipal(tenantId, "INTERVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blindScreeningEnabled").value(true))
+                .andExpect(jsonPath("$.aiScreeningDefault").value(false))
+                .andExpect(jsonPath("$.candidateMatchingDefault").value(true));
+    }
+
+    @Test
+    void updateSettings_passesOnlyTheSwitchesSent() throws Exception {
+        UpdateTenantSettingsRequest request = new UpdateTenantSettingsRequest(true, null, null);
+        when(tenantService.updateSettings(tenantId, request))
+                .thenReturn(new TenantSettingsResponse(true, false, false, Instant.now()));
+
+        mockMvc.perform(patch("/api/v1/tenant/settings")
+                        .with(asCompanyAdmin(tenantId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("blindScreeningEnabled", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blindScreeningEnabled").value(true));
+
+        verify(tenantService).updateSettings(tenantId, request);
+    }
+
+    @Test
+    void updateSettings_needsSettingsEdit() throws Exception {
+        mockMvc.perform(patch("/api/v1/tenant/settings")
+                        .with(asPrincipal(tenantId, "HR_MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"blindScreeningEnabled\":true}"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(tenantService);
     }
 
     // ---------------------------------------------------------------- GET /api/v1/tenant

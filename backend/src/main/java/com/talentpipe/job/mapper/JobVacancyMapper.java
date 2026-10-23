@@ -65,6 +65,9 @@ public class JobVacancyMapper {
                 content.recruitmentPipelineId(),
                 content.screeningQuestions(),
 
+                vacancy.isAiScreeningEnabled(),
+                vacancy.isCandidateMatchingEnabled(),
+
                 vacancy.getCreatedBy(),
                 vacancy.getCreatedAt(),
                 vacancy.getUpdatedAt(),
