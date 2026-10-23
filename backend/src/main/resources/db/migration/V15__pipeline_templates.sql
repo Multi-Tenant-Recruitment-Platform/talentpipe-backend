@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- V14: Pipeline templates and stages.
+-- V15: Pipeline templates and stages.
 --
 -- Enables company admins to define, edit, archive and duplicate recruitment
 -- pipeline templates and their stage configurations.
