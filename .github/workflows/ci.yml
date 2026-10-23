@@ -26,7 +26,7 @@ jobs:
 
       - name: Build and run all tests
         working-directory: backend
-        run: ./mvnw -B verify
+        run: ./mvnw -B clean verify
         env:
           JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
 

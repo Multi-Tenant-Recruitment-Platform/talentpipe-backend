@@ -1,6 +1,8 @@
 package com.talentpipe.auth.repository;
 
 import com.talentpipe.auth.entity.User;
+import com.talentpipe.auth.entity.RoleName;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,4 +33,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /** Team listing for a tenant (PB-003/PB-004), newest members last. */
     List<User> findAllByTenantIdOrderByCreatedAtAsc(UUID tenantId);
+
+    List<User> findAllByTenantIdAndRoleNameIn(UUID tenantId, Collection<RoleName> roles);
 }

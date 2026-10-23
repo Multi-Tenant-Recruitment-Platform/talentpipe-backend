@@ -35,7 +35,6 @@ Base path: `/api/v1`. All bodies are JSON.
 | GET | `/jobs` | `COMPANY_ADMIN`, `HR_MANAGER` | The tenant's vacancies, newest first, paged (`page`, `size` ≤ 100). Every status, **archived included**, unless `status` is given: `DRAFT`, `PUBLISHED`, `CLOSED`, `ARCHIVED`, or `ACTIVE` (everything not archived). `400` for any other value. |
 | GET | `/jobs/counts` | `COMPANY_ADMIN`, `HR_MANAGER` | Vacancy totals per status, e.g. `{"DRAFT":3,"PUBLISHED":12,"CLOSED":0,"ARCHIVED":4}`. Always all four keys. |
 | GET | `/jobs/{id}` | `COMPANY_ADMIN`, `HR_MANAGER` | One vacancy. `404` if it does not exist **or belongs to another tenant**. |
-| POST | `/jobs` | `COMPANY_ADMIN`, `HR_MANAGER` | Create a vacancy as `DRAFT` or straight to `PUBLISHED` (`status` in the body; any other value → `400`). `201`. `422` if published and incomplete. |
 | PUT | `/jobs/{id}` | `COMPANY_ADMIN`, `HR_MANAGER` | Replace a vacancy's content. Never changes status. Body carries the `version` being edited: stale → `409`. `422` if the vacancy is closed or archived, or is published and the edit would leave it incomplete. |
 | POST | `/jobs/{id}/publish` | `COMPANY_ADMIN`, `HR_MANAGER` | `DRAFT → PUBLISHED`. `422` if not a draft, or not complete (the message lists what is missing). |
 | POST | `/jobs/{id}/close` | `COMPANY_ADMIN`, `HR_MANAGER` | `PUBLISHED → CLOSED`. Leaves the public board and stops new applications. `422` if not published. |
@@ -44,6 +43,12 @@ Base path: `/api/v1`. All bodies are JSON.
 | GET | `/public/jobs` | public | Public job board: `PUBLISHED` vacancies across all companies, paged (`page`, `size` ≤ 50). Optional `q` (keywords), `category`, `location` — see [Public job search](#public-job-search). |
 | GET | `/public/jobs/filters` | public | The categories and locations that currently have published vacancies, each with its count — for the board's filter controls. |
 | GET | `/public/jobs/{slugOrId}` | public | One published advert in full, by the `slug` from a board card or by id. `404` unless it is currently published. |
+| POST | `/applications/jobs/{jobId}` | `CANDIDATE` | Submits one application to a published job. Duplicate submissions return `409`. |
+| GET | `/applications` | `CANDIDATE` | Lists the signed-in candidate's applications and current statuses. |
+| GET | `/applications/{applicationId}` | `CANDIDATE` | Gets one application owned by the signed-in candidate. |
+| DELETE | `/applications/{applicationId}` | `CANDIDATE` | Withdraws an application and notifies the tenant's company admins and HR managers. Idempotent when already withdrawn. |
+| GET | `/applications/tenant` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Lists applications belonging to the authenticated tenant. |
+| PATCH | `/applications/{applicationId}/status` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Updates status to `APPLIED`, `IN_REVIEW`, `SHORTLISTED`, or `REJECTED`. |
 
 ### Checkbox option sets
 

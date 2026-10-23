@@ -4,5 +4,6 @@ package com.talentpipe.notification.entity;
 public enum NotificationType {
     EMAIL_VERIFICATION,
     PASSWORD_RESET,
-    INVITATION
+    INVITATION,
+    APPLICATION_WITHDRAWN
 }
