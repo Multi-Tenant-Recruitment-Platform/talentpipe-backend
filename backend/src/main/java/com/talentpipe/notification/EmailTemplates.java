@@ -21,6 +21,7 @@ final class EmailTemplates {
             case EMAIL_VERIFICATION -> verification(event);
             case PASSWORD_RESET -> passwordReset(event);
             case INVITATION -> invitation(event);
+            case APPLICATION_WITHDRAWN -> applicationWithdrawn(event);
         };
     }
 
@@ -56,6 +57,15 @@ final class EmailTemplates {
                         + button(event.link(), "Accept invitation")
                         + "<p style=\"color:#64748b;font-size:13px\">This invitation expires in 7 days.</p>");
         return new EmailMessage(event.recipient(), "You have been invited to TalentPipe", html);
+    }
+
+    private static EmailMessage applicationWithdrawn(NotificationRequestedEvent event) {
+        String html = layout(
+                "Application withdrawn",
+                greeting(event.recipientName())
+                        + "<p>A candidate has withdrawn an application from your hiring workspace.</p>"
+                        + "<p>Open TalentPipe to review the updated application status.</p>");
+        return new EmailMessage(event.recipient(), "Candidate application withdrawn", html);
     }
 
     // ------------------------------------------------------------------ util

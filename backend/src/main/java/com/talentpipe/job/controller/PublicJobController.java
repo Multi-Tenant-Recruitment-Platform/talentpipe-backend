@@ -1,16 +1,24 @@
 package com.talentpipe.job.controller;
 
+import com.talentpipe.application.dto.ApplicationResponse;
+import com.talentpipe.application.service.ApplicationService;
 import com.talentpipe.common.dto.PageResponse;
 import com.talentpipe.job.dto.JobDetailResponse;
 import com.talentpipe.job.dto.JobFilterOptionsResponse;
 import com.talentpipe.job.dto.JobSummaryResponse;
 import com.talentpipe.job.dto.PublicJobSearchParams;
 import com.talentpipe.job.service.PublicJobService;
+import com.talentpipe.security.UserPrincipal;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -31,9 +39,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicJobController {
 
     private final PublicJobService publicJobService;
+    private final ApplicationService applicationService;
 
-    public PublicJobController(PublicJobService publicJobService) {
+    public PublicJobController(PublicJobService publicJobService, ApplicationService applicationService) {
         this.publicJobService = publicJobService;
+        this.applicationService = applicationService;
     }
 
     /**
@@ -93,5 +103,19 @@ public class PublicJobController {
     @GetMapping("/{slugOrId}")
     public JobDetailResponse getPublishedJob(@PathVariable String slugOrId) {
         return publicJobService.getPublished(slugOrId);
+    }
+
+    /**
+     * Compatibility route used by the public job detail page when submitting
+     * an application. The applications module accepts both a UUID and the
+     * public slug used by the job board.
+     */
+    @PostMapping("/{jobId}/applications")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('CANDIDATE')")
+    public ApplicationResponse submitApplication(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable String jobId) {
+        return applicationService.submit(principal.id(), jobId);
     }
 }

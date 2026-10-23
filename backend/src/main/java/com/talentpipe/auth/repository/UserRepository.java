@@ -1,5 +1,6 @@
 package com.talentpipe.auth.repository;
 
+import com.talentpipe.auth.entity.RoleName;
 import com.talentpipe.auth.entity.SystemRole;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.UserStatus;
@@ -59,4 +60,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             group by u.tenantRole.id
             """)
     List<Object[]> countMembersByRole(@Param("tenantId") UUID tenantId);
+
+    List<User> findAllByTenantIdAndRoleNameIn(UUID tenantId, Collection<RoleName> roles);
 }

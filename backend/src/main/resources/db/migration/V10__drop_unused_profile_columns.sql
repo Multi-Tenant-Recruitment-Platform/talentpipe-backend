@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- V11: Drop unused company profile columns (post-sprint client feedback).
+-- V10: Drop unused company profile columns (post-sprint client feedback).
 --
 -- These 12 fields were removed from the Dashboard Settings UI after the
 -- sprint review.  They are no longer referenced by the backend DTO,
