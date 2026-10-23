@@ -13,9 +13,9 @@ import jakarta.validation.constraints.Size;
  */
 public record ResendVerificationRequest(
 
-        @NotBlank(message = "email is required")
-        @Email(message = "must be a valid email address")
-        @Size(max = 255)
+        @NotBlank(message = "Enter your email address.")
+        @Email(message = "Enter a valid email address, like you@company.com.")
+        @Size(max = 255, message = "Keep the email address to 255 characters or fewer.")
         String email
 ) {
 }

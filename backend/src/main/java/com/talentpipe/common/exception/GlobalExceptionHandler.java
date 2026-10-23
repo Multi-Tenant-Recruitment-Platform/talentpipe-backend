@@ -1,6 +1,9 @@
 package com.talentpipe.common.exception;
 
+import com.talentpipe.common.exception.ErrorResponse.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -40,17 +43,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex,
                                                           HttpServletRequest request) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
-                .sorted()
+        List<FieldErrorDetail> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fieldError -> new FieldErrorDetail(fieldError.getField(), fieldError.getDefaultMessage()))
+                .sorted(Comparator.comparing(FieldErrorDetail::field).thenComparing(FieldErrorDetail::message))
+                .toList();
+        // message keeps its original "field: message; ..." shape so existing
+        // clients are unaffected; fieldErrors is the structured form a form
+        // can show next to each input.
+        String message = fieldErrors.stream()
+                .map(error -> error.field() + ": " + error.message())
                 .collect(Collectors.joining("; "));
-        return envelope(HttpStatus.BAD_REQUEST, message, request);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_FAILED, message,
+                        request.getRequestURI()).withFieldErrors(fieldErrors));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex,
                                                               HttpServletRequest request) {
-        return envelope(HttpStatus.BAD_REQUEST, "Malformed request body", request);
+        return envelope(HttpStatus.BAD_REQUEST, ErrorCode.MALFORMED_REQUEST, "Malformed request body", request);
     }
 
     /**
@@ -68,7 +79,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ErrorResponse> handleMissingHeader(MissingRequestHeaderException ex,
                                                              HttpServletRequest request) {
-        return envelope(HttpStatus.BAD_REQUEST,
+        return envelope(HttpStatus.BAD_REQUEST, ErrorCode.MISSING_HEADER,
                 "Missing required header: " + ex.getHeaderName(), request);
     }
 
@@ -81,7 +92,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
                                                             HttpServletRequest request) {
-        return envelope(HttpStatus.BAD_REQUEST,
+        return envelope(HttpStatus.BAD_REQUEST, ErrorCode.INVALID_PARAMETER,
                 "Invalid value for parameter '" + ex.getName() + "'", request);
     }
 
@@ -96,13 +107,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex,
                                                               HttpServletRequest request) {
-        return envelope(HttpStatus.UNAUTHORIZED, "Invalid credentials", request);
+        return envelope(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, "Invalid credentials", request);
     }
 
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidToken(InvalidTokenException ex,
                                                             HttpServletRequest request) {
-        return envelope(HttpStatus.UNAUTHORIZED, "Invalid or expired token", request);
+        return envelope(HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_TOKEN, "Invalid or expired token", request);
     }
 
     // ------------------------------------------------------------------ 403
@@ -121,14 +132,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountNotVerifiedException.class)
     public ResponseEntity<ErrorResponse> handleNotVerified(AccountNotVerifiedException ex,
                                                            HttpServletRequest request) {
-        return envelope(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        return envelope(HttpStatus.FORBIDDEN, ex.getCode(), ex.getMessage(), request);
     }
 
     /** Brute-force lockout (5 failures → 15 min). Message carries retry timing. */
     @ExceptionHandler(AccountLockedException.class)
     public ResponseEntity<ErrorResponse> handleLocked(AccountLockedException ex,
                                                       HttpServletRequest request) {
-        return envelope(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        return envelope(HttpStatus.FORBIDDEN, ErrorCode.ACCOUNT_LOCKED, ex.getMessage(), request);
     }
 
     // ------------------------------------------------------------------ 404
@@ -181,7 +192,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConcurrentUpdateException.class)
     public ResponseEntity<ErrorResponse> handleConcurrentUpdate(ConcurrentUpdateException ex,
                                                                 HttpServletRequest request) {
-        return envelope(HttpStatus.CONFLICT, ex.getMessage(), request);
+        return envelope(HttpStatus.CONFLICT, ErrorCode.CONCURRENT_UPDATE, ex.getMessage(), request);
     }
 
     /**
@@ -193,7 +204,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<ErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
                                                               HttpServletRequest request) {
-        return envelope(HttpStatus.CONFLICT,
+        return envelope(HttpStatus.CONFLICT, ErrorCode.CONCURRENT_UPDATE,
                 "This record was changed by someone else. Reload it and try again.", request);
     }
 
@@ -242,9 +253,15 @@ public class GlobalExceptionHandler {
 
     // ------------------------------------------------------------------ util
 
+    /** An envelope with the status's default {@link ErrorCode}. */
     private ResponseEntity<ErrorResponse> envelope(HttpStatus status, String message,
                                                    HttpServletRequest request) {
+        return envelope(status, ErrorCode.defaultFor(status), message, request);
+    }
+
+    private ResponseEntity<ErrorResponse> envelope(HttpStatus status, ErrorCode code, String message,
+                                                   HttpServletRequest request) {
         return ResponseEntity.status(status)
-                .body(ErrorResponse.of(status, message, request.getRequestURI()));
+                .body(ErrorResponse.of(status, code, message, request.getRequestURI()));
     }
 }
