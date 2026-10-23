@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -60,7 +61,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Fills the database with a believable demo: three companies with their
  * teams, roles, profiles, vacancies in every state, hiring teams, pipeline
  * templates, candidates and applications. Every login is listed in
- * {@code docs/DEMO.md} and printed to the log when the seed finishes.
+ * {@code docs/DEMO.md}; they all share the password set by
+ * {@code talentpipe.demo.password} ({@code application-demo.yml}).
  *
  * <p><strong>Only with the {@code demo} profile</strong>
  * ({@code SPRING_PROFILES_ACTIVE=demo}), and only once: if the first demo
@@ -81,9 +83,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class DemoDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
-
-    /** One password for every demo account; the workspace picker needs the same one anyway. */
-    public static final String PASSWORD = "TalentPipe@2026";
 
     /** The first company seeded; its presence means the demo is already loaded. */
     static final String MARKER_SUBDOMAIN = "lumora";
@@ -112,6 +111,8 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
+    /** One password for every demo account; the workspace picker needs the same one anyway. */
+    private final String demoPassword;
 
     /** What the seed creates, for the backdating step that follows it. */
     private final List<Posted> posted = new ArrayList<>();
@@ -132,7 +133,8 @@ public class DemoDataSeeder implements ApplicationRunner {
                           ApplicationService applicationService,
                           PasswordEncoder passwordEncoder,
                           JdbcTemplate jdbc,
-                          PlatformTransactionManager transactionManager) {
+                          PlatformTransactionManager transactionManager,
+                          @Value("${talentpipe.demo.password}") String demoPassword) {
         this.tenantService = tenantService;
         this.tenantRoleService = tenantRoleService;
         this.tenantRoleRepository = tenantRoleRepository;
@@ -146,6 +148,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         this.passwordEncoder = passwordEncoder;
         this.jdbc = jdbc;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.demoPassword = demoPassword;
     }
 
     @Override
@@ -168,15 +171,15 @@ public class DemoDataSeeder implements ApplicationRunner {
         applied.clear();
         transactions.executeWithoutResult(status -> seed());
         transactions.executeWithoutResult(status -> backdate(Instant.now()));
-        log.info("Demo data seeded: 3 companies, {} vacancies, {} applications. Every password is {}; "
-                + "the logins are listed in docs/DEMO.md.", posted.size(), applied.size(), PASSWORD);
+        log.info("Demo data seeded: 3 companies, {} vacancies, {} applications. The logins are listed "
+                + "in docs/DEMO.md.", posted.size(), applied.size());
         return true;
     }
 
     // ================================================================== seed
 
     private void seed() {
-        passwordHash = passwordEncoder.encode(PASSWORD);
+        passwordHash = passwordEncoder.encode(demoPassword);
         today = LocalDate.now(COLOMBO);
 
         Candidates candidates = candidates();

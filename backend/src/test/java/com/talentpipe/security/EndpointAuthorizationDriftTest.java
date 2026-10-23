@@ -2,11 +2,9 @@ package com.talentpipe.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -16,6 +14,7 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * Build-time guards on how endpoints are authorized. Both rules are easy to
@@ -105,8 +104,7 @@ class EndpointAuthorizationDriftTest {
                 continue;
             }
             // Exception handlers are not endpoints.
-            if (Arrays.stream(type.getAnnotations()).map(Annotation::annotationType)
-                    .noneMatch(annotation -> annotation.getSimpleName().equals("RestControllerAdvice"))) {
+            if (!type.isAnnotationPresent(RestControllerAdvice.class)) {
                 found.add(type);
             }
         }

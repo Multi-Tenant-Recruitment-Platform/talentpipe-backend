@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,9 @@ class DemoDataSeederIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private DemoDataSeeder seeder;
+
+    @Value("${talentpipe.demo.password}")
+    private String demoPassword;
 
     @Test
     void theDemo_loadsOnce_andEveryKindOfLoginWorks() {
@@ -56,13 +60,13 @@ class DemoDataSeederIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         // The consultant is in two companies and is a candidate: the picker appears.
         ResponseEntity<Map<String, Object>> consultant =
-                loginResponse(null, "sanduni.karunaratne@talentconsult.test", DemoDataSeeder.PASSWORD);
+                loginResponse(null, "sanduni.karunaratne@talentconsult.test", demoPassword);
         assertThat(consultant.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat((List<?>) ((Map<String, Object>) consultant.getBody().get("details")).get("accounts")).hasSize(3);
     }
 
     private Map<String, Object> signIn(String email) {
-        ResponseEntity<Map<String, Object>> response = loginResponse(null, email, DemoDataSeeder.PASSWORD);
+        ResponseEntity<Map<String, Object>> response = loginResponse(null, email, demoPassword);
         assertThat(response.getStatusCode()).as("sign-in as %s: %s", email, response.getBody())
                 .isEqualTo(HttpStatus.OK);
         return response.getBody();

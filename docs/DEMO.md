@@ -5,7 +5,8 @@ hiring teams, 22 vacancies in every state, pipeline templates, 11 candidates
 and 24 applications. Loaded by `DemoDataSeeder`, only when the backend runs
 with the `demo` profile, and only into a database that does not have it yet.
 
-**Every account's password is `TalentPipe@2026`.**
+**Every account's password is `TalentPipe@2026`** (set in `application-demo.yml`;
+export `DEMO_PASSWORD` before seeding to use another).
 
 All addresses use the reserved `.test` domain, so nothing can ever be emailed
 to a real person — even with a Resend key configured.

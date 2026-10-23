@@ -1,0 +1,9 @@
+# ---------------------------------------------------------------------------
+# The `demo` profile: loads the presentation dataset (DemoDataSeeder) on
+# startup if it is not there yet. Never activate it in production.
+# ---------------------------------------------------------------------------
+talentpipe:
+  demo:
+    # Sign-in password of every seeded account (docs/DEMO.md). Override with
+    # DEMO_PASSWORD before seeding to use another one.
+    password: ${DEMO_PASSWORD:TalentPipe@2026}
