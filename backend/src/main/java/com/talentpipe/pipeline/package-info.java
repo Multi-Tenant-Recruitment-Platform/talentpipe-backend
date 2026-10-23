@@ -1,7 +1,8 @@
 /**
- * Pipeline module — hiring pipelines, stages and candidate progression.
+ * Pipeline module — recruitment pipeline templates, stages, and workflows.
  *
- * <p>Placeholder only: implemented in a later sprint. Module boundary exists
- * from day one; modules communicate via services/DTOs, never entities.</p>
+ * <p>Provides pipeline template creation, editing, archiving, and stage builder
+ * configurations for multi-tenant recruitment pipelines. Modules communicate
+ * via services and DTOs, never entities.</p>
  */
 package com.talentpipe.pipeline;

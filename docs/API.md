@@ -40,6 +40,13 @@ Base path: `/api/v1`. All bodies are JSON.
 | POST | `/jobs/{id}/close` | `COMPANY_ADMIN`, `HR_MANAGER` | `PUBLISHED → CLOSED`. Leaves the public board and stops new applications. `422` if not published. |
 | POST | `/jobs/{id}/archive` | `COMPANY_ADMIN`, `HR_MANAGER` | `CLOSED → ARCHIVED`. Leaves the active lists; the record is kept. `422` if not closed. |
 | POST | `/jobs/{id}/duplicate` | `COMPANY_ADMIN`, `HR_MANAGER` | Creates a new `DRAFT` pre-filled from this vacancy, from any status. `201` with the new vacancy; the source is unchanged. |
+| GET | `/pipeline-templates` | `COMPANY_ADMIN`, `HR_MANAGER` | The tenant's pipeline templates, newest first, paged (`page`, `size` ≤ 100). Filterable by `search` (name substring) and `includeArchived` (boolean, default false). Job creators (`HR_MANAGER`) see active templates only. |
+| GET | `/pipeline-templates/{id}` | `COMPANY_ADMIN`, `HR_MANAGER` | One pipeline template with its stages in position order. `404` if not found, cross-tenant, or if archived and caller is `HR_MANAGER`. |
+| POST | `/pipeline-templates` | `COMPANY_ADMIN` | Creates a new pipeline template with its ordered stages, benchmarks, and default thresholds (auto, manual, ideal matching switch). `201`. `400` if invalid structure, thresholds, or benchmarks; `409` if active template name exists in tenant. |
+| PUT | `/pipeline-templates/{id}` | `COMPANY_ADMIN` | Replaces a template's details, stages and thresholds in one transaction. `422` if template is archived. `409` if new name conflicts with another active template. |
+| POST | `/pipeline-templates/{id}/archive` | `COMPANY_ADMIN` | Archives an active template. Sets status to `ARCHIVED`. Archived templates cannot be selected for new jobs or edited. Idempotent. |
+| POST | `/pipeline-templates/{id}/duplicate` | `COMPANY_ADMIN` | Duplicates an existing template (and its stages), appending `(Copy)` or `(Copy N)` to the name. `201`. Source template is unchanged. |
+| DELETE | `/pipeline-templates/{id}` | `COMPANY_ADMIN` | Permanently deletes a template and its stages. `204`. `404` if not found or cross-tenant. |
 | GET | `/public/jobs` | public | Public job board: `PUBLISHED` vacancies across all companies, paged (`page`, `size` ≤ 50). Optional `q` (keywords), `category`, `location` — see [Public job search](#public-job-search). |
 | GET | `/public/jobs/filters` | public | The categories and locations that currently have published vacancies, each with its count — for the board's filter controls. |
 | GET | `/public/jobs/{slugOrId}` | public | One published advert in full, by the `slug` from a board card or by id. `404` unless it is currently published. |
