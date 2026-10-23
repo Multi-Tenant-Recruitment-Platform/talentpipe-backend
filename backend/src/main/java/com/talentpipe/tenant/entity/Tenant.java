@@ -90,7 +90,8 @@ public class Tenant extends BaseEntity {
     @Column(name = "timezone", length = 100)
     private String timezone;
 
-    @Column(name = "currency", length = 10)
+    /** As the profile form offers it, e.g. "LKR — Sri Lankan rupee". */
+    @Column(name = "currency", length = 64)
     private String currency;
 
     @Column(name = "language", length = 10)

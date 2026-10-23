@@ -339,6 +339,17 @@ class UpdateCompanyProfileRequestValidationTest {
         assertThat(hasViolationOn(validate(r), "departments")).isFalse();
     }
 
+    // ---------------------------------------------------------------- currency
+
+    @Test
+    void currencyAsTheProfileFormSendsIt_noViolation() {
+        var r = req("Acme Corp", null, null, null, null, null, null, null, null, null, null,
+                "Asia/Colombo", "LKR — Sri Lankan rupee", "English", "admin@acme.io",
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null);
+        assertThat(hasViolationOn(validate(r), "currency")).isFalse();
+    }
+
     // ---------------------------------------------------------------- industries (@AllowedValues on a String)
 
     @Test

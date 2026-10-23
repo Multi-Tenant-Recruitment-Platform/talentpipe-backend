@@ -96,7 +96,7 @@ public record UpdateCompanyProfileRequest(
         @Size(max = 100, message = "timezone must be at most 100 characters")
         String timezone,
 
-        @Size(max = 10, message = "currency must be at most 10 characters")
+        @Size(max = 64, message = "currency must be at most 64 characters")
         String currency,
 
         @Size(max = 10, message = "language must be at most 10 characters")
