@@ -63,7 +63,7 @@ public enum Permission {
     JOBS_VIEW_ALL(Keys.JOBS_VIEW_ALL, Group.VACANCIES,
             "See all vacancies",
             "See every vacancy in the workspace. Without this, people see only the vacancies "
-                    + "they created or are on the hiring team of."),
+                    + "they work on: ones they created, recruit for, manage or are on the hiring team of."),
     JOBS_MANAGE(Keys.JOBS_MANAGE, Group.VACANCIES,
             "Create and edit vacancies",
             "Create, edit and duplicate vacancies, change their AI settings and choose their hiring team."),
