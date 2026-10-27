@@ -470,7 +470,8 @@ them yet: the screening, matching and review modules read them when they land.
 
 ## ADR-14 — Tenant isolation enforced in the ORM, not just by discipline
 
-**Date:** 2026-08-09 · **Status:** Accepted
+**Date:** 2026-08-09 · **Status:** Accepted · **Updated:** 2026-10-27, on
+merging into `development` (more entities, cross-company endpoints)
 
 ### Context
 
@@ -488,8 +489,9 @@ Three independent layers, each sufficient to stop a cross-tenant read:
 1. **Context** (existing): `TenantContext` is populated only from the verified
    JWT and cleared in a `finally` block (leak-guard tested).
 2. **ORM filter** (new): a Hibernate `@FilterDef`/`@Filter`
-   (`tenant_id = :tenantId`, `applyToLoadByKey = true`) on every tenant-scoped
-   entity (`User`, `Notification` today). `TenantFilterAspect` enables it on
+   (`tenant_id = :tenantId`, `applyToLoadByKey = true`) on the tenant-scoped
+   entities: `User`, `Notification`, `TenantRole`, `RoleAuditEvent`,
+   `JobVacancy` and `VacancyTeamMember`. `TenantFilterAspect` enables it on
    the transaction's session for any repository call made while a tenant is in
    context, so the predicate is appended at the SQL level to every query —
    including loads by primary key. A cross-tenant row is not "forbidden", it is
@@ -503,19 +505,37 @@ unauthenticated flows (login, register, emailed-link endpoints), candidates and
 SUPER_ADMIN legitimately query across tenants (global login's find-by-email,
 global password reset), and the async email threads carry no context at all.
 
+Nor is a tenant bound on `/api/v1/auth/**` or `/api/v1/public/**`, even when
+the request carries a valid company token (`TenantResolvingFilter`). Those
+endpoints span companies by design, and the browser sends whatever token it
+holds: signing in to a second workspace must find the account in *that*
+company, an emailed link belongs to whoever received it, and the public board
+lists every company's adverts. Binding the token's tenant there would hide the
+very row the request is about (found while merging: a signed-in member of
+company A got 401 signing in to company B).
+
 ### Consequences
 
 - New tenant-scoped entities must add one `@Filter` line and their table gets
   isolation for free — the default becomes *scoped*, not *global*.
-- `@Filter` does not apply to queries that bypass Hibernate (native SQL with
-  its own session handling) — none exist today; if one is ever added it must
-  scope by hand and say so in review.
-- The limit is per JVM instance state only in the aspect; the filter itself is
-  per-session, so pooled threads/sessions cannot leak a stale tenant.
-- Guarded by `TenantIsolationIntegrationTest`, including a test that bypasses
+- `@Filter` does not apply to native SQL. The two native queries today (public
+  job search and the board's salary ranges) serve only the public board, which
+  never runs with a tenant; any native query added for company data must scope
+  by hand and say so in review.
+- The filter is enabled on the transaction's session, so it covers repository
+  calls made inside a transaction — every company read path. The one
+  tenant-scoped read outside one, the per-request permission lookup in
+  `RolePermissionResolver`, compares the user's company with the token's
+  itself. The session ends at commit, so pooled threads and connections cannot
+  carry a stale tenant into the next request.
+- Applications, the older `jobs` table and pipeline templates are scoped by
+  their own services today and can opt in with the same one line once their
+  owners have checked their flows.
+- Guarded by `TenantIsolationIntegrationTest`, including tests that bypass
   the service layer entirely to prove the ORM layer alone blocks cross-tenant
-  reads (`findAll` narrowed, foreign `findById` empty, unscoped again once the
-  context is cleared).
+  reads on every filtered table (`findAll` narrowed, foreign `findById` empty,
+  unscoped again once the context is cleared), and tests that sign in to a
+  second company and open another company's advert while holding a token.
 
 ---
 
