@@ -1,5 +1,6 @@
 package com.talentpipe.job.entity;
 
+import com.talentpipe.common.tenant.TenantFilters;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -10,6 +11,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
 
 /**
  * One person on a vacancy's hiring team: someone who works on it besides its
@@ -27,6 +29,10 @@ import org.hibernate.annotations.CreationTimestamp;
  */
 @Entity
 @Table(name = "job_vacancy_team_members")
+// Tenant-scoped: a vacancy's hiring team joins the ORM tenant filter defined on User, so a
+// query made while a company is in context only ever sees that company's
+// rows (see TenantFilterAspect).
+@Filter(name = TenantFilters.TENANT_FILTER, condition = "tenant_id = :tenantId")
 @IdClass(VacancyTeamMember.Key.class)
 public class VacancyTeamMember {
 

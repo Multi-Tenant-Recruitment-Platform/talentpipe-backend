@@ -2,6 +2,7 @@ package com.talentpipe.job.entity;
 
 import com.talentpipe.common.entity.BaseEntity;
 import com.talentpipe.common.exception.BusinessRuleException;
+import com.talentpipe.common.tenant.TenantFilters;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import com.talentpipe.job.validator.JobVacancyPublishValidator;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -51,6 +53,10 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "job_vacancies")
+// Tenant-scoped: vacancies joins the ORM tenant filter defined on User, so a
+// query made while a company is in context only ever sees that company's
+// rows (see TenantFilterAspect).
+@Filter(name = TenantFilters.TENANT_FILTER, condition = "tenant_id = :tenantId")
 @SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class JobVacancy extends BaseEntity {
 

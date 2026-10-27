@@ -2,6 +2,7 @@ package com.talentpipe.auth.entity;
 
 import com.talentpipe.common.entity.BaseEntity;
 import com.talentpipe.common.exception.BusinessRuleException;
+import com.talentpipe.common.tenant.TenantFilters;
 import com.talentpipe.security.Permission;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -19,6 +20,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.hibernate.annotations.Filter;
 
 /**
  * A role defined by one company: a name of its choosing and the set of
@@ -46,6 +48,10 @@ import java.util.stream.Collectors;
  */
 @Entity
 @Table(name = "tenant_roles")
+// Tenant-scoped: a company's roles joins the ORM tenant filter defined on User, so a
+// query made while a company is in context only ever sees that company's
+// rows (see TenantFilterAspect).
+@Filter(name = TenantFilters.TENANT_FILTER, condition = "tenant_id = :tenantId")
 @SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class TenantRole extends BaseEntity {
 

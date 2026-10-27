@@ -3,9 +3,15 @@ package com.talentpipe.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.talentpipe.auth.entity.User;
+import com.talentpipe.auth.repository.RoleAuditEventRepository;
+import com.talentpipe.auth.repository.TenantRoleRepository;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.common.tenant.TenantContext;
 import com.talentpipe.integration.TestEmailConfig.CapturingEmailService;
+import com.talentpipe.job.repository.JobVacancyRepository;
+import com.talentpipe.job.repository.VacancyTeamMemberRepository;
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -51,6 +57,18 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private TenantRoleRepository tenantRoleRepository;
+
+    @Autowired
+    private RoleAuditEventRepository roleAuditEventRepository;
+
+    @Autowired
+    private JobVacancyRepository jobVacancyRepository;
+
+    @Autowired
+    private VacancyTeamMemberRepository vacancyTeamMemberRepository;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -105,6 +123,58 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
         return (String) response.getBody().get("id");
     }
 
+    /** One company's rows in each of the newer tenant-scoped tables. */
+    private record CompanyRows(UUID tenantId, UUID roleId, UUID vacancyId) {
+    }
+
+    /**
+     * Gives the company signed in as {@code accessToken} a custom role (which
+     * also writes a role audit event), a vacancy, and a hiring team on it.
+     */
+    private CompanyRows companyWithRoleVacancyAndTeam(String accessToken) {
+        ResponseEntity<Map> me = rest.exchange("/api/v1/auth/me", HttpMethod.GET,
+                jsonEntity(null, null, accessToken), Map.class);
+        UUID tenantId = UUID.fromString((String) me.getBody().get("tenantId"));
+        String memberId = (String) me.getBody().get("id");
+
+        Map<String, Object> roleBody = new HashMap<>();
+        roleBody.put("name", unique("Coordinator"));
+        roleBody.put("description", null);
+        roleBody.put("permissions", List.of("team.view"));
+        ResponseEntity<Map> role = rest.exchange("/api/v1/roles", HttpMethod.POST,
+                jsonEntity(roleBody, null, accessToken), Map.class);
+        assertThat(role.getStatusCode()).as("role: %s", role.getBody()).isEqualTo(HttpStatus.CREATED);
+
+        String vacancyId = createVacancy(accessToken, "DRAFT");
+        ResponseEntity<Map> team = rest.exchange("/api/v1/jobs/" + vacancyId + "/hiring-team", HttpMethod.PUT,
+                jsonEntity(Map.of("memberIds", List.of(memberId)), null, accessToken), Map.class);
+        assertThat(team.getStatusCode()).as("team: %s", team.getBody()).isEqualTo(HttpStatus.OK);
+
+        return new CompanyRows(tenantId, UUID.fromString((String) role.getBody().get("id")),
+                UUID.fromString(vacancyId));
+    }
+
+    /** Creates a complete vacancy in the given status and returns its id. */
+    private String createVacancy(String accessToken, String status) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("title", "Platform Engineer");
+        body.put("department", "Engineering");
+        body.put("openings", 1);
+        body.put("employmentType", "FULL_TIME");
+        body.put("workplaceType", "HYBRID");
+        body.put("location", "Colombo, Sri Lanka");
+        body.put("applicationDeadline", LocalDate.now().plusDays(30).toString());
+        body.put("jobSummary", "Keep the hiring platform running.");
+        body.put("jobDescription", "You will look after the services behind the job board.");
+        body.put("keyResponsibilities", List.of("Run the services"));
+        body.put("requiredSkills", List.of("Java"));
+        body.put("status", status);
+        ResponseEntity<Map> created = rest.exchange("/api/v1/jobs", HttpMethod.POST,
+                jsonEntity(body, null, accessToken), Map.class);
+        assertThat(created.getStatusCode()).as("vacancy: %s", created.getBody()).isEqualTo(HttpStatus.CREATED);
+        return (String) created.getBody().get("id");
+    }
+
     private ResponseEntity<List> listTeam(String accessToken) {
         return rest.exchange("/api/v1/team", HttpMethod.GET,
                 jsonEntity(null, null, accessToken), List.class);
@@ -146,6 +216,59 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
                 Map.class);
 
         assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void ormFilter_alsoScopesRolesAuditEventsVacanciesAndHiringTeams() {
+        // The same service-bypassing check as the one for users, for the
+        // tenant-scoped tables added after the filter: company roles, the role
+        // audit trail, vacancies and vacancy hiring teams.
+        CompanyRows a = companyWithRoleVacancyAndTeam(
+                registerVerifyAndLogin(unique("iso-m"), "admin-m@iso-test.io"));
+        CompanyRows b = companyWithRoleVacancyAndTeam(
+                registerVerifyAndLogin(unique("iso-n"), "admin-n@iso-test.io"));
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            TenantContext.set(a.tenantId());
+            try {
+                assertThat(tenantRoleRepository.findAll()).isNotEmpty()
+                        .allSatisfy(role -> assertThat(role.getTenantId()).isEqualTo(a.tenantId()));
+                assertThat(tenantRoleRepository.findById(b.roleId())).isEmpty();
+
+                assertThat(roleAuditEventRepository.findAll()).isNotEmpty()
+                        .allSatisfy(event -> assertThat(event.getTenantId()).isEqualTo(a.tenantId()));
+
+                assertThat(jobVacancyRepository.findAll()).isNotEmpty()
+                        .allSatisfy(vacancy -> assertThat(vacancy.getTenantId()).isEqualTo(a.tenantId()));
+                assertThat(jobVacancyRepository.findById(b.vacancyId())).isEmpty();
+
+                assertThat(vacancyTeamMemberRepository.findAll()).isNotEmpty()
+                        .allSatisfy(member -> assertThat(member.getTenantId()).isEqualTo(a.tenantId()));
+            } finally {
+                TenantContext.clear();
+            }
+        });
+
+        // Without a tenant in context the other company's rows are reachable again.
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            assertThat(tenantRoleRepository.findById(b.roleId())).isPresent();
+            assertThat(jobVacancyRepository.findById(b.vacancyId())).isPresent();
+        });
+    }
+
+    @Test
+    void publicJobBoard_showsEveryCompany_toASignedInMemberOfOne() {
+        // A recruiter who leaves the dashboard for the public board still
+        // sends their token. The board spans companies, so another company's
+        // advert must open for them exactly as it does for a visitor.
+        String tokenA = registerVerifyAndLogin(unique("iso-p"), "admin-p@iso-test.io");
+        String tokenB = registerVerifyAndLogin(unique("iso-q"), "admin-q@iso-test.io");
+        String vacancyB = createVacancy(tokenB, "PUBLISHED");
+
+        ResponseEntity<Map> advert = rest.exchange("/api/v1/public/jobs/" + vacancyB, HttpMethod.GET,
+                jsonEntity(null, null, tokenA), Map.class);
+
+        assertThat(advert.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.talentpipe.auth.entity;
 
+import com.talentpipe.common.tenant.TenantFilters;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -8,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.UuidGenerator;
 
 /**
@@ -21,6 +23,10 @@ import org.hibernate.annotations.UuidGenerator;
  */
 @Entity
 @Table(name = "tenant_role_audit_events")
+// Tenant-scoped: the role audit trail joins the ORM tenant filter defined on User, so a
+// query made while a company is in context only ever sees that company's
+// rows (see TenantFilterAspect).
+@Filter(name = TenantFilters.TENANT_FILTER, condition = "tenant_id = :tenantId")
 public class RoleAuditEvent {
 
     /** Column width of the before/after values; longer values are cut to fit. */
