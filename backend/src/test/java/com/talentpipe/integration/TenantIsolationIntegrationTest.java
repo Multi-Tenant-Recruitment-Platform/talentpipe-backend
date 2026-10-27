@@ -132,6 +132,23 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
     // --------------------------------------------------------------- tests
 
     @Test
+    void signingInToAnotherCompany_works_whileTheBrowserStillHoldsAToken() {
+        // The SPA attaches whatever token it holds to every request, sign-in
+        // included. Sign-in looks the account up across companies, so the
+        // filter must stay off there whatever token comes along.
+        String tokenA = registerVerifyAndLogin(unique("iso-k"), "admin-k@iso-test.io");
+        String subdomainB = unique("iso-l");
+        registerVerifyAndLogin(subdomainB, "admin-l@iso-test.io");
+
+        ResponseEntity<Map> login = rest.postForEntity("/api/v1/auth/login",
+                jsonEntity(Map.of("email", "admin-l@iso-test.io", "password", "s3cret-password"),
+                        subdomainB, tokenA),
+                Map.class);
+
+        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     void teamListing_isScopedToTheCallersTenant() {
         String tokenA = registerVerifyAndLogin(unique("iso-a"), "admin-a@iso-test.io");
         String tokenB = registerVerifyAndLogin(unique("iso-b"), "admin-b@iso-test.io");
