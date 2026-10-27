@@ -9,12 +9,16 @@ import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.dto.ProfileTaxonomy;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.dto.TenantResponse;
+import com.talentpipe.tenant.dto.TenantSettingsResponse;
 import com.talentpipe.tenant.dto.UpdateCompanyProfileRequest;
+import com.talentpipe.tenant.dto.UpdateTenantSettingsRequest;
 import com.talentpipe.tenant.entity.Tenant;
 import com.talentpipe.tenant.entity.TenantStatus;
 import com.talentpipe.tenant.mapper.TenantMapper;
 import com.talentpipe.tenant.repository.TenantRepository;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -176,7 +180,7 @@ public class TenantService {
         // ---- single-line fields
         tenant.setName(name);
         tenant.setTagline(normalizer.normalizeLine(request.tagline()));
-        tenant.setIndustry(normalizer.normalizeLine(request.industry()));
+        tenant.setIndustry(normalizer.normalizeOption(request.industry(), ProfileTaxonomy.INDUSTRIES));
         tenant.setCompanyType(normalizer.normalizeLine(request.companyType()));
         tenant.setSize(normalizer.normalizeLine(request.size()));
         tenant.setLegalName(normalizer.normalizeLine(request.legalName()));
@@ -212,6 +216,7 @@ public class TenantService {
         tenant.setBenefits(normalizer.normalizeList(request.benefits(), ProfileTaxonomy.BENEFITS));
         tenant.setOfficeLocations(normalizer.normalizeList(request.officeLocations()));
         tenant.setDepartments(normalizer.normalizeList(request.departments()));
+        tenant.setAdditionalIndustries(additionalIndustries(tenant.getIndustry(), request.additionalIndustries()));
 
         Tenant saved = tenantRepository.save(tenant);
         return tenantMapper.toProfileResponse(saved);
@@ -297,6 +302,61 @@ public class TenantService {
         requireEditableTenant(tenantId);
     }
 
+    // --------------------------------------------------------- settings API
+
+    /**
+     * The company's feature switches. Other modules read them here too: the
+     * job module for the switches a new vacancy starts with.
+     *
+     * @throws ResourceNotFoundException if the tenant does not exist (404)
+     */
+    @Transactional(readOnly = true)
+    public TenantSettingsResponse getSettings(UUID tenantId) {
+        return tenantMapper.toSettingsResponse(requireTenant(tenantId));
+    }
+
+    /**
+     * Changes the switches that are given; one left {@code null} keeps its
+     * value. Saved with a flush so the response carries the new
+     * {@code updatedAt}.
+     *
+     * @throws ResourceNotFoundException if the tenant does not exist (404)
+     * @throws BusinessRuleException     if the tenant is suspended (422)
+     */
+    @Transactional
+    public TenantSettingsResponse updateSettings(UUID tenantId, UpdateTenantSettingsRequest request) {
+        Tenant tenant = requireEditableTenant(tenantId);
+        if (request.blindScreeningEnabled() != null) {
+            tenant.setBlindScreeningEnabled(request.blindScreeningEnabled());
+        }
+        if (request.aiScreeningDefault() != null) {
+            tenant.setAiScreeningDefault(request.aiScreeningDefault());
+        }
+        if (request.candidateMatchingDefault() != null) {
+            tenant.setCandidateMatchingDefault(request.candidateMatchingDefault());
+        }
+        return tenantMapper.toSettingsResponse(tenantRepository.saveAndFlush(tenant));
+    }
+
+    /**
+     * The industries a company works in: its main industry first, then the
+     * additional ones in the order it chose them. Other modules file things
+     * under these — the job module, a vacancy's industry. Empty when the
+     * company has not set an industry, or does not exist.
+     */
+    @Transactional(readOnly = true)
+    public List<String> industriesOf(UUID tenantId) {
+        return tenantRepository.findById(tenantId)
+                .filter(tenant -> tenant.getIndustry() != null)
+                .map(tenant -> {
+                    List<String> industries = new ArrayList<>();
+                    industries.add(tenant.getIndustry());
+                    industries.addAll(tenant.getAdditionalIndustries());
+                    return List.copyOf(industries);
+                })
+                .orElse(List.of());
+    }
+
     // ---------------------------------------------------------------- private
 
     /**
@@ -316,6 +376,21 @@ public class TenantService {
                     "Profile updates are not allowed for suspended tenants");
         }
         return tenant;
+    }
+
+    /**
+     * The industries a company lists besides its main one, canonicalized and
+     * with the main industry and repeats left out.
+     *
+     * @throws InvalidRequestException (400) additional industries without a main one
+     */
+    private List<String> additionalIndustries(String mainIndustry, List<String> requested) {
+        List<String> additional = new ArrayList<>(normalizer.normalizeList(requested, ProfileTaxonomy.INDUSTRIES));
+        additional.remove(mainIndustry);
+        if (mainIndustry == null && !additional.isEmpty()) {
+            throw new InvalidRequestException("Choose a main industry before adding more.");
+        }
+        return additional;
     }
 
     /**

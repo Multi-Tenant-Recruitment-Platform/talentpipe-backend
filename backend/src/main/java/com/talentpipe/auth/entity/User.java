@@ -14,9 +14,18 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A platform staff account (company admins, HR managers, interviewers,
- * super admins). Candidates are NOT users — they get their own
- * tenant-independent model in a later sprint.
+ * A platform staff account: a member of a company workspace, or a platform
+ * operator (SUPER_ADMIN). Candidates are NOT users — they have their own
+ * tenant-independent model in the candidate module.
+ *
+ * <p>Roles: a company member's access comes from {@link #getTenantRole()} —
+ * the company-defined role they hold. {@link #getRole()} is the old fixed role
+ * and is now only a transitional mirror: set for platform operators and for
+ * members of the three default roles (Owner → COMPANY_ADMIN, Recruiter →
+ * HR_MANAGER, Interviewer → INTERVIEWER), {@code null} for members of a
+ * custom role. Nothing new should read it. The database enforces that every
+ * company member has a company role, and that it belongs to their own
+ * company.</p>
  *
  * <p>Tenancy: {@code tenantId} is a plain UUID column, not a {@code @ManyToOne
  * Tenant} — the Tenant entity belongs to the tenant module and entities never
@@ -30,12 +39,21 @@ import java.util.UUID;
 @Table(name = "users")
 public class User extends BaseEntity {
 
+    /** {@link #legacyRoleName()} for a member of a role the company defined itself. */
+    public static final String CUSTOM_ROLE = "CUSTOM";
+
     @Column(name = "tenant_id", updatable = false)
     private UUID tenantId;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "role_id", nullable = false)
+    /** Transitional mirror of the old fixed role; see the class comment. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "role_id")
     private Role role;
+
+    /** The company role this member holds; {@code null} only for platform operators. */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "tenant_role_id")
+    private TenantRole tenantRole;
 
     @Column(name = "email", nullable = false, length = 255)
     private String email;
@@ -65,10 +83,27 @@ public class User extends BaseEntity {
         // for JPA
     }
 
+    /**
+     * A user identified by a fixed role only — a platform operator. Company
+     * members are created with {@link #User(UUID, TenantRole, Role, String,
+     * String, String, String, UserStatus)} so they always have a company role.
+     */
     public User(UUID tenantId, Role role, String email, String passwordHash,
                 String firstName, String lastName, UserStatus status) {
+        this(tenantId, null, role, email, passwordHash, firstName, lastName, status);
+    }
+
+    /**
+     * A company member.
+     *
+     * @param legacyRole the fixed role mirroring {@code tenantRole}, or
+     *                   {@code null} when it is a custom role
+     */
+    public User(UUID tenantId, TenantRole tenantRole, Role legacyRole, String email, String passwordHash,
+                String firstName, String lastName, UserStatus status) {
         this.tenantId = tenantId;
-        this.role = role;
+        this.tenantRole = tenantRole;
+        this.role = legacyRole;
         this.email = email;
         this.passwordHash = passwordHash;
         this.firstName = firstName;
@@ -80,8 +115,35 @@ public class User extends BaseEntity {
         return tenantId;
     }
 
+    /** The transitional fixed role, or {@code null} for a member of a custom role. */
     public Role getRole() {
         return role;
+    }
+
+    /** The company role this member holds, or {@code null} for a platform operator. */
+    public TenantRole getTenantRole() {
+        return tenantRole;
+    }
+
+    /**
+     * The role name the API has always exposed as {@code role}: the fixed role
+     * when there is one, {@value #CUSTOM_ROLE} for a member of a custom role.
+     * Clients should move to the role id and permission list.
+     */
+    public String legacyRoleName() {
+        return role != null ? role.getName().name() : CUSTOM_ROLE;
+    }
+
+    /**
+     * Moves the member to another company role, keeping the transitional
+     * fixed-role mirror in step with it.
+     *
+     * @param legacyRole the fixed role mirroring {@code newRole}, or
+     *                   {@code null} when it is a custom role
+     */
+    public void assignRole(TenantRole newRole, Role legacyRole) {
+        this.tenantRole = newRole;
+        this.role = legacyRole;
     }
 
     public String getEmail() {

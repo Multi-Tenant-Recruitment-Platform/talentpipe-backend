@@ -1,6 +1,8 @@
 package com.talentpipe.auth.repository;
 
 import com.talentpipe.auth.entity.InvitationToken;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +14,9 @@ public interface InvitationTokenRepository extends JpaRepository<InvitationToken
 
     /** Token lookup by hash (the raw token is never stored). */
     Optional<InvitationToken> findByTokenHash(String tokenHash);
+
+    /** The invitations of several invitees at once — for the team listing. */
+    List<InvitationToken> findAllByUserIdIn(Collection<UUID> userIds);
 
     /** Clears outstanding tokens before re-issuing, so only one is ever valid. */
     @Modifying

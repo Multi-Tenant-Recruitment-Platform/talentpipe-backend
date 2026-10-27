@@ -1,7 +1,9 @@
 package com.talentpipe.tenant.controller;
 
+import com.talentpipe.security.MethodSecurityConfig;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -33,6 +35,8 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  */
 @TestConfiguration
 @EnableMethodSecurity
+// The @RequirePermission meta-annotation needs its template defaults.
+@Import(MethodSecurityConfig.class)
 class TestSecurityConfig {
 
     @Bean

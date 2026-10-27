@@ -47,11 +47,12 @@ public class SecurityConfig {
                                                    SecurityErrorWriter errorWriter,
                                                    RestAuthenticationEntryPoint authenticationEntryPoint,
                                                    RestAccessDeniedHandler accessDeniedHandler,
+                                                   PermissionResolver permissionResolver,
                                                    @Value("${talentpipe.security.login-rate-limit.max-per-minute:10}")
                                                    int loginRateLimitPerMinute) throws Exception {
         // Instantiated here (not as @Component) so the servlet container does
         // not ALSO auto-register them outside the security chain.
-        var jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenProvider, errorWriter);
+        var jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenProvider, permissionResolver, errorWriter);
         var tenantResolvingFilter = new TenantResolvingFilter(jwtTokenProvider);
         var loginRateLimitFilter = new LoginRateLimitFilter(errorWriter, loginRateLimitPerMinute);
 
@@ -66,6 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/login/select",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/verify-email",
                                 "/api/v1/auth/resend-verification",
@@ -73,8 +75,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/password-reset/confirm",
                                 "/api/v1/auth/accept-invite").permitAll()
                         .requestMatchers("/api/v1/public/**").permitAll()
-                        // Everything else needs a token; role scoping is enforced
-                        // per-controller with @PreAuthorize (PB-002).
+                        // Everything else needs a token; what the caller may do is
+                        // enforced per endpoint with @RequirePermission (PB-002).
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)

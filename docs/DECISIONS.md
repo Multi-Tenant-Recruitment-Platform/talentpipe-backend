@@ -299,6 +299,175 @@ fails if any stops using its index.
 
 ---
 
+## ADR-9 — Company-defined roles built from a permission catalogue
+
+**Date:** 2026-10-23 · **Status:** Accepted
+
+### Context
+
+Companies do not all hire with an "HR manager" and an "interviewer". One wants
+a coordinator who runs the team and the interview schedule; another wants a
+panel member who only conducts interviews. Fixed roles cannot express that, and
+checks such as `hasRole('HR_MANAGER')` tie every endpoint to one company's
+org chart.
+
+### Decision
+
+- **Permissions are code, roles are data.** `Permission` is the catalogue — a
+  stable key, a group, a label and a description each, plus what it needs
+  (`team.invite` needs `team.view`). A company composes roles from it
+  (`tenant_roles`, `tenant_role_permissions`, V16). Endpoints check permissions
+  (`@RequirePermission`, `@RequireCompanyMember`), never role names.
+- **Three default roles** per workspace: Owner (every permission, always; not
+  editable), Recruiter and Interviewer (editable, not deletable).
+- **Resolved per request.** The token says who you are, not what you may do.
+  `RolePermissionResolver` loads the member's current permissions, cached per
+  user for at most a minute and evicted when a role or member changes. A change
+  takes effect on the next request, with no re-login and no stale token.
+- **Guardrails:** nobody grants or revokes a permission they do not hold; only
+  an Owner makes or moves an Owner; the last active Owner cannot be moved; a
+  role in use is deleted only by reassigning its members; role edits use
+  optimistic locking; every change is audited (`tenant_role_audit_events`).
+- **The database keeps a role in its tenant**: a member's role is a composite
+  foreign key `(tenant_role_id, tenant_id)`.
+- **Transition:** `users.role_id` stays as a nullable mirror of the default
+  roles, and their members also carry the old `ROLE_COMPANY_ADMIN` /
+  `ROLE_HR_MANAGER` / `ROLE_INTERVIEWER` authorities, so branches written
+  against fixed roles keep working. A custom role gets neither, so an old
+  check fails closed. Responses keep `role` (`CUSTOM` for a custom role) next to
+  the new `roleId`, `roleName` and `permissions`. Remove both in sprint 3
+  (`TODO(sprint3)` in `Authorities`).
+- `EndpointAuthorizationDriftTest` fails the build if an endpoint outside
+  `/auth` and `/public` has no authorization annotation.
+
+### Moving a branch from roles to permissions
+
+| Old check | Use instead |
+| --- | --- |
+| `hasRole('COMPANY_ADMIN')` on team endpoints | `team.view` / `team.invite` / `team.manage` |
+| `hasRole('COMPANY_ADMIN')` on company profile, logo, cover | `settings.edit` |
+| `hasAnyRole('COMPANY_ADMIN','HR_MANAGER')` reading vacancies | `@RequireCompanyMember`, scoped in the service (ADR-11) |
+| `hasAnyRole('COMPANY_ADMIN','HR_MANAGER')` writing vacancies | `jobs.manage`; publish / close / archive `jobs.publish` |
+| pipeline templates (`Pipeline-Template-Creation`) | `pipeline.templates.manage` |
+| listing applications (`Job-Application-Submission-&-Tracking`) | `applications.view.all`, or scope to vacancies the member works on |
+| moving / rejecting applications | `applications.manage` |
+| scheduling interviews | `interviews.schedule`; conducting them `interviews.conduct` |
+| notifications sent "to HR managers" | the members holding the permission the event concerns |
+| member roles in `Manage-Recruitment-Teams` | `PUT /team/members/{id}/role` with a `roleId` |
+
+A new permission is a new constant in `Permission`; give it to the default roles
+that should have it in `SystemRole`, and write a migration if existing Recruiter
+or Interviewer rows should gain it.
+
+---
+
+## ADR-10 — Choosing a workspace at sign-in
+
+**Date:** 2026-10-23 · **Status:** Accepted
+
+### Context
+
+The sign-in modal sends only an email and a password; it has no subdomain to
+send (ADR-1). Users are unique per `(tenant, email)` and candidates are a
+separate identity (ADR-3), so one email can fit several accounts. The old
+header-less login signed in to the first company account whose password
+matched, in no defined order, and a person whose company and candidate
+accounts shared a password could never reach the candidate one.
+
+### Decision
+
+- Without `X-Tenant-Subdomain`, the password is checked against **every**
+  account using the email: memberships of any company, a platform
+  administrator, the candidate account.
+- One match signs in as before. Several answer `409 WORKSPACE_SELECTION_REQUIRED`
+  with the choices and a token; `POST /auth/login/select` exchanges the token for
+  the chosen account. We did not forbid one email in two companies: consultants
+  and people who change jobs exist, and a choice costs one screen.
+- **The token** is 32 random bytes, stored as its SHA-256 only
+  (`login_selections`, V17), valid for two minutes, single-use (row-locked when
+  redeemed), and bound to the accounts the password was checked against — the
+  second step never takes a password and never accepts another account. A choice
+  refused because the account is unverified or locked does not use it up.
+- **Locked accounts are never password-checked on this path.** Otherwise a
+  password that fits a locked account would answer differently from one that
+  does not, and the lock could be guessed around. A failed attempt counts
+  against every account that was checked, since one guess tests them all.
+- Disabled accounts are left out entirely.
+- Listing the choices leaks nothing: the caller has proven the password for each.
+
+### Consequence
+
+The frontend needs one more step after sign-in (pick a workspace) and must
+branch on `code`, not on the message.
+
+---
+
+## ADR-11 — A vacancy is visible to the people who work on it
+
+**Date:** 2026-10-23 · **Status:** Accepted
+
+### Context
+
+With custom roles (ADR-9), "can see vacancies" stopped being all or nothing. An
+interviewer needs the vacancies they interview for and no others; a junior
+recruiter may run their own adverts without seeing the rest.
+
+### Decision
+
+- `jobs.view.all` sees every vacancy in the company. Without it, a member sees
+  the vacancies they **work on**: created (`created_by`, V18), recruit for,
+  manage, or are on the hiring team of (`job_vacancy_team_members`, V18).
+- Everything else is `404`, for reads and writes — the same rule as across
+  tenants, applied inside one. Writes need their permission as well.
+- The rule is written once for single lookups (`JobVacancyRepository.WORKS_ON`)
+  and once for the list (`VacancySpecifications.worksOn`); `VacancyAccess` is the
+  only way recruiter-side code loads one vacancy.
+- The controller builds a `VacancyViewer` (tenant, user, sees-all) from the
+  token and the current permissions, so services never read security state.
+- The hiring team decides visibility only. Members must be active and in the
+  vacancy's company; composite foreign keys enforce the company in the database.
+
+Applications should follow the same rule with `applications.view.all`.
+
+---
+
+## ADR-12 — Industries come from a fixed list
+
+**Date:** 2026-10-23 · **Status:** Accepted
+
+### Context
+
+A vacancy should be filed under an industry its company works in, which needs
+both to be comparable. The company's industry was free text.
+
+### Decision
+
+- `ProfileTaxonomy.INDUSTRIES` — the list the frontend's forms already show —
+  is the only accepted set, stored as those labels and matched loosely
+  (`OptionKey`). A company has a main industry and up to three more.
+- A vacancy's industry must be one of its company's (`VacancyIndustryPolicy`).
+  It defaults to the main one and is kept if the company later drops it, so an
+  unrelated edit never fails.
+- It is **not required to publish**: requiring it would block every company that
+  has not filled in its profile, including through today's frontend.
+- V19 rewrote existing free-text values to the list; anything unmatched became
+  `Other`. Only API clients could have stored such values — the forms only ever
+  offered the list.
+
+---
+
+## ADR-13 — Feature switches are stored, not just shown
+
+**Date:** 2026-10-23 · **Status:** Accepted
+
+The vacancy switches (AI screening, candidate matching — PB-015) and the company
+ones (blind screening, and the defaults a new vacancy starts with) are columns
+(V20), changed through endpoints where a switch left out keeps its value. A
+company default applies only to vacancies created afterwards. Nothing acts on
+them yet: the screening, matching and review modules read them when they land.
+
+---
+
 ## Standing conventions (not individually numbered)
 
 - **Deferred-work marker:** `// TODO(sprint2): ...` — grep for it at sprint
@@ -307,9 +476,12 @@ fails if any stops using its index.
 - **Tokens in links** (verification, reset, invite) are 32 random bytes stored
   as SHA-256 hashes only, single-use (`used_at`), with server-side expiry:
   verification 24 h, reset 30 min, invitation 7 days.
-- **Role checks happen twice** for sensitive operations: `@PreAuthorize` on the
-  controller for the role, plus an independent tenant-scope re-check in the
-  service, so a future caller reaching the service another way cannot bypass it.
+- **Authorization happens twice** for sensitive operations: a permission check
+  on the controller (`@RequirePermission`, ADR-9), plus an independent scope
+  re-check in the service — tenant, and for vacancies who works on them (ADR-11)
+  — so a future caller reaching the service another way cannot bypass it.
+- **Clients branch on `code`, never on `message`** (`ErrorCode`). Codes are
+  only added, never renamed; messages are sentences and may change.
 - **404 over 403 for cross-tenant access:** a resource that exists but belongs
   to another tenant is indistinguishable from one that doesn't exist.
 - **Refresh tokens are stored hashed (SHA-256) and rotated on every use**; raw

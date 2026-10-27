@@ -50,7 +50,21 @@ public record UpdateCompanyProfileRequest(
         String tagline,
 
         // ---- company info
-        @Size(max = 100, message = "industry must be at most 100 characters")
+        // Keep in sync with ProfileTaxonomy.INDUSTRIES (ProfileTaxonomyDriftTest guards this).
+        @AllowedValues(
+                value = {
+                        "Information Technology",
+                        "Finance & Banking",
+                        "Healthcare",
+                        "Education",
+                        "Retail & E-commerce",
+                        "Manufacturing",
+                        "Hospitality & Leisure",
+                        "Construction & Engineering",
+                        "Logistics & Transport",
+                        "Other"
+                },
+                message = "Choose an industry from the list.")
         String industry,
 
         @Size(max = 100, message = "companyType must be at most 100 characters")
@@ -82,7 +96,7 @@ public record UpdateCompanyProfileRequest(
         @Size(max = 100, message = "timezone must be at most 100 characters")
         String timezone,
 
-        @Size(max = 10, message = "currency must be at most 10 characters")
+        @Size(max = 64, message = "currency must be at most 64 characters")
         String currency,
 
         @Size(max = 10, message = "language must be at most 10 characters")
@@ -158,6 +172,25 @@ public record UpdateCompanyProfileRequest(
         List<String> officeLocations,
 
         @ValidTaxonomyList
-        List<String> departments
+        List<String> departments,
+
+        // ---- industries besides the main one (same options; null = none)
+        @Size(max = ProfileTaxonomy.MAX_ADDITIONAL_INDUSTRIES,
+                message = "Choose at most " + ProfileTaxonomy.MAX_ADDITIONAL_INDUSTRIES + " more industries.")
+        @AllowedValues(
+                value = {
+                        "Information Technology",
+                        "Finance & Banking",
+                        "Healthcare",
+                        "Education",
+                        "Retail & E-commerce",
+                        "Manufacturing",
+                        "Hospitality & Leisure",
+                        "Construction & Engineering",
+                        "Logistics & Transport",
+                        "Other"
+                },
+                message = "Choose industries from the list.")
+        List<String> additionalIndustries
 ) {
 }

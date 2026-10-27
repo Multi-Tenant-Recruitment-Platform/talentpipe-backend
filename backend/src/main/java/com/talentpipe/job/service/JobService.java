@@ -49,6 +49,7 @@ public class JobService {
                 null,
                 null,
                 null,
+                null, // industry: legacy jobs have none
                 0,
                 null,
                 null,

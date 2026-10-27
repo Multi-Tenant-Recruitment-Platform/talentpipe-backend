@@ -1,12 +1,16 @@
 package com.talentpipe.auth.repository;
 
-import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.RoleName;
+import com.talentpipe.auth.entity.SystemRole;
+import com.talentpipe.auth.entity.User;
+import com.talentpipe.auth.entity.UserStatus;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /** Persistence access for users — private to the auth module by convention. */
 public interface UserRepository extends JpaRepository<User, UUID> {
@@ -33,6 +37,29 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /** Team listing for a tenant (PB-003/PB-004), newest members last. */
     List<User> findAllByTenantIdOrderByCreatedAtAsc(UUID tenantId);
+
+    /** The given users, as far as they belong to the tenant; ids from elsewhere are left out. */
+    List<User> findAllByTenantIdAndIdIn(UUID tenantId, Collection<UUID> ids);
+
+    // ---------------------------------------------------------------- roles
+
+    /** Everyone holding a role, whatever their status — used when a role is deleted. */
+    List<User> findAllByTenantRoleId(UUID tenantRoleId);
+
+    /** Members of a role, whatever their status, invitations included. */
+    long countByTenantRoleId(UUID tenantRoleId);
+
+    /** How many people of a given status hold a default role — used to protect the last Owner. */
+    long countByTenantIdAndTenantRole_SystemRoleAndStatus(UUID tenantId, SystemRole systemRole, UserStatus status);
+
+    /** Member count per role, for the roles list: rows of [roleId, count]. */
+    @Query("""
+            select u.tenantRole.id, count(u)
+            from User u
+            where u.tenantId = :tenantId and u.tenantRole is not null
+            group by u.tenantRole.id
+            """)
+    List<Object[]> countMembersByRole(@Param("tenantId") UUID tenantId);
 
     List<User> findAllByTenantIdAndRoleNameIn(UUID tenantId, Collection<RoleName> roles);
 }

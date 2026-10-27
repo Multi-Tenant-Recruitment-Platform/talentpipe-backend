@@ -35,6 +35,7 @@ public record JobSummaryResponse(
         String companyName,
         String companyLogoUrl,
         String department,
+        String industry,
         int openings,
         EmploymentType employmentType,
         WorkplaceType workplaceType,

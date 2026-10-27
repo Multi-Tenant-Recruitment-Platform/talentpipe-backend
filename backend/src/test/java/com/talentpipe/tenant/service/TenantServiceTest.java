@@ -571,7 +571,8 @@ class TenantServiceTest {
     @Test
     void getPublicProfile_knownSubdomain_returnsPublicResponse() {
         PublicCompanyProfileResponse publicResponse = new PublicCompanyProfileResponse(
-                "Acme", "acme", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                "Acme", "acme", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                List.of());
 
         when(tenantRepository.findBySubdomain("acme")).thenReturn(Optional.of(tenant));
         when(tenantMapper.toPublicResponse(tenant)).thenReturn(publicResponse);
@@ -621,7 +622,7 @@ class TenantServiceTest {
                 null, null, null, null, null, null, null, null,
                 email, null, null, null, null, null, null, null, null,
                 null, null, null, null,
-                null, null, null);
+                null, null, null, null);
     }
 
     /** Like {@link #buildUpdateRequest}, but with every list field populated
@@ -634,7 +635,7 @@ class TenantServiceTest {
                 null, null, null, null, null, null, null, null,
                 "admin@acme.io", null, null, null, null, null, null, null, null,
                 null, null, null, null,
-                benefits, officeLocations, departments);
+                benefits, officeLocations, departments, null);
     }
 
     private CompanyProfileResponse buildProfileResponse(UUID id, String logoUrl, String coverUrl) {
@@ -645,7 +646,7 @@ class TenantServiceTest {
                 null, null, null,
                 null, null, null, null, null, null, null, null, null,
                 null, null, null, null,
-                List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(),
                 Instant.now());
     }
 }

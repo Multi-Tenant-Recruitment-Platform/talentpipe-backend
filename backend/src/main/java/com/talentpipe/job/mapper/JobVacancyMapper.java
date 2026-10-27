@@ -30,6 +30,7 @@ public class JobVacancyMapper {
 
                 content.title(),
                 content.department(),
+                vacancy.getIndustry(),
                 content.openings(),
                 content.employmentType(),
                 content.workplaceType(),
@@ -64,6 +65,10 @@ public class JobVacancyMapper {
                 content.recruitmentPipelineId(),
                 content.screeningQuestions(),
 
+                vacancy.isAiScreeningEnabled(),
+                vacancy.isCandidateMatchingEnabled(),
+
+                vacancy.getCreatedBy(),
                 vacancy.getCreatedAt(),
                 vacancy.getUpdatedAt(),
                 vacancy.getPublishedAt(),
@@ -93,6 +98,7 @@ public class JobVacancyMapper {
                 companyName,
                 company == null ? null : company.logoUrl(),
                 content.department(),
+                vacancy.getIndustry(),
                 content.openings(),
                 content.employmentType(),
                 content.workplaceType(),

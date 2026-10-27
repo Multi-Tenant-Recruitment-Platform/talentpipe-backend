@@ -229,7 +229,7 @@ public final class VacancyFixtures {
         /** The same content as a client would submit it. */
         public JobVacancyRequest toRequest(VacancyStatus status, Integer version) {
             return new JobVacancyRequest(
-                    title, department, openings, employmentType, workplaceType, location, applicationDeadline,
+                    title, department, null, openings, employmentType, workplaceType, location, applicationDeadline,
                     jobSummary, jobDescription, keyResponsibilities,
                     requiredSkills, preferredSkills, 4, "Bachelor’s degree",
                     List.of(), List.of("English"), null,
@@ -237,6 +237,7 @@ public final class VacancyFixtures {
                     workingDays, "9:00 AM – 6:00 PM", ShiftType.DAY, new BigDecimal("40"),
                     assignedRecruiterId, hiringManagerId, recruitmentPipelineId,
                     List.of("Do you have the right to work in Sri Lanka?"),
+                    null, null,
                     status, version);
         }
     }

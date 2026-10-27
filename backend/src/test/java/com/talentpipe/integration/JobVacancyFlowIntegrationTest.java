@@ -45,7 +45,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
     // ------------------------------------------------------------------- roles
 
     @Test
-    void adminAndHrManager_canManageVacancies_interviewerAndAnonymousCannot() {
+    void adminAndHrManager_canManageVacancies_interviewerSeesOnlyTheirs_anonymousNothing() {
         Workspace acme = newWorkspace("Acme");
         String hrManager = newMember(acme, "HR_MANAGER");
         String interviewer = newMember(acme, "INTERVIEWER");
@@ -57,8 +57,12 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + created.get("id"), hrManager, null).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
 
-        assertThat(call(HttpMethod.GET, "/api/v1/jobs", interviewer, null).getStatusCode())
-                .isEqualTo(HttpStatus.FORBIDDEN);
+        // An interviewer may list vacancies, but sees only the ones they work on: none yet.
+        ResponseEntity<Map<String, Object>> interviewerList = call(HttpMethod.GET, "/api/v1/jobs", interviewer, null);
+        assertThat(interviewerList.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(interviewerList.getBody()).containsEntry("totalElements", 0);
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + created.get("id"), interviewer, null).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(call(HttpMethod.POST, "/api/v1/jobs", interviewer, completeVacancy("Nope")).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
 

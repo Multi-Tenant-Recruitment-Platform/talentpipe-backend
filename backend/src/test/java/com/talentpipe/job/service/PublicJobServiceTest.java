@@ -19,13 +19,19 @@ import com.talentpipe.job.dto.JobDetailResponse;
 import com.talentpipe.job.dto.JobFilterOption;
 import com.talentpipe.job.dto.JobFilterOptionsResponse;
 import com.talentpipe.job.dto.JobSummaryResponse;
+import com.talentpipe.job.entity.EmploymentType;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.PayPeriod;
 import com.talentpipe.job.entity.VacancyStatus;
+import com.talentpipe.job.entity.WorkplaceType;
 import com.talentpipe.job.mapper.JobVacancyMapper;
+import com.talentpipe.job.repository.BoardFacetCount;
 import com.talentpipe.job.repository.JobVacancyRepository;
 import com.talentpipe.job.repository.PublicJobSearchCriteria;
+import com.talentpipe.job.repository.SalaryRangeRow;
 import com.talentpipe.tenant.dto.CompanySummaryResponse;
 import com.talentpipe.tenant.service.TenantService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -92,7 +98,7 @@ class PublicJobServiceTest {
         when(tenantService.findCompanySummaries(Set.of(ACME_ID, GLOBEX_ID)))
                 .thenReturn(Map.of(ACME_ID, ACME, GLOBEX_ID, GLOBEX));
 
-        Page<JobSummaryResponse> result = service.search(null, null, null, 0, 20);
+        Page<JobSummaryResponse> result = service.search(PublicJobSearchCriteria.none(), 0, 20);
 
         assertThat(result.getContent()).extracting(JobSummaryResponse::companyName)
                 .containsExactly("Acme Corp", "Globex");
@@ -108,7 +114,7 @@ class PublicJobServiceTest {
                 VacancyFixtures.published(GLOBEX_ID)));
         when(tenantService.findCompanySummaries(any())).thenReturn(Map.of(ACME_ID, ACME, GLOBEX_ID, GLOBEX));
 
-        service.search(null, null, null, 0, 20);
+        service.search(PublicJobSearchCriteria.none(), 0, 20);
 
         verify(tenantService, times(1)).findCompanySummaries(Set.of(ACME_ID, GLOBEX_ID));
     }
@@ -117,17 +123,19 @@ class PublicJobServiceTest {
     void search_passesNormalizedCriteriaToTheRepository() {
         when(repository.searchPublished(any(), any())).thenReturn(Page.empty());
 
-        service.search("  senior   java ", " Engineering ", "", 0, 20);
+        PublicJobSearchCriteria wanted = PublicJobSearchCriteria.of("  senior   java ", " Engineering ", "");
+
+        service.search(wanted, 0, 20);
 
         verify(repository).searchPublished(criteria.capture(), any());
-        assertThat(criteria.getValue()).isEqualTo(new PublicJobSearchCriteria("senior java", "Engineering", null));
+        assertThat(criteria.getValue()).isEqualTo(PublicJobSearchCriteria.of("senior java", "Engineering", null));
     }
 
     @Test
     void search_capsThePageSizeAtFifty() {
         when(repository.searchPublished(any(), any())).thenReturn(Page.empty());
 
-        service.search(null, null, null, 0, 10_000);
+        service.search(PublicJobSearchCriteria.none(), 0, 10_000);
 
         verify(repository).searchPublished(any(), pageable.capture());
         assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
@@ -140,7 +148,7 @@ class PublicJobServiceTest {
                 .thenReturn(new PageImpl<>(List.of(vacancy), PageRequest.of(2, 1), 5));
         when(tenantService.findCompanySummaries(any())).thenReturn(Map.of(ACME_ID, ACME));
 
-        Page<JobSummaryResponse> result = service.search(null, null, null, 2, 1);
+        Page<JobSummaryResponse> result = service.search(PublicJobSearchCriteria.none(), 2, 1);
 
         assertThat(result.getTotalElements()).isEqualTo(5);
         assertThat(result.getNumber()).isEqualTo(2);
@@ -155,7 +163,7 @@ class PublicJobServiceTest {
         // In the company's own timezone the deadline was yesterday.
         when(calendar.today("Asia/Colombo")).thenReturn(vacancy.getApplicationDeadline().plusDays(1));
 
-        Page<JobSummaryResponse> result = service.search(null, null, null, 0, 20);
+        Page<JobSummaryResponse> result = service.search(PublicJobSearchCriteria.none(), 0, 20);
 
         assertThat(result.getContent().get(0).acceptingApplications()).isFalse();
     }
@@ -165,7 +173,7 @@ class PublicJobServiceTest {
         when(repository.searchPublished(any(), any())).thenReturn(page(VacancyFixtures.published(ACME_ID)));
         when(tenantService.findCompanySummaries(any())).thenReturn(Map.of());
 
-        Page<JobSummaryResponse> result = service.search(null, null, null, 0, 20);
+        Page<JobSummaryResponse> result = service.search(PublicJobSearchCriteria.none(), 0, 20);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).companyName()).isEmpty();
@@ -221,21 +229,73 @@ class PublicJobServiceTest {
     // ----------------------------------------------------------------- filters
 
     @Test
-    void filterOptions_returnsCategoriesAndLocations_boundedInNumber() {
+    void filterOptions_returnsEveryFacet_boundedInNumber() {
         List<JobFilterOption> categories = List.of(new JobFilterOption("Engineering", 7));
         List<JobFilterOption> locations = List.of(new JobFilterOption("Colombo, Sri Lanka", 5));
         when(repository.findPublishedCategories(any())).thenReturn(categories);
         when(repository.findPublishedLocations(any())).thenReturn(locations);
+        when(repository.findPublishedIndustries()).thenReturn(List.of(new JobFilterOption("Healthcare", 2)));
+        when(repository.countPublishedByEmploymentType()).thenReturn(List.of(facet(EmploymentType.FULL_TIME, 6)));
+        when(repository.countPublishedByWorkplaceType()).thenReturn(List.of(facet(WorkplaceType.REMOTE, 3)));
+        when(repository.findPublishedSalaryRanges()).thenReturn(List.of(salaryRange()));
 
         JobFilterOptionsResponse options = service.filterOptions();
 
         assertThat(options.categories()).isEqualTo(categories);
         assertThat(options.locations()).isEqualTo(locations);
+        assertThat(options.industries()).containsExactly(new JobFilterOption("Healthcare", 2));
+        assertThat(options.employmentTypes()).containsExactly(new JobFilterOption("FULL_TIME", 6));
+        assertThat(options.workplaceTypes()).containsExactly(new JobFilterOption("REMOTE", 3));
+        assertThat(options.salaryRanges()).containsExactly(new JobFilterOptionsResponse.SalaryRange(
+                PayPeriod.MONTHLY, "LKR", new BigDecimal("100000"), new BigDecimal("250000"), 4));
         verify(repository).findPublishedCategories(pageable.capture());
         assertThat(pageable.getValue().getPageSize()).isEqualTo(PublicJobService.MAX_FILTER_OPTIONS);
     }
 
     private static Page<JobVacancy> page(JobVacancy... vacancies) {
         return new PageImpl<>(List.of(vacancies));
+    }
+
+    private static <E extends Enum<E>> BoardFacetCount<E> facet(E value, long total) {
+        return new BoardFacetCount<>() {
+            @Override
+            public E getFacet() {
+                return value;
+            }
+
+            @Override
+            public long getTotal() {
+                return total;
+            }
+        };
+    }
+
+    private static SalaryRangeRow salaryRange() {
+        return new SalaryRangeRow() {
+            @Override
+            public String getPayPeriod() {
+                return "MONTHLY";
+            }
+
+            @Override
+            public String getCurrency() {
+                return "LKR";
+            }
+
+            @Override
+            public BigDecimal getLowest() {
+                return new BigDecimal("100000");
+            }
+
+            @Override
+            public BigDecimal getHighest() {
+                return new BigDecimal("250000");
+            }
+
+            @Override
+            public long getTotal() {
+                return 4;
+            }
+        };
     }
 }

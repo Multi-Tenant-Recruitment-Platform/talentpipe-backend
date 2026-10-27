@@ -24,6 +24,8 @@ import java.util.UUID;
  * keeps responses clean.</p>
  *
  * @param version        optimistic-lock counter; send it back on {@code PUT}
+ * @param createdBy      who filed it; {@code null} for vacancies filed before
+ *                       this was recorded
  * @param publishedAt    when the vacancy went live; {@code null} until then
  * @param closedAt       when it was closed; {@code null} until then
  * @param archivedAt     when it was archived; {@code null} until then
@@ -38,6 +40,7 @@ public record JobVacancyResponse(
 
         String title,
         String department,
+        String industry,
         int openings,
         EmploymentType employmentType,
         WorkplaceType workplaceType,
@@ -72,6 +75,10 @@ public record JobVacancyResponse(
         String recruitmentPipelineId,
         List<String> screeningQuestions,
 
+        boolean aiScreeningEnabled,
+        boolean candidateMatchingEnabled,
+
+        UUID createdBy,
         Instant createdAt,
         Instant updatedAt,
         Instant publishedAt,

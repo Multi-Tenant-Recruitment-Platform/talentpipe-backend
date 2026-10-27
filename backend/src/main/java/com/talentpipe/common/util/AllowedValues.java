@@ -9,8 +9,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Validates that every entry in a {@code List<String>} is one of the
- * explicitly permitted values.
+ * Validates that a {@code String}, or every entry in a {@code List<String>},
+ * is one of the explicitly permitted values.
  *
  * <p>Designed for fields that are driven by fixed checkboxes on the frontend
  * (e.g. {@code workModes}, {@code benefits}, {@code employmentTypes},
@@ -39,7 +39,7 @@ import java.lang.annotation.Target;
  * }</pre>
  */
 @Documented
-@Constraint(validatedBy = AllowedValuesValidator.class)
+@Constraint(validatedBy = {AllowedValuesValidator.class, AllowedValueValidator.class})
 @Target({ElementType.FIELD, ElementType.PARAMETER})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface AllowedValues {

@@ -1,22 +1,24 @@
 package com.talentpipe.job.controller;
 
-import com.talentpipe.common.dto.PageResponse;
 import com.talentpipe.application.dto.ApplicationResponse;
 import com.talentpipe.application.service.ApplicationService;
+import com.talentpipe.common.dto.PageResponse;
 import com.talentpipe.job.dto.JobDetailResponse;
 import com.talentpipe.job.dto.JobFilterOptionsResponse;
 import com.talentpipe.job.dto.JobSummaryResponse;
+import com.talentpipe.job.dto.PublicJobSearchParams;
 import com.talentpipe.job.service.PublicJobService;
 import com.talentpipe.security.UserPrincipal;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -47,32 +49,46 @@ public class PublicJobController {
     /**
      * Published vacancies across all companies, a page at a time.
      *
-     * <p>All three filters are optional and combine with AND. With none, this
+     * <p>Every filter is optional and they combine with AND. With none, this
      * is the plain board, newest first. Re-request with new values whenever a
-     * filter changes — each combination is served from an index.</p>
+     * filter changes: the board filters on the server, over every published
+     * vacancy, not just the page already loaded.</p>
      *
-     * @param q        keywords, matched against title, skills, summary and
-     *                 description. Results are ranked by relevance. Supports
-     *                 {@code "quoted phrases"}, {@code OR} and {@code -exclusion}.
-     * @param category a department, matched whole and case-insensitively; use
-     *                 a value from {@link #filters()}
-     * @param location matched anywhere in the vacancy's location,
-     *                 case-insensitively — {@code colombo} finds "Colombo, Sri Lanka"
-     * @param size     page size, capped at 50
+     * <ul>
+     *   <li>{@code q} — keywords, matched against title, skills, summary and
+     *       description. Supports {@code "quoted phrases"}, {@code OR} and
+     *       {@code -exclusion}.</li>
+     *   <li>{@code category} — a department, matched whole, ignoring case;
+     *       use a value from {@link #filters()}.</li>
+     *   <li>{@code location} — matched anywhere in the vacancy's location,
+     *       ignoring case: {@code colombo} finds "Colombo, Sri Lanka".</li>
+     *   <li>{@code industry} — one of the listed industries, e.g.
+     *       {@code Information Technology}; spelling and case are forgiven.</li>
+     *   <li>{@code employmentType}, {@code workplaceType} — any of the given
+     *       values; repeat the parameter or separate values with commas.</li>
+     *   <li>{@code minExperience}, {@code maxExperience} — years the vacancy
+     *       asks for; one that names none asks for none.</li>
+     *   <li>{@code salaryOnly} — only vacancies that state their pay.</li>
+     *   <li>{@code payPeriod}, {@code currency} (e.g. {@code LKR}),
+     *       {@code salaryMin}, {@code salaryMax} — stated pay that overlaps
+     *       the range. A range needs a pay period.</li>
+     *   <li>{@code sort} — {@code relevant} (default: best keyword match
+     *       first) or {@code newest}.</li>
+     *   <li>{@code size} — page size, capped at 50.</li>
+     * </ul>
      */
     @GetMapping
     public PageResponse<JobSummaryResponse> listPublishedJobs(
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String location,
+            @Valid PublicJobSearchParams search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.from(publicJobService.search(q, category, location, page, size));
+        return PageResponse.from(publicJobService.search(search.toCriteria(), page, size));
     }
 
     /**
-     * The categories and locations that currently have published vacancies,
-     * each with its count — what the board's filter controls are filled from.
+     * The categories, locations, industries, employment and workplace types that
+     * currently have published vacancies, each with its count, and the span
+     * of pay they state: what the board's filter controls are filled from.
      */
     @GetMapping("/filters")
     public JobFilterOptionsResponse filters() {

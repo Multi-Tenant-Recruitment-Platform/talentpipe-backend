@@ -11,11 +11,11 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record LoginRequest(
 
-        @NotBlank(message = "email is required")
-        @Email
+        @NotBlank(message = "Enter your email address.")
+        @Email(message = "Enter a valid email address, like you@company.com.")
         String email,
 
-        @NotBlank(message = "password is required")
+        @NotBlank(message = "Enter your password.")
         String password
 ) {
 }
