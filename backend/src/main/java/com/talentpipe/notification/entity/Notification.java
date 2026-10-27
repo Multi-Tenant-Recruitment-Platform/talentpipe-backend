@@ -27,6 +27,13 @@ import org.hibernate.annotations.UuidGenerator;
  */
 @Entity
 @Table(name = "notifications")
+// Tenant-scoped: joins the ORM-level isolation filter defined on User. Reads
+// while a tenant is in context only ever see that tenant's rows; the async
+// dispatcher's writes run on pool threads with no tenant context and are
+// deliberately unfiltered (the row's tenant comes from the event).
+@org.hibernate.annotations.Filter(
+        name = com.talentpipe.common.tenant.TenantFilters.TENANT_FILTER,
+        condition = "tenant_id = :tenantId")
 public class Notification {
 
     /** Failure text is truncated to the column width before persisting. */
