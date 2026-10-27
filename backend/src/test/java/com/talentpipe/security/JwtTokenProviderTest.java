@@ -144,9 +144,9 @@ class JwtTokenProviderTest {
 
     @Test
     void weakSecret_failsFastAtConstruction() {
-        assertThatThrownBy(() -> new JwtTokenProvider(
-                new JwtProperties("too-short", Duration.ofMinutes(15), Duration.ofDays(7)),
-                new ObjectMapper()))
+        JwtProperties properties = new JwtProperties("too-short", Duration.ofMinutes(15), Duration.ofDays(7));
+        ObjectMapper objectMapper = new ObjectMapper();
+        assertThatThrownBy(() -> new JwtTokenProvider(properties, objectMapper))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32 bytes");
     }

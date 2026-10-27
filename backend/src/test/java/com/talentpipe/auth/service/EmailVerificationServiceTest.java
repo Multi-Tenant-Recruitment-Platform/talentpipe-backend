@@ -4,8 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,9 +28,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -67,7 +64,7 @@ class EmailVerificationServiceTest {
     }
 
     private static User pendingUser() {
-        Role role = org.mockito.Mockito.mock(Role.class);
+        Role role = mock(Role.class);
         when(role.getName()).thenReturn(RoleName.COMPANY_ADMIN);
         User user = new User(UUID.randomUUID(), role, "ada@acme.io",
                 "$2a$12$hash", "Ada", "Lovelace", UserStatus.PENDING_VERIFICATION);
@@ -159,8 +156,9 @@ class EmailVerificationServiceTest {
         EmailVerificationToken expired = new EmailVerificationToken(
                 UUID.randomUUID(), sha256("some-token"), Instant.now().minusSeconds(1));
         when(tokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(expired));
+        EmailVerificationService service = service();
 
-        assertThatThrownBy(() -> service().verify("some-token"))
+        assertThatThrownBy(() -> service.verify("some-token"))
                 .isInstanceOf(InvalidTokenException.class)
                 .hasMessageContaining("expired");
     }
@@ -171,8 +169,9 @@ class EmailVerificationServiceTest {
                 UUID.randomUUID(), sha256("some-token"), Instant.now().plusSeconds(3600));
         token.markUsed(Instant.now());
         when(tokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(token));
+        EmailVerificationService service = service();
 
-        assertThatThrownBy(() -> service().verify("some-token"))
+        assertThatThrownBy(() -> service.verify("some-token"))
                 .isInstanceOf(InvalidTokenException.class)
                 .hasMessageContaining("already been used");
     }

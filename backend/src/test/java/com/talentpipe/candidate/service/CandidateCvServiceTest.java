@@ -78,7 +78,7 @@ class CandidateCvServiceTest {
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.of(previousCv));
 
-        byte[] newBytes = new byte[]{0x25, 0x50, 0x44, 0x46, 1, 2, 3};
+        byte[] newBytes = {0x25, 0x50, 0x44, 0x46, 1, 2, 3};
         MockMultipartFile newFile = new MockMultipartFile(
                 "cv",
                 "new_resume.pdf",
@@ -103,7 +103,7 @@ class CandidateCvServiceTest {
 
     @Test
     void uploadCvIsIdempotentWhenFileContentIdentical() throws Exception {
-        byte[] bytes = new byte[]{0x25, 0x50, 0x44, 0x46, 1, 2, 3};
+        byte[] bytes = {0x25, 0x50, 0x44, 0x46, 1, 2, 3};
         MockMultipartFile file = new MockMultipartFile("cv", "resume.pdf", "application/pdf", bytes);
 
         java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
@@ -165,7 +165,7 @@ class CandidateCvServiceTest {
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.empty());
 
-        byte[] newBytes = new byte[]{0x25, 0x50, 0x44, 0x46, 9, 8, 7};
+        byte[] newBytes = {0x25, 0x50, 0x44, 0x46, 9, 8, 7};
         MockMultipartFile newFile = new MockMultipartFile(
                 "cv",
                 "first_resume.pdf",
@@ -225,7 +225,7 @@ class CandidateCvServiceTest {
 
         when(cvRepository.findFirstByCandidateIdAndIsActiveTrue(candidate.getId()))
                 .thenReturn(Optional.of(activeCv));
-        byte[] expectedBytes = new byte[]{1, 2, 3, 4};
+        byte[] expectedBytes = {1, 2, 3, 4};
         when(storageService.load("candidate/key/my_cv.pdf")).thenReturn(expectedBytes);
 
         CandidateCvService.CvDownloadPayload payload = cvService.loadActiveCvResource(candidate.getId());
@@ -237,7 +237,7 @@ class CandidateCvServiceTest {
 
     @Test
     void uploadCvCleansUpStoredFileWhenRepositorySaveFails() {
-        byte[] newBytes = new byte[]{0x25, 0x50, 0x44, 0x46, 1, 2, 3};
+        byte[] newBytes = {0x25, 0x50, 0x44, 0x46, 1, 2, 3};
         MockMultipartFile newFile = new MockMultipartFile(
                 "cv",
                 "resume.pdf",
@@ -259,9 +259,9 @@ class CandidateCvServiceTest {
 
     @Test
     void cvDownloadPayloadEqualsHashCodeAndToString() {
-        byte[] data1 = new byte[]{1, 2, 3};
-        byte[] data2 = new byte[]{1, 2, 3};
-        byte[] diffData = new byte[]{4, 5};
+        byte[] data1 = {1, 2, 3};
+        byte[] data2 = {1, 2, 3};
+        byte[] diffData = {4, 5};
 
         CandidateCvService.CvDownloadPayload payload1 =
                 new CandidateCvService.CvDownloadPayload("cv.pdf", "application/pdf", data1);
@@ -283,9 +283,8 @@ class CandidateCvServiceTest {
                 .isNotEqualTo("string")
                 .isNotEqualTo(diffFile)
                 .isNotEqualTo(diffMime)
-                .isNotEqualTo(diffBytes);
-
-        assertThat(payload1).hasSameHashCodeAs(payload2);
+                .isNotEqualTo(diffBytes)
+                .hasSameHashCodeAs(payload2);
         assertThat(payload1.toString()).contains("cv.pdf", "application/pdf", "3");
         assertThat(nullBytes.toString()).contains("0");
     }

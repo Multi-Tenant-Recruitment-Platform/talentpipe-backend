@@ -2,6 +2,7 @@ package com.talentpipe.job.validator;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.talentpipe.auth.service.UserDirectoryService;
@@ -68,12 +69,14 @@ class JobVacancyMemberValidatorTest {
 
     @Test
     void validateMembers_managerInAnotherTenant_throws422() {
-        UUID managerId = UUID.randomUUID();
-        when(userDirectoryService.isActiveMember(tenantId, managerId)).thenReturn(false);
+        UUID managerFromOtherTenant = UUID.randomUUID();
+        when(userDirectoryService.isActiveMember(tenantId, managerFromOtherTenant)).thenReturn(false);
 
-        assertThatThrownBy(() -> validator.validateMembers(tenantId, null, managerId))
+        assertThatThrownBy(() -> validator.validateMembers(tenantId, null, managerFromOtherTenant))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("The hiring manager must be an active member of your workspace.");
+
+        verify(userDirectoryService).isActiveMember(tenantId, managerFromOtherTenant);
     }
 
     @Test

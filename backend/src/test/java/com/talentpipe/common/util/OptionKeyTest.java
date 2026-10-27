@@ -107,7 +107,7 @@ class OptionKeyTest {
             "RELOCATION,         relocation",
             "CAREER_DEVELOPMENT, careerdevelopment"})
     void benefitCatalogueId_foldsToItsExpectedKey(String id, String expectedKey) {
-        assertThat(ProfileTaxonomy.BENEFITS).contains(id);
+        assertThat(id).isIn(ProfileTaxonomy.BENEFITS);
 
         assertThat(OptionKey.of(id)).isEqualTo(expectedKey);
         assertThat(OptionKey.of(id.toLowerCase(Locale.ROOT))).isEqualTo(expectedKey);

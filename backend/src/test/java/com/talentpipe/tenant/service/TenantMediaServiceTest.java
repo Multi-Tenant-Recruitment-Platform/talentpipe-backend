@@ -64,7 +64,7 @@ class TenantMediaServiceTest {
     // ---------------------------------------------------------------- uploadLogo
 
     @Test
-    void uploadLogo_validPngFile_noExistingLogo_storesAndUpdates() throws Exception {
+    void uploadLogo_validPngFile_noExistingLogo_storesAndUpdates() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "logo.png", "image/png", new byte[100]);
 
@@ -82,7 +82,7 @@ class TenantMediaServiceTest {
     }
 
     @Test
-    void uploadLogo_validFile_existingLogoDeleted() throws Exception {
+    void uploadLogo_validFile_existingLogoDeleted() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "new-logo.png", "image/png", new byte[100]);
 
@@ -132,7 +132,7 @@ class TenantMediaServiceTest {
     }
 
     @Test
-    void uploadLogo_allowsWebpMimeType() throws Exception {
+    void uploadLogo_allowsWebpMimeType() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "logo.webp", "image/webp", new byte[100]);
 
@@ -149,7 +149,7 @@ class TenantMediaServiceTest {
     }
 
     @Test
-    void uploadLogo_allowsSvgMimeType() throws Exception {
+    void uploadLogo_allowsSvgMimeType() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "logo.svg", "image/svg+xml", new byte[100]);
 
@@ -184,7 +184,7 @@ class TenantMediaServiceTest {
     // ---------------------------------------------------------------- uploadCover
 
     @Test
-    void uploadCover_validJpegFile_noExistingCover_storesAndUpdates() throws Exception {
+    void uploadCover_validJpegFile_noExistingCover_storesAndUpdates() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "cover.jpg", "image/jpeg", new byte[200]);
 
@@ -202,7 +202,7 @@ class TenantMediaServiceTest {
     }
 
     @Test
-    void uploadCover_existingCoverDeleted_beforeStoringNew() throws Exception {
+    void uploadCover_existingCoverDeleted_beforeStoringNew() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "new-cover.jpg", "image/jpeg", new byte[200]);
 

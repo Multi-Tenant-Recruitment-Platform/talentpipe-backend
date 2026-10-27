@@ -19,7 +19,6 @@ import com.talentpipe.auth.entity.SystemRole;
 import com.talentpipe.auth.entity.TenantRole;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.UserStatus;
-import com.talentpipe.auth.mapper.UserMapper;
 import com.talentpipe.auth.repository.RoleAuditEventRepository;
 import com.talentpipe.auth.repository.RoleRepository;
 import com.talentpipe.auth.repository.TenantRoleRepository;
@@ -78,7 +77,7 @@ class TenantRoleServiceTest {
     @BeforeEach
     void setUp() {
         service = new TenantRoleService(roleRepository, legacyRoleRepository, userRepository, auditRepository,
-                resolver, new HtmlSanitizer(), new UserMapper(),
+                resolver, new HtmlSanitizer(),
                 Clock.fixed(Instant.parse("2026-10-23T09:00:00Z"), ZoneOffset.UTC));
         lenient().when(roleRepository.saveAndFlush(any(TenantRole.class))).thenAnswer(call -> persisted(call.getArgument(0)));
         lenient().when(userRepository.saveAndFlush(any(User.class))).thenAnswer(call -> call.getArgument(0));
@@ -125,9 +124,9 @@ class TenantRoleServiceTest {
     @Test
     void create_cannotGrantWhatTheCreatorDoesNotHold() {
         actorHas(EnumSet.of(Permission.TEAM_VIEW, Permission.ROLES_MANAGE));
+        RoleRequest request = request("Publisher", List.of("jobs.publish"), null);
 
-        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR,
-                request("Publisher", List.of("jobs.publish"), null)))
+        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("You can only give out permissions you have yourself. "
                         + "You don't have: Create and edit vacancies, Publish vacancies.");
@@ -136,7 +135,8 @@ class TenantRoleServiceTest {
 
     @Test
     void create_withAnUnknownPermission_isABadRequest() {
-        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request("X", List.of("jobs.delete"), null)))
+        RoleRequest request = request("X", List.of("jobs.delete"), null);
+        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request))
                 .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("Unknown permission 'jobs.delete'");
     }
@@ -144,8 +144,9 @@ class TenantRoleServiceTest {
     @Test
     void create_withATakenName_isAConflict_ignoringCase() {
         when(roleRepository.existsByTenantIdAndNameIgnoreCase(TENANT, "recruiter")).thenReturn(true);
+        RoleRequest request = request("  recruiter ", List.of(), null);
 
-        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request("  recruiter ", List.of(), null)))
+        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("There is already a role called 'recruiter'. Choose another name.");
     }
@@ -156,15 +157,17 @@ class TenantRoleServiceTest {
 
         assertThat(service.createRole(TENANT, ACTOR, request("<b>Panel</b> member", List.of(), null)).name())
                 .isEqualTo("Panel member");
-        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request("<i></i>", List.of(), null)))
+        RoleRequest emptyRequest = request("<i></i>", List.of(), null);
+        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, emptyRequest))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
     void create_isCappedPerWorkspace() {
         when(roleRepository.countByTenantIdAndSystemRoleIsNull(TENANT)).thenReturn((long) TenantRoleService.MAX_CUSTOM_ROLES);
+        RoleRequest request = request("One more", List.of(), null);
 
-        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request("One more", List.of(), null)))
+        assertThatThrownBy(() -> service.createRole(TENANT, ACTOR, request))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageStartingWith("A workspace can have at most 50 custom roles.");
     }
@@ -192,8 +195,10 @@ class TenantRoleServiceTest {
     @Test
     void update_ofOwner_isRefused() {
         TenantRole owner = stored(TenantRole.fromTemplate(TENANT, SystemRole.OWNER));
+        UUID ownerId = owner.getId();
+        RoleRequest request = request("Boss", List.of(), 0);
 
-        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, owner.getId(), request("Boss", List.of(), 0)))
+        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, ownerId, request))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("The Owner role can't be changed. It always has every permission.");
     }
@@ -201,16 +206,20 @@ class TenantRoleServiceTest {
     @Test
     void update_withAStaleVersion_isAConflict() {
         TenantRole role = stored(TenantRole.fromTemplate(TENANT, SystemRole.RECRUITER));
+        UUID roleId = role.getId();
+        RoleRequest request = request("R", List.of(), 3);
 
-        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, role.getId(), request("R", List.of(), 3)))
+        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, roleId, request))
                 .isInstanceOf(ConcurrentUpdateException.class);
     }
 
     @Test
     void update_withoutAVersion_isABadRequest() {
         TenantRole role = stored(TenantRole.fromTemplate(TENANT, SystemRole.RECRUITER));
+        UUID roleId = role.getId();
+        RoleRequest request = request("R", List.of(), null);
 
-        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, role.getId(), request("R", List.of(), null)))
+        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, roleId, request))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -219,9 +228,10 @@ class TenantRoleServiceTest {
         // Removing "publish" from a role is as much a use of that power as granting it.
         actorHas(EnumSet.of(Permission.TEAM_VIEW, Permission.ROLES_MANAGE));
         TenantRole recruiter = stored(TenantRole.fromTemplate(TENANT, SystemRole.RECRUITER));
+        UUID recruiterId = recruiter.getId();
+        RoleRequest request = request("Recruiter", List.of(), 0);
 
-        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, recruiter.getId(),
-                request("Recruiter", List.of(), 0)))
+        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, recruiterId, request))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageStartingWith("You can only give out permissions you have yourself.");
     }
@@ -231,8 +241,9 @@ class TenantRoleServiceTest {
         UUID foreign = UUID.randomUUID();
         when(roleRepository.findByIdAndTenantId(foreign, TENANT)).thenReturn(Optional.empty());
 
+        RoleRequest request = request("x", List.of(), 0);
         assertThatThrownBy(() -> service.getRole(TENANT, foreign)).isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, foreign, request("x", List.of(), 0)))
+        assertThatThrownBy(() -> service.updateRole(TENANT, ACTOR, foreign, request))
                 .isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.deleteRole(TENANT, ACTOR, foreign, null))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -243,8 +254,9 @@ class TenantRoleServiceTest {
     @Test
     void delete_ofADefaultRole_isRefused() {
         TenantRole recruiter = stored(TenantRole.fromTemplate(TENANT, SystemRole.RECRUITER));
+        UUID recruiterId = recruiter.getId();
 
-        assertThatThrownBy(() -> service.deleteRole(TENANT, ACTOR, recruiter.getId(), null))
+        assertThatThrownBy(() -> service.deleteRole(TENANT, ACTOR, recruiterId, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Default roles can't be deleted. You can rename and edit them instead.");
     }
@@ -254,9 +266,10 @@ class TenantRoleServiceTest {
         actorHas(Permission.all());
         TenantRole custom = stored(TenantRole.custom(TENANT, "Coordinator", null, EnumSet.of(Permission.TEAM_VIEW)));
         List<User> members = List.of(member(custom), member(custom));
-        when(userRepository.findAllByTenantRoleId(custom.getId())).thenReturn(members);
+        UUID customId = custom.getId();
+        when(userRepository.findAllByTenantRoleId(customId)).thenReturn(members);
 
-        assertThatThrownBy(() -> service.deleteRole(TENANT, ACTOR, custom.getId(), null))
+        assertThatThrownBy(() -> service.deleteRole(TENANT, ACTOR, customId, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("2 people have this role. Choose a role to move them to before deleting it.");
         verify(roleRepository, never()).delete(any());
@@ -287,9 +300,11 @@ class TenantRoleServiceTest {
         TenantRole custom = stored(TenantRole.custom(TENANT, "Coordinator", null, EnumSet.of(Permission.TEAM_VIEW)));
         TenantRole owner = stored(TenantRole.fromTemplate(TENANT, SystemRole.OWNER));
         List<User> members = List.of(member(custom));
-        when(userRepository.findAllByTenantRoleId(custom.getId())).thenReturn(members);
+        UUID customId = custom.getId();
+        UUID ownerId = owner.getId();
+        when(userRepository.findAllByTenantRoleId(customId)).thenReturn(members);
 
-        assertThatThrownBy(() -> service.deleteRole(TENANT, ACTOR, custom.getId(), owner.getId()))
+        assertThatThrownBy(() -> service.deleteRole(TENANT, ACTOR, customId, ownerId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Only an Owner can make someone an Owner or change an Owner's role.");
     }
@@ -335,8 +350,10 @@ class TenantRoleServiceTest {
         User onlyOwner = member(owner);
         when(userRepository.countByTenantIdAndTenantRole_SystemRoleAndStatus(TENANT, SystemRole.OWNER, UserStatus.ACTIVE))
                 .thenReturn(1L);
+        UUID onlyOwnerId = onlyOwner.getId();
+        UUID recruiterId = recruiter.getId();
 
-        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, onlyOwner.getId(), recruiter.getId()))
+        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, onlyOwnerId, recruiterId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageStartingWith("Every workspace needs at least one Owner.");
         assertThat(onlyOwner.getTenantRole()).isSameAs(owner);
@@ -363,8 +380,10 @@ class TenantRoleServiceTest {
         actorIsOwner(false);
         TenantRole owner = stored(TenantRole.fromTemplate(TENANT, SystemRole.OWNER));
         User member = member(stored(TenantRole.fromTemplate(TENANT, SystemRole.RECRUITER)));
+        UUID memberId = member.getId();
+        UUID ownerId = owner.getId();
 
-        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, member.getId(), owner.getId()))
+        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, memberId, ownerId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("Only an Owner can make someone an Owner or change an Owner's role.");
     }
@@ -375,8 +394,10 @@ class TenantRoleServiceTest {
         TenantRole recruiter = stored(TenantRole.fromTemplate(TENANT, SystemRole.RECRUITER));
         TenantRole interviewer = stored(TenantRole.fromTemplate(TENANT, SystemRole.INTERVIEWER));
         User strongerMember = member(recruiter);
+        UUID strongerMemberId = strongerMember.getId();
+        UUID interviewerId = interviewer.getId();
 
-        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, strongerMember.getId(), interviewer.getId()))
+        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, strongerMemberId, interviewerId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageStartingWith("You can only give out permissions you have yourself.");
     }
@@ -386,9 +407,11 @@ class TenantRoleServiceTest {
         User outsider = new User(UUID.randomUUID(), TenantRole.fromTemplate(UUID.randomUUID(), SystemRole.INTERVIEWER),
                 null, "x@other.io", "h", "X", "Y", UserStatus.ACTIVE);
         ReflectionTestUtils.setField(outsider, "id", UUID.randomUUID());
-        when(userRepository.findById(outsider.getId())).thenReturn(Optional.of(outsider));
+        UUID outsiderId = outsider.getId();
+        UUID targetRoleId = UUID.randomUUID();
+        when(userRepository.findById(outsiderId)).thenReturn(Optional.of(outsider));
 
-        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, outsider.getId(), UUID.randomUUID()))
+        assertThatThrownBy(() -> service.changeMemberRole(TENANT, ACTOR, outsiderId, targetRoleId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Team member not found");
     }
@@ -407,8 +430,9 @@ class TenantRoleServiceTest {
     @Test
     void roleForInvitation_neverOwner() {
         TenantRole owner = stored(TenantRole.fromTemplate(TENANT, SystemRole.OWNER));
+        UUID ownerId = owner.getId();
 
-        assertThatThrownBy(() -> service.roleForInvitation(TENANT, ACTOR, owner.getId(), null))
+        assertThatThrownBy(() -> service.roleForInvitation(TENANT, ACTOR, ownerId, null))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageStartingWith("People can't be invited as Owner.");
     }
@@ -417,8 +441,9 @@ class TenantRoleServiceTest {
     void roleForInvitation_neverMoreThanTheInviterHolds() {
         actorHas(EnumSet.of(Permission.TEAM_VIEW, Permission.TEAM_INVITE));
         TenantRole recruiter = stored(TenantRole.fromTemplate(TENANT, SystemRole.RECRUITER));
+        UUID recruiterId = recruiter.getId();
 
-        assertThatThrownBy(() -> service.roleForInvitation(TENANT, ACTOR, recruiter.getId(), null))
+        assertThatThrownBy(() -> service.roleForInvitation(TENANT, ACTOR, recruiterId, null))
                 .isInstanceOf(BusinessRuleException.class);
     }
 

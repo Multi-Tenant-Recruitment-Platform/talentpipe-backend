@@ -113,8 +113,8 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         ResponseEntity<Map> me = rest.exchange("/api/v1/auth/me", HttpMethod.GET,
                 new HttpEntity<>(bearer), Map.class);
         assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(me.getBody().get("email")).isEqualTo(email);
-        assertThat(me.getBody().get("tenantName")).isEqualTo("Acme Inc");
+        assertThat(me.getBody()).containsEntry("email", email);
+        assertThat(me.getBody()).containsEntry("tenantName", "Acme Inc");
     }
 
     @Test
@@ -131,10 +131,9 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
                 Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        // Uniform envelope: { timestamp, status, error, message, path }
         assertThat(response.getBody()).containsKeys("timestamp", "status", "error", "message", "path");
-        assertThat(response.getBody().get("status")).isEqualTo(401);
-        assertThat(response.getBody().get("path")).isEqualTo("/api/v1/auth/login");
+        assertThat(response.getBody()).containsEntry("status", 401);
+        assertThat(response.getBody()).containsEntry("path", "/api/v1/auth/login");
     }
 
     @Test
@@ -165,7 +164,7 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         ResponseEntity<Map> refreshed = rest.postForEntity("/api/v1/auth/refresh",
                 jsonEntity(Map.of("refreshToken", originalRefreshToken), null), Map.class);
         assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(refreshed.getBody().get("refreshToken")).isNotEqualTo(originalRefreshToken);
+        assertThat(refreshed.getBody()).doesNotContainEntry("refreshToken", originalRefreshToken);
 
         // Replaying the consumed token must fail: rotation revoked it.
         ResponseEntity<Map> replay = rest.postForEntity("/api/v1/auth/refresh",
@@ -178,7 +177,7 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         ResponseEntity<Map> response = rest.getForEntity("/api/v1/auth/me", Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getBody().get("status")).isEqualTo(401);
+        assertThat(response.getBody()).containsEntry("status", 401);
     }
 
     @Test
@@ -208,8 +207,8 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         ResponseEntity<Map> me = rest.exchange("/api/v1/auth/me", HttpMethod.GET,
                 new HttpEntity<>(bearer), Map.class);
         assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(me.getBody().get("email")).isEqualTo(email);
-        assertThat(me.getBody().get("tenantName")).isEqualTo("Acme Inc");
+        assertThat(me.getBody()).containsEntry("email", email);
+        assertThat(me.getBody()).containsEntry("tenantName", "Acme Inc");
     }
 
     @Test
@@ -252,7 +251,7 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         ResponseEntity<Map> response = rest.getForEntity("/api/v1/public/jobs", Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().get("content")).isEqualTo(java.util.List.of());
-        assertThat(response.getBody().get("totalElements")).isEqualTo(0);
+        assertThat(response.getBody()).containsEntry("content", java.util.List.of());
+        assertThat(response.getBody()).containsEntry("totalElements", 0);
     }
 }

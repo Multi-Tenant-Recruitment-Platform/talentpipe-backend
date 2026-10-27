@@ -80,7 +80,7 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
      * (tenant identity must never travel in a request body) and every account
      * using this address receives its own link.
      */
-    private ResponseEntity<String> requestReset(String email, String subdomain) {
+    private ResponseEntity<String> requestReset(String email) {
         return rest.postForEntity("/api/v1/auth/forgot-password",
                 jsonEntity(Map.of("email", email), null), String.class);
     }
@@ -119,7 +119,7 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
         registerAndActivate(subdomain, "ada@acme.io", "original-password");
 
         // Request reset.
-        ResponseEntity<String> resetReq = requestReset("ada@acme.io", subdomain);
+        ResponseEntity<String> resetReq = requestReset("ada@acme.io");
         assertThat(resetReq.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         // Capture token from in-memory email.
@@ -139,7 +139,7 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
         String subdomain = uniqueSubdomain();
         registerAndActivate(subdomain, "ada@acme.io", "original-password");
 
-        requestReset("ada@acme.io", subdomain);
+        requestReset("ada@acme.io");
         String rawToken = extractToken(emailCapture.lastResetLink(), "token");
         confirmReset(rawToken, "brand-new-password");
 
@@ -158,7 +158,7 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
         String oldRefreshToken = (String) auth.get("refreshToken");
 
         // Reset password.
-        requestReset("ada@acme.io", subdomain);
+        requestReset("ada@acme.io");
         String rawToken = extractToken(emailCapture.lastResetLink(), "token");
         confirmReset(rawToken, "brand-new-password");
 
@@ -178,7 +178,7 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
         String subdomain = uniqueSubdomain();
         registerAndActivate(subdomain, "ada@acme.io", "original-password");
 
-        requestReset("ada@acme.io", subdomain);
+        requestReset("ada@acme.io");
         String rawToken = extractToken(emailCapture.lastResetLink(), "token");
 
         // First confirm consumes the token.
@@ -193,7 +193,7 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
     @Test
     void requestReset_unknownEmail_always200_noEnumeration() {
         // Must return 200 even for non-existent email — no user enumeration.
-        ResponseEntity<String> resp = requestReset("ghost@nowhere.io", "non-existent-subdomain");
+        ResponseEntity<String> resp = requestReset("ghost@nowhere.io");
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
@@ -203,12 +203,12 @@ class PasswordResetFlowIntegrationTest extends AbstractIntegrationTest {
         registerAndActivate(subdomain, "ada@acme.io", "original-password");
 
         // First request.
-        requestReset("ada@acme.io", subdomain);
+        requestReset("ada@acme.io");
         String firstToken = extractToken(emailCapture.lastResetLink(), "token");
         emailCapture.clear();
 
         // Second request — issues a new token, superseding the first.
-        requestReset("ada@acme.io", subdomain);
+        requestReset("ada@acme.io");
         String secondToken = extractToken(emailCapture.lastResetLink(), "token");
 
         // The second token must work.

@@ -1,12 +1,11 @@
 package com.talentpipe.pipeline.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -95,7 +94,7 @@ class PipelineTemplateServiceTest {
         PipelineTemplateResponse response = service.get(TENANT_ID, TEMPLATE_ID, true);
 
         assertNotNull(response);
-        assertTrue(response.status() == PipelineTemplateStatus.ARCHIVED);
+        assertSame(PipelineTemplateStatus.ARCHIVED, response.status());
     }
 
     @Test
@@ -217,7 +216,7 @@ class PipelineTemplateServiceTest {
 
         PipelineTemplateResponse response = service.archive(TENANT_ID, TEMPLATE_ID);
 
-        assertTrue(response.status() == PipelineTemplateStatus.ARCHIVED);
+        assertSame(PipelineTemplateStatus.ARCHIVED, response.status());
         assertTrue(entity.isArchived());
     }
 
@@ -230,7 +229,7 @@ class PipelineTemplateServiceTest {
 
         PipelineTemplateResponse response = service.archive(TENANT_ID, TEMPLATE_ID);
 
-        assertTrue(response.status() == PipelineTemplateStatus.ARCHIVED);
+        assertSame(PipelineTemplateStatus.ARCHIVED, response.status());
         verify(templateRepository, never()).save(entity);
     }
 
@@ -240,7 +239,7 @@ class PipelineTemplateServiceTest {
         when(templateRepository.findWithStagesByIdAndTenantId(TEMPLATE_ID, TENANT_ID))
                 .thenReturn(Optional.of(source));
         when(templateRepository.existsByTenantIdAndNameIgnoreCaseAndStatus(
-                eq(TENANT_ID), eq(source.getName() + " (Copy)"), eq(PipelineTemplateStatus.ACTIVE)))
+                TENANT_ID, source.getName() + " (Copy)", PipelineTemplateStatus.ACTIVE))
                 .thenReturn(false);
         when(templateRepository.save(any(PipelineTemplate.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -257,10 +256,10 @@ class PipelineTemplateServiceTest {
         when(templateRepository.findWithStagesByIdAndTenantId(TEMPLATE_ID, TENANT_ID))
                 .thenReturn(Optional.of(source));
         when(templateRepository.existsByTenantIdAndNameIgnoreCaseAndStatus(
-                eq(TENANT_ID), eq(source.getName() + " (Copy)"), eq(PipelineTemplateStatus.ACTIVE)))
+                TENANT_ID, source.getName() + " (Copy)", PipelineTemplateStatus.ACTIVE))
                 .thenReturn(true);
         when(templateRepository.existsByTenantIdAndNameIgnoreCaseAndStatus(
-                eq(TENANT_ID), eq(source.getName() + " (Copy 2)"), eq(PipelineTemplateStatus.ACTIVE)))
+                TENANT_ID, source.getName() + " (Copy 2)", PipelineTemplateStatus.ACTIVE))
                 .thenReturn(false);
         when(templateRepository.save(any(PipelineTemplate.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

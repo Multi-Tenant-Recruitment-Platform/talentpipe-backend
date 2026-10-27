@@ -26,8 +26,8 @@ class CandidateCvValidatorTest {
 
     @Test
     void acceptsValidCvFormats() {
-        byte[] pdfBytes = new byte[]{0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34}; // "%PDF-1.4"
-        byte[] docxBytes = new byte[]{0x50, 0x4B, 0x03, 0x04, 0x00, 0x00}; // "PK\x03\x04"
+        byte[] pdfBytes = {0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34}; // "%PDF-1.4"
+        byte[] docxBytes = {0x50, 0x4B, 0x03, 0x04, 0x00, 0x00}; // "PK\x03\x04"
 
         assertThatCode(() -> validator.validate(new MockMultipartFile(
                 "cv", "resume.pdf", "application/pdf", pdfBytes))).doesNotThrowAnyException();
@@ -50,7 +50,7 @@ class CandidateCvValidatorTest {
 
     @Test
     void rejectsOversizedCv() {
-        byte[] pdfHeader = new byte[]{0x25, 0x50, 0x44, 0x46};
+        byte[] pdfHeader = {0x25, 0x50, 0x44, 0x46};
         byte[] bigData = new byte[(6 * 1024 * 1024)];
         System.arraycopy(pdfHeader, 0, bigData, 0, pdfHeader.length);
 
@@ -98,7 +98,7 @@ class CandidateCvValidatorTest {
 
     @Test
     void rejectsCvWhenHeaderIsTooShort() {
-        byte[] shortBytes = new byte[]{0x25}; // shorter than 4-byte prefix
+        byte[] shortBytes = {0x25}; // shorter than 4-byte prefix
         MockMultipartFile file = new MockMultipartFile(
                 "cv",
                 "short.pdf",

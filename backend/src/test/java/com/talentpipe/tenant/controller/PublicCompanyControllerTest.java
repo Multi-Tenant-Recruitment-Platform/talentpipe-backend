@@ -5,7 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.tenant.dto.PublicCompanyProfileResponse;
 import com.talentpipe.tenant.service.TenantService;
 import java.util.List;

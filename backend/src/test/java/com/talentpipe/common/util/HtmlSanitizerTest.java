@@ -23,7 +23,7 @@ class HtmlSanitizerTest {
 
     @Test
     void emptyString_returnsEmpty() {
-        assertThat(sanitizer.sanitize("")).isEqualTo("");
+        assertThat(sanitizer.sanitize("")).isEmpty();
     }
 
     @Test
@@ -119,10 +119,9 @@ class HtmlSanitizerTest {
     void nestedTags_contentPreserved_tagsStripped() {
         String input = "<div><p><strong>Nested</strong></p></div>";
         String result = sanitizer.sanitize(input);
-        assertThat(result).contains("Nested");
-        assertThat(result).doesNotContain("<div>");
-        assertThat(result).doesNotContain("<p>");
-        assertThat(result).doesNotContain("<strong>");
+        assertThat(result)
+                .contains("Nested")
+                .doesNotContain("<div>", "<p>", "<strong>");
     }
 
     // ---------------------------------------------------------------- multiline
@@ -131,9 +130,9 @@ class HtmlSanitizerTest {
     void multilineTextWithHtml_tagsStripped_newlinesPreserved() {
         String input = "Line one\n<script>evil()</script>\nLine three";
         String result = sanitizer.sanitize(input);
-        assertThat(result).contains("Line one");
-        assertThat(result).contains("Line three");
-        assertThat(result).doesNotContain("<script>");
+        assertThat(result)
+                .contains("Line one", "Line three")
+                .doesNotContain("<script>");
     }
 
     // ---------------------------------------------------------------- length invariant

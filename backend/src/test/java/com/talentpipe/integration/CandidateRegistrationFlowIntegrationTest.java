@@ -89,10 +89,10 @@ class CandidateRegistrationFlowIntegrationTest extends AbstractIntegrationTest {
         // 1. Candidate Registration
         ResponseEntity<Map> regResp = registerCandidate(email, password, name);
         assertThat(regResp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(regResp.getBody().get("email")).isEqualTo(email);
+        assertThat(regResp.getBody()).containsEntry("email", email);
         // CandidateProfile carries no "role" field by design — the role is
         // asserted below on the login response, where it belongs.
-        assertThat(regResp.getBody().get("status")).isEqualTo("PENDING_VERIFICATION");
+        assertThat(regResp.getBody()).containsEntry("status", "PENDING_VERIFICATION");
 
         // 2. Try Login before Verification -> Should Fail (403 actionable: correct
         // credentials, unverified email — same contract as company users)
@@ -111,9 +111,10 @@ class CandidateRegistrationFlowIntegrationTest extends AbstractIntegrationTest {
         assertThat(loginResp.getBody()).containsKeys("accessToken", "refreshToken", "user");
 
         Map<String, Object> userMap = (Map<String, Object>) loginResp.getBody().get("user");
-        assertThat(userMap.get("email")).isEqualTo(email);
-        assertThat(userMap.get("role")).isEqualTo("CANDIDATE");
-        assertThat(userMap.get("status")).isEqualTo("ACTIVE");
+        assertThat(userMap)
+                .containsEntry("email", email)
+                .containsEntry("role", "CANDIDATE")
+                .containsEntry("status", "ACTIVE");
 
         // 5. Access /auth/me -> Should return Candidate details
         HttpHeaders headers = new HttpHeaders();
@@ -122,8 +123,9 @@ class CandidateRegistrationFlowIntegrationTest extends AbstractIntegrationTest {
                 new HttpEntity<>(headers), Map.class);
 
         assertThat(meResp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(meResp.getBody().get("email")).isEqualTo(email);
-        assertThat(meResp.getBody().get("role")).isEqualTo("CANDIDATE");
+        assertThat(meResp.getBody())
+                .containsEntry("email", email)
+                .containsEntry("role", "CANDIDATE");
     }
 
     @Test
