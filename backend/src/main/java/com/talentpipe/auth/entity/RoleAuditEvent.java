@@ -63,6 +63,7 @@ public class RoleAuditEvent {
         // for JPA
     }
 
+    @SuppressWarnings("java:S107") // Audit event constructor requires full audit trail context
     public RoleAuditEvent(UUID tenantId, UUID actorUserId, RoleAuditAction action, UUID roleId,
                           String roleName, UUID targetUserId, String previousValue, String newValue,
                           Instant occurredAt) {

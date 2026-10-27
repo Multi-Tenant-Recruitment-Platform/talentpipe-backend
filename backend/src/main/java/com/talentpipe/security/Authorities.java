@@ -18,7 +18,7 @@ import org.springframework.security.core.Authentication;
  *       against the old fixed roles keep working until they move to
  *       {@link RequirePermission}. A member of a custom role does not get
  *       them, so old-style checks fail closed for them.
- *       TODO(sprint3): remove once no {@code hasRole} check on a company
+ *       Scheduled for removal once no {@code hasRole} check on a company
  *       endpoint remains (see the mapping table in docs/DECISIONS.md).</li>
  * </ul>
  */

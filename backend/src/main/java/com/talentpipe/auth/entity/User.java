@@ -37,6 +37,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "users")
+@SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class User extends BaseEntity {
 
     /** {@link #legacyRoleName()} for a member of a role the company defined itself. */
@@ -99,6 +100,7 @@ public class User extends BaseEntity {
      * @param legacyRole the fixed role mirroring {@code tenantRole}, or
      *                   {@code null} when it is a custom role
      */
+    @SuppressWarnings("java:S107") // Entity constructor requires all persistent fields
     public User(UUID tenantId, TenantRole tenantRole, Role legacyRole, String email, String passwordHash,
                 String firstName, String lastName, UserStatus status) {
         this.tenantId = tenantId;

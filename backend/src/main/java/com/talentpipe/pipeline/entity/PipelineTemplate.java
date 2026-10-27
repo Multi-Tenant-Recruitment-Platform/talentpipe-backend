@@ -21,6 +21,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "pipeline_templates")
+@SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class PipelineTemplate extends BaseEntity {
 
     @Column(name = "tenant_id", nullable = false)

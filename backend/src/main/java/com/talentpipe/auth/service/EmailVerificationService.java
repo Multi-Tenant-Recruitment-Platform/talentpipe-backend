@@ -62,6 +62,10 @@ public class EmailVerificationService {
      */
     @Transactional
     public void issueAndSend(User user) {
+        doIssueAndSend(user);
+    }
+
+    private void doIssueAndSend(User user) {
         tokenRepository.deleteAllByUserId(user.getId());
 
         String rawToken = SecureTokens.generate();
@@ -90,7 +94,7 @@ public class EmailVerificationService {
     public void resend(java.util.UUID tenantId, String email) {
         userRepository.findByTenantIdAndEmail(tenantId, email)
                 .filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION)
-                .ifPresent(this::issueAndSend);
+                .ifPresent(this::doIssueAndSend);
     }
 
     /**
@@ -103,7 +107,7 @@ public class EmailVerificationService {
         boolean found = false;
         for (User user : users) {
             if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
-                issueAndSend(user);
+                doIssueAndSend(user);
                 found = true;
             }
         }

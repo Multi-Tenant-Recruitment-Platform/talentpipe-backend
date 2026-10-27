@@ -95,7 +95,6 @@ public class TenantRoleService {
     private final RoleAuditEventRepository auditRepository;
     private final RolePermissionResolver permissionResolver;
     private final HtmlSanitizer htmlSanitizer;
-    private final UserMapper userMapper;
     private final Clock clock;
 
     public TenantRoleService(TenantRoleRepository roleRepository,
@@ -104,7 +103,6 @@ public class TenantRoleService {
                              RoleAuditEventRepository auditRepository,
                              RolePermissionResolver permissionResolver,
                              HtmlSanitizer htmlSanitizer,
-                             UserMapper userMapper,
                              Clock clock) {
         this.roleRepository = roleRepository;
         this.legacyRoleRepository = legacyRoleRepository;
@@ -112,7 +110,6 @@ public class TenantRoleService {
         this.auditRepository = auditRepository;
         this.permissionResolver = permissionResolver;
         this.htmlSanitizer = htmlSanitizer;
-        this.userMapper = userMapper;
         this.clock = clock;
     }
 
@@ -204,6 +201,10 @@ public class TenantRoleService {
      */
     @Transactional
     public RoleResponse createRole(UUID tenantId, UUID actorId, RoleRequest request) {
+        return doCreateRole(tenantId, actorId, request);
+    }
+
+    private RoleResponse doCreateRole(UUID tenantId, UUID actorId, RoleRequest request) {
         if (roleRepository.countByTenantIdAndSystemRoleIsNull(tenantId) >= MAX_CUSTOM_ROLES) {
             throw new BusinessRuleException("A workspace can have at most " + MAX_CUSTOM_ROLES
                     + " custom roles. Delete one you no longer use first.");
@@ -277,7 +278,7 @@ public class TenantRoleService {
                 source.getDescription(),
                 UserMapper.permissionKeys(source.permissions()),
                 null);
-        return createRole(tenantId, actorId, copy);
+        return doCreateRole(tenantId, actorId, copy);
     }
 
     /**

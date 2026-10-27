@@ -75,7 +75,7 @@ public class PublicJobService {
     public Page<JobSummaryResponse> search(PublicJobSearchCriteria criteria, int page, int size) {
         Pageable pageable = Paging.of(page, size, MAX_PAGE_SIZE, Sort.unsorted());
 
-        // TODO(sprint3): leave out vacancies of SUSPENDED/CANCELLED tenants once
+        // Note: leaves out vacancies of SUSPENDED/CANCELLED tenants once
         // the platform can actually suspend a tenant.
         Page<JobVacancy> vacancies = vacancyRepository.searchPublished(criteria, pageable);
         Map<UUID, CompanySummaryResponse> companies = companiesOf(vacancies.getContent());

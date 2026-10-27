@@ -46,6 +46,7 @@ import java.util.stream.Collectors;
  */
 @Entity
 @Table(name = "tenant_roles")
+@SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class TenantRole extends BaseEntity {
 
     /** Column widths, mirrored by the request DTO's constraints. */

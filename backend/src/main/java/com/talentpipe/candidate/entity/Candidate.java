@@ -19,6 +19,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "candidates")
+@SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class Candidate extends BaseEntity {
 
     @Column(name = "email", nullable = false, unique = true, length = 255)
