@@ -313,7 +313,7 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
                 "/api/v1/team/invitations/" + invitedByA, HttpMethod.DELETE,
                 jsonEntity(null, null, tokenB), Map.class);
         assertThat(revoke.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(revoke.getBody().get("status")).isEqualTo(404);
+        assertThat(revoke.getBody()).containsEntry("status", 404);
 
         // And the failed cross-tenant attempts must not have touched the real
         // invitation: its owner still sees it, and can still revoke it.
@@ -387,8 +387,9 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(meA.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(meB.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(meA.getBody().get("tenantId")).isNotEqualTo(meB.getBody().get("tenantId"));
-        assertThat(meA.getBody().get("tenantName")).isEqualTo("Corp " + subdomainA);
-        assertThat(meB.getBody().get("tenantName")).isEqualTo("Corp " + subdomainB);
+        assertThat(meA.getBody())
+                .doesNotContainEntry("tenantId", meB.getBody().get("tenantId"))
+                .containsEntry("tenantName", "Corp " + subdomainA);
+        assertThat(meB.getBody()).containsEntry("tenantName", "Corp " + subdomainB);
     }
 }
