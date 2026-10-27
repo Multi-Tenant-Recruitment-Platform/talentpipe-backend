@@ -32,43 +32,11 @@ public class JobVacancyShapeValidator {
 
     public void validateCreationShape(JobVacancyRequest request) {
         validateStatusOnCreate(request.status());
-        validateContentShape(
-                request.title(),
-                request.openings(),
-                request.location(),
-                request.jobSummary(),
-                request.jobDescription(),
-                request.otherRequirements(),
-                request.minimumExperienceYears(),
-                request.workingHours(),
-                request.expectedHoursPerWeek(),
-                request.salaryMin(),
-                request.salaryMax(),
-                request.currency(),
-                request.payPeriod() != null,
-                request.screeningQuestions(),
-                request.recruitmentPipelineId()
-        );
+        validateContentShape(request);
     }
 
     public void validateUpdateShape(JobVacancyRequest request) {
-        validateContentShape(
-                request.title(),
-                request.openings(),
-                request.location(),
-                request.jobSummary(),
-                request.jobDescription(),
-                request.otherRequirements(),
-                request.minimumExperienceYears(),
-                request.workingHours(),
-                request.expectedHoursPerWeek(),
-                request.salaryMin(),
-                request.salaryMax(),
-                request.currency(),
-                request.payPeriod() != null,
-                request.screeningQuestions(),
-                request.recruitmentPipelineId()
-        );
+        validateContentShape(request);
     }
 
     private void validateStatusOnCreate(VacancyStatus status) {
@@ -77,28 +45,28 @@ public class JobVacancyShapeValidator {
         }
     }
 
-    private void validateContentShape(
-            String title,
-            Integer openings,
-            String location,
-            String jobSummary,
-            String jobDescription,
-            String otherRequirements,
-            Integer minimumExperienceYears,
-            String workingHours,
-            BigDecimal expectedHoursPerWeek,
-            BigDecimal salaryMin,
-            BigDecimal salaryMax,
-            String currency,
-            boolean hasPayPeriod,
-            List<String> screeningQuestions,
-            String recruitmentPipelineId
-    ) {
-        validateTextLengths(title, location, jobSummary, jobDescription, otherRequirements, workingHours);
-        validateNumericBounds(openings, minimumExperienceYears, expectedHoursPerWeek);
-        validateSalary(salaryMin, salaryMax, currency, hasPayPeriod);
-        validateScreeningQuestions(screeningQuestions);
-        validatePipelineTemplate(recruitmentPipelineId);
+    private void validateContentShape(JobVacancyRequest request) {
+        validateTextLengths(
+                request.title(),
+                request.location(),
+                request.jobSummary(),
+                request.jobDescription(),
+                request.otherRequirements(),
+                request.workingHours()
+        );
+        validateNumericBounds(
+                request.openings(),
+                request.minimumExperienceYears(),
+                request.expectedHoursPerWeek()
+        );
+        validateSalary(
+                request.salaryMin(),
+                request.salaryMax(),
+                request.currency(),
+                request.payPeriod() != null
+        );
+        validateScreeningQuestions(request.screeningQuestions());
+        validatePipelineTemplate(request.recruitmentPipelineId());
     }
 
     private void validateTextLengths(

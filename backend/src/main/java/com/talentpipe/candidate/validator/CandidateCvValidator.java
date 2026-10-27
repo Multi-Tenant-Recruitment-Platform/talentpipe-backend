@@ -27,8 +27,8 @@ public class CandidateCvValidator extends AbstractFileValidator {
             ".docx"
     );
 
-    private static final byte[] PDF_MAGIC_BYTES = new byte[]{0x25, 0x50, 0x44, 0x46}; // "%PDF"
-    private static final byte[] ZIP_MAGIC_BYTES = new byte[]{0x50, 0x4B};             // "PK" for DOCX
+    private static final byte[] PDF_MAGIC_BYTES = {0x25, 0x50, 0x44, 0x46}; // "%PDF"
+    private static final byte[] ZIP_MAGIC_BYTES = {0x50, 0x4B};             // "PK" for DOCX
 
     private final StorageProperties storageProperties;
 
