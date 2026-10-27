@@ -15,8 +15,12 @@ import org.springframework.security.core.annotation.AnnotationTemplateExpression
  * <p>The bean is {@code static} so it is available before the method-security
  * infrastructure is created, as Spring Security requires.</p>
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class MethodSecurityConfig {
+
+    private MethodSecurityConfig() {
+        // configuration class with static bean definitions only
+    }
 
     @Bean
     static AnnotationTemplateExpressionDefaults annotationTemplateExpressionDefaults() {
