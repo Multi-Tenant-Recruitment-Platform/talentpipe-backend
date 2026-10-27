@@ -60,8 +60,9 @@ class ProfileNormalizerTest {
     void normalizeLine_stripsScriptXssPayload() {
         String xss = "<script>alert('xss')</script>Acme Corp";
         String result = normalizer.normalizeLine(xss);
-        assertThat(result).doesNotContain("<script>");
-        assertThat(result).contains("Acme Corp");
+        assertThat(result)
+                .doesNotContain("<script>")
+                .contains("Acme Corp");
     }
 
     @Test
@@ -115,18 +116,18 @@ class ProfileNormalizerTest {
     void normalizeMultiline_stripsHtmlTags() {
         String input = "<p>Great culture.</p>\n<p>Inclusive team.</p>";
         String result = normalizer.normalizeMultiline(input);
-        assertThat(result).doesNotContain("<p>");
-        assertThat(result).contains("Great culture.");
-        assertThat(result).contains("Inclusive team.");
+        assertThat(result)
+                .doesNotContain("<p>")
+                .contains("Great culture.", "Inclusive team.");
     }
 
     @Test
     void normalizeMultiline_stripsScriptTags() {
         String input = "Good company.\n<script>stealData()</script>\nGreat benefits.";
         String result = normalizer.normalizeMultiline(input);
-        assertThat(result).doesNotContain("<script>");
-        assertThat(result).contains("Good company.");
-        assertThat(result).contains("Great benefits.");
+        assertThat(result)
+                .doesNotContain("<script>")
+                .contains("Good company.", "Great benefits.");
     }
 
     // ---------------------------------------------------------------- normalizeUrl

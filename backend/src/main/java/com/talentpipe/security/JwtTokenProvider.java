@@ -33,6 +33,7 @@ import org.springframework.stereotype.Component;
  * </ul>
  */
 @Component
+@SuppressWarnings("java:S2143") // JJWT JwtBuilder requires java.util.Date for issuedAt/expiration
 public class JwtTokenProvider {
 
     /** Minimum HS256 key length in bytes (RFC 7518: key size >= hash size). */

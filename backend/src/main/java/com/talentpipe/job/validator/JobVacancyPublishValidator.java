@@ -24,39 +24,11 @@ public class JobVacancyPublishValidator {
     public static final String MUST_STAY_COMPLETE = "A published vacancy has to stay complete";
 
     public void validateForPublish(JobVacancyRequest request, LocalDate today) {
-        validatePublishFields(
-                request.title(),
-                request.department(),
-                request.openings(),
-                request.employmentType(),
-                request.workplaceType(),
-                request.location(),
-                request.applicationDeadline(),
-                request.jobSummary(),
-                request.jobDescription(),
-                request.keyResponsibilities(),
-                request.requiredSkills(),
-                today,
-                NOT_READY_TO_PUBLISH
-        );
+        validatePublishFields(PublishableFields.from(request), today, NOT_READY_TO_PUBLISH);
     }
 
     public void validateForStayComplete(JobVacancyRequest request, LocalDate today) {
-        validatePublishFields(
-                request.title(),
-                request.department(),
-                request.openings(),
-                request.employmentType(),
-                request.workplaceType(),
-                request.location(),
-                request.applicationDeadline(),
-                request.jobSummary(),
-                request.jobDescription(),
-                request.keyResponsibilities(),
-                request.requiredSkills(),
-                today,
-                MUST_STAY_COMPLETE
-        );
+        validatePublishFields(PublishableFields.from(request), today, MUST_STAY_COMPLETE);
     }
 
     public void validateForPublish(JobVacancy vacancy, LocalDate today) {
@@ -76,49 +48,58 @@ public class JobVacancyPublishValidator {
     }
 
     public static List<String> missing(VacancyContent content, LocalDate today) {
-        return findMissing(
-                content.title(),
-                content.department(),
-                content.openings(),
-                content.employmentType(),
-                content.workplaceType(),
-                content.location(),
-                content.applicationDeadline(),
-                content.jobSummary(),
-                content.jobDescription(),
-                content.keyResponsibilities(),
-                content.requiredSkills(),
-                today
-        );
+        return findMissing(PublishableFields.from(content), today);
     }
 
-    private void validatePublishFields(
-            String title,
-            String department,
-            Integer openings,
-            EmploymentType employmentType,
-            WorkplaceType workplaceType,
-            String location,
-            LocalDate applicationDeadline,
-            String jobSummary,
-            String jobDescription,
-            List<String> keyResponsibilities,
-            List<String> requiredSkills,
-            LocalDate today,
-            String lead
-    ) {
-        List<String> missing = findMissing(
-                title, department, openings, employmentType, workplaceType,
-                location, applicationDeadline, jobSummary, jobDescription,
-                keyResponsibilities, requiredSkills, today
-        );
-
+    private void validatePublishFields(PublishableFields fields, LocalDate today, String lead) {
+        List<String> missing = findMissing(fields, today);
         if (!missing.isEmpty()) {
             throw new BusinessRuleException(lead + ": add " + joinLabels(missing) + ".");
         }
     }
 
-    private static List<String> findMissing(
+    private static List<String> findMissing(PublishableFields fields, LocalDate today) {
+        List<String> missing = new ArrayList<>();
+
+        if (isBlank(fields.title())) {
+            missing.add("a job title");
+        }
+        if (isBlank(fields.department())) {
+            missing.add("a department");
+        }
+        if (fields.openings() != null && fields.openings() < 1) {
+            missing.add("the number of openings");
+        }
+        if (fields.employmentType() == null) {
+            missing.add("an employment type");
+        }
+        if (fields.workplaceType() == null) {
+            missing.add("a workplace type");
+        }
+        if (isBlank(fields.location())) {
+            missing.add("a location");
+        }
+        if (fields.applicationDeadline() == null) {
+            missing.add("an application deadline");
+        } else if (fields.applicationDeadline().isBefore(today)) {
+            missing.add("an application deadline that is today or later");
+        }
+        if (isBlank(fields.jobSummary())) {
+            missing.add("a job summary");
+        }
+        if (isBlank(fields.jobDescription())) {
+            missing.add("a job description");
+        }
+        if (isEmptyList(fields.keyResponsibilities())) {
+            missing.add("at least one key responsibility");
+        }
+        if (isEmptyList(fields.requiredSkills())) {
+            missing.add("at least one required skill");
+        }
+        return missing;
+    }
+
+    private record PublishableFields(
             String title,
             String department,
             Integer openings,
@@ -129,47 +110,39 @@ public class JobVacancyPublishValidator {
             String jobSummary,
             String jobDescription,
             List<String> keyResponsibilities,
-            List<String> requiredSkills,
-            LocalDate today
+            List<String> requiredSkills
     ) {
-        List<String> missing = new ArrayList<>();
+        static PublishableFields from(JobVacancyRequest request) {
+            return new PublishableFields(
+                    request.title(),
+                    request.department(),
+                    request.openings(),
+                    request.employmentType(),
+                    request.workplaceType(),
+                    request.location(),
+                    request.applicationDeadline(),
+                    request.jobSummary(),
+                    request.jobDescription(),
+                    request.keyResponsibilities(),
+                    request.requiredSkills()
+            );
+        }
 
-        if (isBlank(title)) {
-            missing.add("a job title");
+        static PublishableFields from(VacancyContent content) {
+            return new PublishableFields(
+                    content.title(),
+                    content.department(),
+                    content.openings(),
+                    content.employmentType(),
+                    content.workplaceType(),
+                    content.location(),
+                    content.applicationDeadline(),
+                    content.jobSummary(),
+                    content.jobDescription(),
+                    content.keyResponsibilities(),
+                    content.requiredSkills()
+            );
         }
-        if (isBlank(department)) {
-            missing.add("a department");
-        }
-        if (openings != null && openings < 1) {
-            missing.add("the number of openings");
-        }
-        if (employmentType == null) {
-            missing.add("an employment type");
-        }
-        if (workplaceType == null) {
-            missing.add("a workplace type");
-        }
-        if (isBlank(location)) {
-            missing.add("a location");
-        }
-        if (applicationDeadline == null) {
-            missing.add("an application deadline");
-        } else if (applicationDeadline.isBefore(today)) {
-            missing.add("an application deadline that is today or later");
-        }
-        if (isBlank(jobSummary)) {
-            missing.add("a job summary");
-        }
-        if (isBlank(jobDescription)) {
-            missing.add("a job description");
-        }
-        if (isEmptyList(keyResponsibilities)) {
-            missing.add("at least one key responsibility");
-        }
-        if (isEmptyList(requiredSkills)) {
-            missing.add("at least one required skill");
-        }
-        return missing;
     }
 
     private static boolean isBlank(String value) {

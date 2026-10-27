@@ -198,7 +198,7 @@ final class DemoVacancy {
         return this;
     }
 
-    DemoVacancy team(UUID... members) {
+    DemoVacancy withTeamMembers(UUID... members) {
         this.team.addAll(List.of(members));
         return this;
     }

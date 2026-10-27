@@ -3,7 +3,6 @@ package com.talentpipe.integration;
 import com.talentpipe.notification.EmailMessage;
 import com.talentpipe.notification.EmailService;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
@@ -70,21 +69,10 @@ public class TestEmailConfig {
         }
 
         private String awaitLastLinkContaining(String pathFragment) {
-            Instant deadline = Instant.now().plus(TIMEOUT);
-            while (Instant.now().isBefore(deadline)) {
-                String link = findLastLink(pathFragment);
-                if (link != null) {
-                    return link;
-                }
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-            throw new IllegalStateException("No email containing '" + pathFragment
-                    + "' was sent within " + TIMEOUT);
+            return org.awaitility.Awaitility.await()
+                    .atMost(TIMEOUT)
+                    .pollInterval(Duration.ofMillis(50))
+                    .until(() -> findLastLink(pathFragment), java.util.Objects::nonNull);
         }
 
         private String findLastLink(String pathFragment) {

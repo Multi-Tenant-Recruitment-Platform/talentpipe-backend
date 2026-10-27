@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -65,7 +67,7 @@ class PasswordResetServiceTest {
     }
 
     private static User activeUser(UUID tenantId) {
-        Role role = org.mockito.Mockito.mock(Role.class);
+        Role role = mock(Role.class);
         when(role.getName()).thenReturn(RoleName.COMPANY_ADMIN);
         User user = new User(tenantId, role, "ada@acme.io",
                 "$2a$04$hash", "Ada", "Lovelace", UserStatus.ACTIVE);
@@ -135,7 +137,7 @@ class PasswordResetServiceTest {
         // Every matching account gets its own token — none is silently skipped.
         verify(tokenRepository).deleteAllByUserId(first.getId());
         verify(tokenRepository).deleteAllByUserId(second.getId());
-        verify(events, org.mockito.Mockito.times(2))
+        verify(events, times(2))
                 .publishEvent(any(NotificationRequestedEvent.class));
     }
 
@@ -149,7 +151,7 @@ class PasswordResetServiceTest {
                 Instant.now().plusSeconds(1800));
         when(tokenRepository.findByTokenHash(sha256(rawToken))).thenReturn(Optional.of(stored));
 
-        Role role = org.mockito.Mockito.mock(Role.class);
+        Role role = mock(Role.class);
         when(role.getName()).thenReturn(RoleName.COMPANY_ADMIN);
         User user = new User(UUID.randomUUID(), role, "ada@acme.io",
                 "$2a$04$oldhash", "Ada", "Lovelace", UserStatus.ACTIVE);
@@ -190,8 +192,9 @@ class PasswordResetServiceTest {
     @Test
     void confirmReset_unknownToken_throwsInvalidToken() {
         when(tokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+        PasswordResetService service = service();
 
-        assertThatThrownBy(() -> service().confirmReset("bad-token", "new-pass-word"))
+        assertThatThrownBy(() -> service.confirmReset("bad-token", "new-pass-word"))
                 .isInstanceOf(InvalidTokenException.class);
     }
 
@@ -200,8 +203,9 @@ class PasswordResetServiceTest {
         PasswordResetToken expired = new PasswordResetToken(
                 UUID.randomUUID(), sha256("tok"), Instant.now().minusSeconds(1));
         when(tokenRepository.findByTokenHash(sha256("tok"))).thenReturn(Optional.of(expired));
+        PasswordResetService service = service();
 
-        assertThatThrownBy(() -> service().confirmReset("tok", "new-pass-word"))
+        assertThatThrownBy(() -> service.confirmReset("tok", "new-pass-word"))
                 .isInstanceOf(InvalidTokenException.class)
                 .hasMessageContaining("expired");
     }
@@ -212,8 +216,9 @@ class PasswordResetServiceTest {
                 UUID.randomUUID(), sha256("tok"), Instant.now().plusSeconds(1800));
         used.markUsed(Instant.now());
         when(tokenRepository.findByTokenHash(sha256("tok"))).thenReturn(Optional.of(used));
+        PasswordResetService service = service();
 
-        assertThatThrownBy(() -> service().confirmReset("tok", "new-pass-word"))
+        assertThatThrownBy(() -> service.confirmReset("tok", "new-pass-word"))
                 .isInstanceOf(InvalidTokenException.class)
                 .hasMessageContaining("already been used");
     }

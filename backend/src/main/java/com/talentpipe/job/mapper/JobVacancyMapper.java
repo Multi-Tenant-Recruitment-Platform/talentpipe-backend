@@ -74,7 +74,7 @@ public class JobVacancyMapper {
                 vacancy.getPublishedAt(),
                 vacancy.getClosedAt(),
                 vacancy.getArchivedAt(),
-                // TODO(sprint3): real count once the applications module is
+                // Applications count is populated once the applications module is
                 // merged. Null, not zero — see JobVacancyResponse.
                 null);
     }

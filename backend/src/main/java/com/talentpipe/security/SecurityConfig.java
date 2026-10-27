@@ -10,6 +10,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -42,6 +43,7 @@ public class SecurityConfig {
     private static final int BCRYPT_COST = 12;
 
     @Bean
+    @SuppressWarnings("java:S4502") // Stateless JWT API: credentials never sent in cookies; CSRF protection is not needed
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtTokenProvider jwtTokenProvider,
                                                    SecurityErrorWriter errorWriter,
@@ -57,7 +59,8 @@ public class SecurityConfig {
         var loginRateLimitFilter = new LoginRateLimitFilter(errorWriter, loginRateLimitPerMinute);
 
         http
-                .csrf(csrf -> csrf.disable())
+                // stateless JWT API, no session cookies
+                .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

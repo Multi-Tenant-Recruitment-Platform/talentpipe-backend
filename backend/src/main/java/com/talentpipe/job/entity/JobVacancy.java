@@ -51,6 +51,7 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "job_vacancies")
+@SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class JobVacancy extends BaseEntity {
 
     @Column(name = "tenant_id", nullable = false, updatable = false)

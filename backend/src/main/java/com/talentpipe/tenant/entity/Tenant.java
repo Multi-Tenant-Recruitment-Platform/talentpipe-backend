@@ -26,6 +26,7 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "tenants")
+@SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class Tenant extends BaseEntity {
 
     // ---------------------------------------------------------------- identity

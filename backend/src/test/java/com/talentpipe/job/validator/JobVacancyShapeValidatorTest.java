@@ -9,9 +9,6 @@ import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.entity.PayPeriod;
 import com.talentpipe.job.entity.VacancyStatus;
-import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

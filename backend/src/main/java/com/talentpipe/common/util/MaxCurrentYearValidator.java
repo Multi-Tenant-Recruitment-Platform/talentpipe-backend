@@ -3,6 +3,7 @@ package com.talentpipe.common.util;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import java.time.Year;
+import java.time.ZoneOffset;
 
 /**
  * Validates that an integer year is not greater than the current calendar year.
@@ -16,6 +17,6 @@ public class MaxCurrentYearValidator implements ConstraintValidator<MaxCurrentYe
         if (value == null) {
             return true; // optional — use @NotNull to make mandatory
         }
-        return value <= Year.now().getValue();
+        return value <= Year.now(ZoneOffset.UTC).getValue();
     }
 }

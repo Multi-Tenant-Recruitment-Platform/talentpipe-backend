@@ -1,6 +1,5 @@
 package com.talentpipe.notification;
 
-import com.talentpipe.notification.entity.NotificationType;
 import com.talentpipe.notification.event.NotificationRequestedEvent;
 
 /**

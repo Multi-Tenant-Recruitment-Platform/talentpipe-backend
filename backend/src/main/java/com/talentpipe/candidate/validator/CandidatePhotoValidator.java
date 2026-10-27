@@ -31,10 +31,10 @@ public class CandidatePhotoValidator extends AbstractFileValidator {
             ".webp"
     );
 
-    private static final byte[] PNG_MAGIC_BYTES = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47};
-    private static final byte[] JPEG_MAGIC_BYTES = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
-    private static final byte[] RIFF_MAGIC_BYTES = new byte[]{0x52, 0x49, 0x46, 0x46}; // "RIFF"
-    private static final byte[] WEBP_MAGIC_BYTES = new byte[]{0x57, 0x45, 0x42, 0x50}; // "WEBP" at offset 8
+    private static final byte[] PNG_MAGIC_BYTES = {(byte) 0x89, 0x50, 0x4E, 0x47};
+    private static final byte[] JPEG_MAGIC_BYTES = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] RIFF_MAGIC_BYTES = {0x52, 0x49, 0x46, 0x46}; // "RIFF"
+    private static final byte[] WEBP_MAGIC_BYTES = {0x57, 0x45, 0x42, 0x50}; // "WEBP" at offset 8
 
     private final StorageProperties storageProperties;
 

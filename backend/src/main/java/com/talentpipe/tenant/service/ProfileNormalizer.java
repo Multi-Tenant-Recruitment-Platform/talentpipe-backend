@@ -145,17 +145,12 @@ public class ProfileNormalizer {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
         List<String> result = new ArrayList<>();
         for (String raw : values) {
-            if (raw == null) {
-                continue;
-            }
-            String sanitized = htmlSanitizer.sanitize(raw);
-            String trimmed = canonicalize(sanitized.trim(), canonicalOptions);
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            String key = trimmed.toLowerCase(Locale.ROOT);
-            if (seen.add(key)) {
-                result.add(trimmed); // preserve original casing of first occurrence
+            if (raw != null) {
+                String sanitized = htmlSanitizer.sanitize(raw);
+                String trimmed = canonicalize(sanitized.trim(), canonicalOptions);
+                if (!trimmed.isEmpty() && seen.add(trimmed.toLowerCase(Locale.ROOT))) {
+                    result.add(trimmed); // preserve original casing of first occurrence
+                }
             }
         }
         return Collections.unmodifiableList(result);

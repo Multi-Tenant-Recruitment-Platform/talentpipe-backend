@@ -109,7 +109,7 @@ class CandidateProfileControllerTest {
 
     @Test
     void downloadMyCvStreamsFileAttachment() throws Exception {
-        byte[] dummyCv = new byte[]{0x25, 0x50, 0x44, 0x46, 1, 2, 3};
+        byte[] dummyCv = {0x25, 0x50, 0x44, 0x46, 1, 2, 3};
         when(cvService.loadActiveCvResource(candidateId))
                 .thenReturn(new CandidateCvService.CvDownloadPayload("resume.pdf", "application/pdf", dummyCv));
 

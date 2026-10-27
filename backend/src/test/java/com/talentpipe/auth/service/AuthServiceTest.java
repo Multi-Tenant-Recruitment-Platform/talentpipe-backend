@@ -115,8 +115,10 @@ class AuthServiceTest {
     void register_duplicateSubdomain_propagatesConflictAndCreatesNoUser() {
         when(tenantService.createTenant("Acme Inc", "acme"))
                 .thenThrow(new DuplicateResourceException("Subdomain 'acme' is already taken"));
+        AuthService service = service(new UserMapper());
+        RegisterRequest request = acmeRequest();
 
-        assertThatThrownBy(() -> service(new UserMapper()).register(acmeRequest()))
+        assertThatThrownBy(() -> service.register(request))
                 .isInstanceOf(DuplicateResourceException.class);
 
         verify(userRepository, never()).save(any());

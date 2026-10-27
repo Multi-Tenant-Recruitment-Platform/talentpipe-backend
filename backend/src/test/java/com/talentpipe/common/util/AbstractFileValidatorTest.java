@@ -115,7 +115,7 @@ class AbstractFileValidatorTest {
     @Test
     void matchesPrefix_checksAllBranches() {
         ConcreteValidator validator = new ConcreteValidator();
-        byte[] prefix = new byte[]{0x01, 0x02};
+        byte[] prefix = {0x01, 0x02};
 
         org.assertj.core.api.Assertions.assertThat(validator.matchesPrefix(null, prefix)).isFalse();
         org.assertj.core.api.Assertions.assertThat(validator.matchesPrefix(new byte[]{0x01}, prefix)).isFalse();
@@ -126,7 +126,7 @@ class AbstractFileValidatorTest {
     @Test
     void matchesBytesAt_checksAllBranches() {
         ConcreteValidator validator = new ConcreteValidator();
-        byte[] pattern = new byte[]{0x0A, 0x0B};
+        byte[] pattern = {0x0A, 0x0B};
 
         org.assertj.core.api.Assertions.assertThat(validator.matchesBytesAt(null, pattern, 0)).isFalse();
         org.assertj.core.api.Assertions.assertThat(validator.matchesBytesAt(new byte[]{0x0A}, pattern, 0)).isFalse();

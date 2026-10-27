@@ -128,7 +128,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
         assertThat(resp.getBody()).containsKey("subdomain");
         assertThat(resp.getBody()).containsKey("planTier");
         assertThat(resp.getBody()).containsKey("logoUrl");
-        assertThat(resp.getBody().get("subdomain")).isEqualTo(subdomain);
+        assertThat(resp.getBody()).containsEntry("subdomain", subdomain);
     }
 
     @Test
@@ -162,10 +162,10 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 new HttpEntity<>(patchBody, jsonHeaders(token)), Map.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(resp.getBody().get("name")).isEqualTo("Profile Test Co");   // trimmed
-        assertThat(resp.getBody().get("website")).isEqualTo("https://acme.io"); // scheme added
-        assertThat(resp.getBody().get("foundedYear")).isEqualTo(2015);
-        assertThat(resp.getBody().get("city")).isEqualTo("Bangalore");
+        assertThat(resp.getBody()).containsEntry("name", "Profile Test Co");   // trimmed
+        assertThat(resp.getBody()).containsEntry("website", "https://acme.io"); // scheme added
+        assertThat(resp.getBody()).containsEntry("foundedYear", 2015);
+        assertThat(resp.getBody()).containsEntry("city", "Bangalore");
         // "engineering" deduplicated — only "Engineering" should remain
         @SuppressWarnings("unchecked")
         List<String> departments = (List<String>) resp.getBody().get("departments");
@@ -187,7 +187,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 new HttpEntity<>(badBody, jsonHeaders(token)), Map.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(resp.getBody().get("status")).isEqualTo(400);
+        assertThat(resp.getBody()).containsEntry("status", 400);
         assertThat(resp.getBody().get("message").toString()).contains("name");
     }
 
@@ -269,7 +269,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 new HttpEntity<>(bearerHeaders(tokenA)), Map.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(resp.getBody().get("subdomain")).isEqualTo(subA);
+        assertThat(resp.getBody()).containsEntry("subdomain", subA);
         // Tenant B's data is never reachable by Tenant A's token — confirmed by
         // TenantContextLeakIntegrationTest which exhaustively verifies ThreadLocal cleanup.
     }
@@ -301,7 +301,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
         assertThat(resp.getBody()).doesNotContainKey("hrEmail");     // excluded (internal)
         assertThat(resp.getBody()).doesNotContainKey("planTier");    // excluded (billing)
         assertThat(resp.getBody()).doesNotContainKey("status");      // excluded (billing)
-        assertThat(resp.getBody().get("name")).isEqualTo("Public Acme");
+        assertThat(resp.getBody()).containsEntry("name", "Public Acme");
     }
 
     @Test
@@ -343,7 +343,7 @@ class TenantProfileIntegrationTest extends AbstractIntegrationTest {
                 new HttpEntity<>(multipart, headers), Map.class);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
-        assertThat(resp.getBody().get("status")).isEqualTo(415);
+        assertThat(resp.getBody()).containsEntry("status", 415);
     }
 
     @Test

@@ -1,9 +1,9 @@
 package com.talentpipe.common.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -124,34 +124,28 @@ class LocalFileStorageServiceTest {
     @Test
     void delete_nonExistingFile_doesNotThrow() {
         String fakeUrl = "http://localhost:8080/api/v1/public/media/logo/nonexistent.png";
-
-        // Should complete without exception even though no tenant dirs exist yet
-        storageService.delete(fakeUrl);
+        assertThatCode(() -> storageService.delete(fakeUrl)).doesNotThrowAnyException();
     }
 
     @Test
     void delete_nullUrl_doesNothing() {
-        storageService.delete(null);
-        // No exception — idempotent
+        assertThatCode(() -> storageService.delete(null)).doesNotThrowAnyException();
     }
 
     @Test
     void delete_blankUrl_doesNothing() {
-        storageService.delete("   ");
-        // No exception — idempotent
+        assertThatCode(() -> storageService.delete("   ")).doesNotThrowAnyException();
     }
 
     @Test
     void delete_urlWithTooFewParts_doesNothing() {
-        storageService.delete("http://localhost/onlyone");
-        // parts.length < 2 guard — should not throw
+        assertThatCode(() -> storageService.delete("http://localhost/onlyone")).doesNotThrowAnyException();
     }
 
     @Test
     void delete_whenTenantDirAbsent_doesNotThrow() {
-        // tempDir/tenant does NOT exist — should return early without exception
         String url = "http://localhost:8080/api/v1/public/media/logo/missing.png";
-        storageService.delete(url);
+        assertThatCode(() -> storageService.delete(url)).doesNotThrowAnyException();
     }
 
     @Test
