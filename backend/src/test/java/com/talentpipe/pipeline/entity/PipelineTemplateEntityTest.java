@@ -18,7 +18,7 @@ class PipelineTemplateEntityTest {
     @Test
     void entity_creationAndDefaults_workCorrectly() {
         PipelineTemplate template = new PipelineTemplate(
-                TENANT_ID, "Engineering", "Desc", 80, 70, true, USER_ID);
+                TENANT_ID, "Engineering", "Desc", 80, 70, true, true, USER_ID);
 
         assertEquals(TENANT_ID, template.getTenantId());
         assertEquals("Engineering", template.getName());
@@ -26,6 +26,7 @@ class PipelineTemplateEntityTest {
         assertEquals(80, template.getDefaultAutoThreshold());
         assertEquals(70, template.getDefaultManualThreshold());
         assertTrue(template.isIdealMatchingEnabled());
+        assertTrue(template.isBlindModeEnabled());
         assertEquals(USER_ID, template.getCreatedBy());
         assertEquals(PipelineTemplateStatus.ACTIVE, template.getStatus());
         assertTrue(template.isActive());
@@ -37,7 +38,7 @@ class PipelineTemplateEntityTest {
     @Test
     void addStage_and_clearStages_manageBidirectionalRelationship() {
         PipelineTemplate template = new PipelineTemplate(
-                TENANT_ID, "Sales", "Desc", 85, 65, false, USER_ID);
+                TENANT_ID, "Sales", "Desc", 85, 65, false, false, USER_ID);
         PipelineTemplateStage stage1 = new PipelineTemplateStage(
                 TENANT_ID, 0, StageType.POST_APPLICATION, "Apply", null);
         PipelineTemplateStage stage2 = new PipelineTemplateStage(
@@ -59,7 +60,7 @@ class PipelineTemplateEntityTest {
     @Test
     void setStages_replacesExistingStages() {
         PipelineTemplate template = new PipelineTemplate(
-                TENANT_ID, "Marketing", "Desc", 80, 70, false, USER_ID);
+                TENANT_ID, "Marketing", "Desc", 80, 70, false, false, USER_ID);
         PipelineTemplateStage oldStage = new PipelineTemplateStage(
                 TENANT_ID, 0, StageType.POST_APPLICATION, "Old", null);
         template.addStage(oldStage);
@@ -76,7 +77,7 @@ class PipelineTemplateEntityTest {
     @Test
     void archive_setsStatusAndArchivedTimestamp() {
         PipelineTemplate template = new PipelineTemplate(
-                TENANT_ID, "Support", "Desc", 80, 70, false, USER_ID);
+                TENANT_ID, "Support", "Desc", 80, 70, false, false, USER_ID);
 
         template.archive();
 
@@ -95,6 +96,7 @@ class PipelineTemplateEntityTest {
         template.setDefaultAutoThreshold(90);
         template.setDefaultManualThreshold(80);
         template.setIdealMatchingEnabled(true);
+        template.setBlindModeEnabled(true);
         template.setCreatedBy(USER_ID);
         template.setArchivedAt(null);
 
@@ -104,6 +106,7 @@ class PipelineTemplateEntityTest {
         assertEquals(90, template.getDefaultAutoThreshold());
         assertEquals(80, template.getDefaultManualThreshold());
         assertTrue(template.isIdealMatchingEnabled());
+        assertTrue(template.isBlindModeEnabled());
         assertEquals(USER_ID, template.getCreatedBy());
 
         PipelineTemplateStage stage = new PipelineTemplateStage(

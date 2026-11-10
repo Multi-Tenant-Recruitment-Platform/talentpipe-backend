@@ -106,7 +106,7 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
         PipelineTemplate duplicate = new PipelineTemplate(
                 tenantId, copyName, source.getDescription(),
                 source.getDefaultAutoThreshold(), source.getDefaultManualThreshold(),
-                source.isIdealMatchingEnabled(), userId
+                source.isIdealMatchingEnabled(), source.isBlindModeEnabled(), userId
         );
         duplicateStages(tenantId, source, duplicate);
 
@@ -134,6 +134,7 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
                 req.defaultAutoThreshold(),
                 req.defaultManualThreshold(),
                 Boolean.TRUE.equals(req.idealMatchingEnabled()),
+                Boolean.TRUE.equals(req.blindModeEnabled()),
                 userId
         );
     }
@@ -144,6 +145,7 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
         template.setDefaultAutoThreshold(req.defaultAutoThreshold());
         template.setDefaultManualThreshold(req.defaultManualThreshold());
         template.setIdealMatchingEnabled(Boolean.TRUE.equals(req.idealMatchingEnabled()));
+        template.setBlindModeEnabled(Boolean.TRUE.equals(req.blindModeEnabled()));
     }
 
     private void buildAndAttachStages(UUID tenantId, PipelineTemplate template, List<PipelineStageRequest> stageReqs) {

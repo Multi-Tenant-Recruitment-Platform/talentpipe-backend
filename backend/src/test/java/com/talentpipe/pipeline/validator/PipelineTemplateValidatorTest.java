@@ -60,7 +60,7 @@ class PipelineTemplateValidatorTest {
                 new PipelineStageRequest(2, StageType.ONBOARD, "Onboard", null)
         );
         PipelineTemplateRequest request = new PipelineTemplateRequest(
-                "Short Pipeline", "Direct interview", 85, 65, false, stages);
+                "Short Pipeline", "Direct interview", 85, 65, false, false, stages);
 
         when(templateRepository.existsByTenantIdAndNameIgnoreCaseAndStatus(
                 TENANT_ID, "Short Pipeline", PipelineTemplateStatus.ACTIVE))
@@ -72,7 +72,7 @@ class PipelineTemplateValidatorTest {
     @Test
     void validate_blankName_throwsInvalidRequestException() {
         PipelineTemplateRequest request = new PipelineTemplateRequest(
-                "   ", "desc", 80, 70, true, PipelineTemplateFixtures.standardStages());
+                "   ", "desc", 80, 70, true, false, PipelineTemplateFixtures.standardStages());
 
         assertThrows(InvalidRequestException.class, () -> validator.validate(TENANT_ID, null, request));
     }
@@ -80,7 +80,7 @@ class PipelineTemplateValidatorTest {
     @Test
     void validate_nameWithHtmlOnly_throwsInvalidRequestException() {
         PipelineTemplateRequest request = new PipelineTemplateRequest(
-                "<b></b>", "desc", 80, 70, true, PipelineTemplateFixtures.standardStages());
+                "<b></b>", "desc", 80, 70, true, false, PipelineTemplateFixtures.standardStages());
 
         assertThrows(InvalidRequestException.class, () -> validator.validate(TENANT_ID, null, request));
     }
@@ -118,7 +118,7 @@ class PipelineTemplateValidatorTest {
     @Test
     void validate_autoThresholdLowerThanManual_throwsBusinessRuleException() {
         PipelineTemplateRequest request = new PipelineTemplateRequest(
-                "Name", "desc", 60, 70, true, PipelineTemplateFixtures.standardStages());
+                "Name", "desc", 60, 70, true, false, PipelineTemplateFixtures.standardStages());
 
         assertThrows(BusinessRuleException.class, () -> validator.validate(TENANT_ID, null, request));
     }
@@ -126,7 +126,7 @@ class PipelineTemplateValidatorTest {
     @Test
     void validate_autoThresholdEqualToManual_throwsBusinessRuleException() {
         PipelineTemplateRequest request = new PipelineTemplateRequest(
-                "Name", "desc", 70, 70, true, PipelineTemplateFixtures.standardStages());
+                "Name", "desc", 70, 70, true, false, PipelineTemplateFixtures.standardStages());
 
         assertThrows(BusinessRuleException.class, () -> validator.validate(TENANT_ID, null, request));
     }

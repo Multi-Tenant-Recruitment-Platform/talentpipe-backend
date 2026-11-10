@@ -14,6 +14,7 @@ public record PipelineTemplateSummaryResponse(
         int defaultAutoThreshold,
         int defaultManualThreshold,
         boolean idealMatchingEnabled,
+        boolean blindModeEnabled,
         PipelineTemplateStatus status,
         int stageCount,
         int interviewRoundCount,

@@ -31,17 +31,26 @@ public final class PipelineTemplateFixtures {
     }
 
     public static PipelineTemplateRequest validRequest() {
+        return requestWithBlindMode(false);
+    }
+
+    public static PipelineTemplateRequest requestWithBlindMode(Boolean blindModeEnabled) {
         return new PipelineTemplateRequest(
                 "Standard Engineering Pipeline",
                 "Default hiring workflow for engineers",
                 80,
                 70,
                 true,
+                blindModeEnabled,
                 standardStages()
         );
     }
 
     public static PipelineTemplate createEntity(UUID tenantId) {
+        return createEntity(tenantId, false);
+    }
+
+    public static PipelineTemplate createEntity(UUID tenantId, boolean blindModeEnabled) {
         PipelineTemplate template = new PipelineTemplate(
                 tenantId,
                 "Standard Engineering Pipeline",
@@ -49,6 +58,7 @@ public final class PipelineTemplateFixtures {
                 80,
                 70,
                 true,
+                blindModeEnabled,
                 UUID.randomUUID()
         );
         template.addStage(new PipelineTemplateStage(tenantId, 0, StageType.POST_APPLICATION, "Post Application", null));
@@ -59,14 +69,26 @@ public final class PipelineTemplateFixtures {
     }
 
     public static PipelineTemplateResponse sampleResponse(UUID id) {
+        return sampleResponse(id, false);
+    }
+
+    public static PipelineTemplateResponse sampleResponse(UUID id, boolean blindModeEnabled) {
+        return templateResponse(id, 80, 70, blindModeEnabled, PipelineTemplateStatus.ACTIVE);
+    }
+
+    /** The standard four-stage template as the pipeline service hands it out, with the settings given. */
+    public static PipelineTemplateResponse templateResponse(UUID id, int defaultAutoThreshold,
+                                                            int defaultManualThreshold, boolean blindModeEnabled,
+                                                            PipelineTemplateStatus status) {
         return new PipelineTemplateResponse(
                 id,
                 "Standard Engineering Pipeline",
                 "Default hiring workflow for engineers",
-                80,
-                70,
+                defaultAutoThreshold,
+                defaultManualThreshold,
                 true,
-                PipelineTemplateStatus.ACTIVE,
+                blindModeEnabled,
+                status,
                 4,
                 1,
                 List.of(
@@ -77,7 +99,7 @@ public final class PipelineTemplateFixtures {
                 ),
                 Instant.now(),
                 Instant.now(),
-                null
+                status == PipelineTemplateStatus.ARCHIVED ? Instant.now() : null
         );
     }
 
@@ -89,6 +111,7 @@ public final class PipelineTemplateFixtures {
                 80,
                 70,
                 true,
+                false,
                 PipelineTemplateStatus.ACTIVE,
                 4,
                 1,

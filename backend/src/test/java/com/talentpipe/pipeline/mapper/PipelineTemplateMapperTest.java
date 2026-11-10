@@ -1,6 +1,7 @@
 package com.talentpipe.pipeline.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,6 +61,17 @@ class PipelineTemplateMapperTest {
         assertEquals(4, summary.stageCount());
         assertEquals(1, summary.interviewRoundCount());
         assertNotNull(summary.status());
+    }
+
+    @Test
+    void blindMode_reachesBothTheFullAndTheSummaryResponse() {
+        PipelineTemplate blind = PipelineTemplateFixtures.createEntity(TENANT_ID, true);
+        PipelineTemplate open = PipelineTemplateFixtures.createEntity(TENANT_ID, false);
+
+        assertTrue(mapper.toResponse(blind).blindModeEnabled());
+        assertTrue(mapper.toSummaryResponse(blind).blindModeEnabled());
+        assertFalse(mapper.toResponse(open).blindModeEnabled());
+        assertFalse(mapper.toSummaryResponse(open).blindModeEnabled());
     }
 
     @Test

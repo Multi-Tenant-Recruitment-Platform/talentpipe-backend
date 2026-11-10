@@ -784,7 +784,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             positioned.add(new PipelineStageRequest(i, stages[i].stageType(), stages[i].name(), stages[i].benchmark()));
         }
         pipelineTemplateService.create(company.tenantId, company.ownerId,
-                new PipelineTemplateRequest(name, description, auto, manual, idealMatching, positioned));
+                new PipelineTemplateRequest(name, description, auto, manual, idealMatching, false, positioned));
     }
 
     private static PipelineStageRequest stage(StageType type, String name, Integer benchmark) {
