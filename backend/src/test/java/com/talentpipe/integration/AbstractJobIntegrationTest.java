@@ -50,11 +50,33 @@ abstract class AbstractJobIntegrationTest extends AbstractWorkspaceIntegrationTe
         return body;
     }
 
-    /** Creates a vacancy and returns the stored response; fails the test unless it answers 201. */
+    /**
+     * Creates a vacancy and returns the stored response; fails the test unless
+     * it answers 201. A body that names no pipeline template is created from
+     * the workspace's {@linkplain #standardTemplate(String) standard one}.
+     */
     protected Map<String, Object> create(String token, Map<String, Object> body) {
-        ResponseEntity<Map<String, Object>> response = call(HttpMethod.POST, "/api/v1/jobs", token, body);
+        ResponseEntity<Map<String, Object>> response = attemptCreate(token, body);
         assertThat(response.getStatusCode()).as("create: %s", response.getBody()).isEqualTo(HttpStatus.CREATED);
         return response.getBody();
+    }
+
+    /**
+     * {@code POST /jobs}, whatever it answers — for tests about a refusal. A
+     * body without a {@code pipelineTemplateId} key gets the workspace's
+     * standard template; to send none at all, put the key with {@code null}.
+     */
+    protected ResponseEntity<Map<String, Object>> attemptCreate(String token, Map<String, Object> body) {
+        Map<String, Object> sent = new HashMap<>(body);
+        if (!sent.containsKey("pipelineTemplateId")) {
+            sent.put("pipelineTemplateId", standardTemplate(token).toString());
+        }
+        return call(HttpMethod.POST, "/api/v1/jobs", token, sent);
+    }
+
+    /** {@code GET /jobs/{id}/stages}: the stages the vacancy runs on, first to last. */
+    protected ResponseEntity<List<Map<String, Object>>> stagesOf(String token, Object vacancyId) {
+        return callForList("/api/v1/jobs/" + vacancyId + "/stages", token);
     }
 
     /** Creates a complete vacancy already PUBLISHED. */

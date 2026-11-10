@@ -3,11 +3,13 @@ package com.talentpipe.job.controller;
 import com.talentpipe.common.dto.PageResponse;
 import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
+import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.service.JobVacancyService;
+import com.talentpipe.job.service.PipelineSnapshotService;
 import com.talentpipe.job.service.VacancyHiringTeamService;
 import com.talentpipe.job.service.VacancyListFilter;
 import com.talentpipe.job.service.VacancyViewer;
@@ -18,6 +20,7 @@ import com.talentpipe.security.RequirePermission;
 import com.talentpipe.security.UserPrincipal;
 import jakarta.validation.Valid;
 import jakarta.validation.groups.Default;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -62,10 +65,13 @@ public class JobVacancyController {
 
     private final JobVacancyService vacancyService;
     private final VacancyHiringTeamService hiringTeamService;
+    private final PipelineSnapshotService pipelineSnapshots;
 
-    public JobVacancyController(JobVacancyService vacancyService, VacancyHiringTeamService hiringTeamService) {
+    public JobVacancyController(JobVacancyService vacancyService, VacancyHiringTeamService hiringTeamService,
+                                PipelineSnapshotService pipelineSnapshots) {
         this.vacancyService = vacancyService;
         this.hiringTeamService = hiringTeamService;
+        this.pipelineSnapshots = pipelineSnapshots;
     }
 
     // ------------------------------------------------------------------ reads
@@ -118,6 +124,16 @@ public class JobVacancyController {
     @GetMapping("/{id}/hiring-team")
     public HiringTeamResponse hiringTeam(Authentication authentication, @PathVariable UUID id) {
         return hiringTeamService.get(viewer(authentication), id);
+    }
+
+    /**
+     * The stages the vacancy runs on, first to last: the copy taken from its
+     * template when it was created, unaffected by later template changes.
+     */
+    @RequireCompanyMember
+    @GetMapping("/{id}/stages")
+    public List<JobStageResponse> stages(Authentication authentication, @PathVariable UUID id) {
+        return pipelineSnapshots.stages(viewer(authentication), id);
     }
 
     // ----------------------------------------------------------------- writes

@@ -210,6 +210,27 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "candidate_matching_enabled", nullable = false)
     private boolean candidateMatchingEnabled;
 
+    // ------------------------------------------------------- pipeline (V23)
+
+    /**
+     * The template the vacancy was created from; its stages were copied to
+     * {@link JobStage}. Never written after the insert: the database clears it
+     * if the template is deleted, and the copied stages stay.
+     * {@code null} for vacancies created before V23.
+     */
+    @Column(name = "pipeline_template_id", updatable = false)
+    private UUID pipelineTemplateId;
+
+    @Column(name = "auto_threshold")
+    private Integer autoThreshold;
+
+    @Column(name = "manual_threshold")
+    private Integer manualThreshold;
+
+    /** Reviewers screen applicants without seeing who they are. */
+    @Column(name = "blind_mode_enabled", nullable = false)
+    private boolean blindModeEnabled;
+
     // ---------------------------------------------------- lifecycle timestamps
 
     /** Set on entering each state and never cleared, so the history survives archiving. */
@@ -321,6 +342,24 @@ public class JobVacancy extends BaseEntity {
         }
     }
 
+    /**
+     * Puts a new vacancy on the pipeline it was created from, with the
+     * screening settings resolved from that template. Happens once: a
+     * vacancy keeps its own copy of the pipeline, so the template it came
+     * from never changes afterwards.
+     *
+     * @throws IllegalStateException if the vacancy is already on a pipeline
+     */
+    public void runOn(UUID templateId, int autoThreshold, int manualThreshold, boolean blindModeEnabled) {
+        if (this.pipelineTemplateId != null) {
+            throw new IllegalStateException("Vacancy " + getId() + " is already on pipeline " + pipelineTemplateId);
+        }
+        this.pipelineTemplateId = Objects.requireNonNull(templateId, "templateId");
+        this.autoThreshold = autoThreshold;
+        this.manualThreshold = manualThreshold;
+        this.blindModeEnabled = blindModeEnabled;
+    }
+
     /** The advert as currently stored — the inverse of {@link #applyContent}. */
     public VacancyContent content() {
         return new VacancyContent(
@@ -410,6 +449,22 @@ public class JobVacancy extends BaseEntity {
 
     public boolean isCandidateMatchingEnabled() {
         return candidateMatchingEnabled;
+    }
+
+    public UUID getPipelineTemplateId() {
+        return pipelineTemplateId;
+    }
+
+    public Integer getAutoThreshold() {
+        return autoThreshold;
+    }
+
+    public Integer getManualThreshold() {
+        return manualThreshold;
+    }
+
+    public boolean isBlindModeEnabled() {
+        return blindModeEnabled;
     }
 
     public int getVersion() {

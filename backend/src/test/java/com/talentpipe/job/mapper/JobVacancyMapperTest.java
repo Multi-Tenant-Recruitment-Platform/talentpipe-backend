@@ -99,7 +99,8 @@ class JobVacancyMapperTest {
 
         assertThat(fieldNames(body)).doesNotContain(
                 "tenantId", "status", "version", "assignedRecruiterId", "hiringManagerId",
-                "recruitmentPipelineId", "screeningQuestions", "createdAt", "updatedAt");
+                "recruitmentPipelineId", "screeningQuestions", "createdAt", "updatedAt",
+                "pipelineTemplateId", "autoThreshold", "manualThreshold", "blindModeEnabled");
     }
 
     @Test
@@ -130,7 +131,8 @@ class JobVacancyMapperTest {
 
         assertThat(fieldNames(body)).doesNotContain(
                 "tenantId", "status", "version", "assignedRecruiterId", "hiringManagerId",
-                "recruitmentPipelineId", "screeningQuestions");
+                "recruitmentPipelineId", "screeningQuestions",
+                "pipelineTemplateId", "autoThreshold", "manualThreshold", "blindModeEnabled");
     }
 
     private static List<String> fieldNames(JsonNode node) {

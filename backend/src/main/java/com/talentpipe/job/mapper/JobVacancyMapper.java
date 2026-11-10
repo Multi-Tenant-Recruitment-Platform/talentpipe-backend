@@ -1,8 +1,10 @@
 package com.talentpipe.job.mapper;
 
 import com.talentpipe.job.dto.JobDetailResponse;
+import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobSummaryResponse;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.entity.JobStage;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyContent;
 import com.talentpipe.tenant.dto.CompanySummaryResponse;
@@ -68,6 +70,11 @@ public class JobVacancyMapper {
                 vacancy.isAiScreeningEnabled(),
                 vacancy.isCandidateMatchingEnabled(),
 
+                vacancy.getPipelineTemplateId(),
+                vacancy.getAutoThreshold(),
+                vacancy.getManualThreshold(),
+                vacancy.isBlindModeEnabled(),
+
                 vacancy.getCreatedBy(),
                 vacancy.getCreatedAt(),
                 vacancy.getUpdatedAt(),
@@ -77,6 +84,12 @@ public class JobVacancyMapper {
                 // Applications count is populated once the applications module is
                 // merged. Null, not zero — see JobVacancyResponse.
                 null);
+    }
+
+    /** One stage of a vacancy's pipeline, for the recruiter dashboard. */
+    public JobStageResponse toStageResponse(JobStage stage) {
+        return new JobStageResponse(
+                stage.getId(), stage.getPosition(), stage.getStageType(), stage.getName(), stage.getBenchmark());
     }
 
     /**

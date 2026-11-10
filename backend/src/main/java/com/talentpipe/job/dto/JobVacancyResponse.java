@@ -24,6 +24,13 @@ import java.util.UUID;
  * keeps responses clean.</p>
  *
  * @param version        optimistic-lock counter; send it back on {@code PUT}
+ * @param pipelineTemplateId the template the vacancy was created from; its
+ *                       stages are at {@code GET /jobs/{id}/stages}. {@code null}
+ *                       for vacancies older than templates, or once the
+ *                       template is deleted — the stages stay either way
+ * @param autoThreshold  as resolved from the template when the vacancy was
+ *                       created; {@code null} with no template, as is
+ *                       {@code manualThreshold}
  * @param createdBy      who filed it; {@code null} for vacancies filed before
  *                       this was recorded
  * @param publishedAt    when the vacancy went live; {@code null} until then
@@ -77,6 +84,11 @@ public record JobVacancyResponse(
 
         boolean aiScreeningEnabled,
         boolean candidateMatchingEnabled,
+
+        UUID pipelineTemplateId,
+        Integer autoThreshold,
+        Integer manualThreshold,
+        boolean blindModeEnabled,
 
         UUID createdBy,
         Instant createdAt,

@@ -24,12 +24,13 @@ import java.util.UUID;
  * Request body for both {@code POST /api/v1/jobs} (create) and
  * {@code PUT /api/v1/jobs/{id}} (edit).
  *
- * <p>The two operations carry the same thirty content fields and differ in one
- * field each, so they share this record instead of two near-identical copies.
+ * <p>The two operations carry the same thirty content fields and differ in a
+ * few, so they share this record instead of two near-identical copies.
  * The difference is expressed with validation groups:</p>
  * <ul>
  *   <li>{@link OnCreate} — {@code status} is required and says whether the
- *       vacancy is filed as a DRAFT or published at once.</li>
+ *       vacancy is filed as a DRAFT or published at once; so is
+ *       {@code pipelineTemplateId}, the template whose pipeline it runs on.</li>
  *   <li>{@link OnUpdate} — {@code version} is required: the optimistic-lock
  *       token from the response being edited. {@code status} is ignored on an
  *       edit, because every status change has its own endpoint and a PUT that
@@ -172,6 +173,23 @@ public record JobVacancyRequest(
 
         Boolean candidateMatchingEnabled,
 
+        // ---- pipeline (create only). The vacancy runs on a copy of the
+        // template's stages; a threshold or blind mode left out is taken from
+        // the template. An edit ignores all four: the pipeline is fixed when
+        // the vacancy is created.
+        @NotNull(groups = OnCreate.class, message = "Choose a pipeline template for this vacancy.")
+        UUID pipelineTemplateId,
+
+        @Min(value = 0, message = "Set the auto threshold between 0 and 100.")
+        @Max(value = 100, message = "Set the auto threshold between 0 and 100.")
+        Integer autoThreshold,
+
+        @Min(value = 0, message = "Set the manual threshold between 0 and 100.")
+        @Max(value = 100, message = "Set the manual threshold between 0 and 100.")
+        Integer manualThreshold,
+
+        Boolean blindModeEnabled,
+
         // ---- operation-specific
         @NotNull(groups = OnCreate.class,
                 message = "Choose whether to save this vacancy as a draft or publish it.")
@@ -184,7 +202,7 @@ public record JobVacancyRequest(
         Integer version
 ) {
 
-    /** Validation group for {@code POST /jobs}: {@code status} is required. */
+    /** Validation group for {@code POST /jobs}: {@code status} and {@code pipelineTemplateId} are required. */
     public interface OnCreate {
     }
 

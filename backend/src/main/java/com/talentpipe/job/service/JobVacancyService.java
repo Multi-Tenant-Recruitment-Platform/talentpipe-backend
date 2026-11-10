@@ -90,6 +90,7 @@ public class JobVacancyService {
     private final VacancyCalendar calendar;
     private final UserDirectoryService userDirectory;
     private final TenantService tenantService;
+    private final PipelineSnapshotService pipelineSnapshots;
     private final JobVacancyMapper mapper;
 
     public JobVacancyService(JobVacancyRepository vacancyRepository,
@@ -103,6 +104,7 @@ public class JobVacancyService {
                              VacancyCalendar calendar,
                              UserDirectoryService userDirectory,
                              TenantService tenantService,
+                             PipelineSnapshotService pipelineSnapshots,
                              JobVacancyMapper mapper) {
         this.vacancyRepository = vacancyRepository;
         this.access = access;
@@ -115,6 +117,7 @@ public class JobVacancyService {
         this.calendar = calendar;
         this.userDirectory = userDirectory;
         this.tenantService = tenantService;
+        this.pipelineSnapshots = pipelineSnapshots;
         this.mapper = mapper;
     }
 
@@ -184,22 +187,32 @@ public class JobVacancyService {
     // ----------------------------------------------------------------- writes
 
     /**
-     * Files a new vacancy, as a DRAFT or straight to PUBLISHED.
+     * Files a new vacancy, as a DRAFT or straight to PUBLISHED, on the
+     * pipeline of the template it names.
      *
      * <p>"Straight to published" is not a second way in: the vacancy is built
      * as a draft and published in the same transaction, so it passes exactly
      * the checks a later publish would and gets its {@code publishedAt} in
      * the same request.</p>
      *
-     * @throws InvalidRequestException (400) if the requested status is
-     *         anything but DRAFT or PUBLISHED
-     * @throws BusinessRuleException   (422) if a content rule fails, or the
-     *         vacancy is to be published and is not complete
+     * <p>The template's stages are copied to the vacancy in this same
+     * transaction ({@link PipelineSnapshotService}), so a vacancy is never
+     * stored without its stages, and its thresholds and blind mode are the
+     * template's unless the request overrides them.</p>
+     *
+     * @throws InvalidRequestException   (400) if the requested status is
+     *         anything but DRAFT or PUBLISHED, or no template is named
+     * @throws ResourceNotFoundException (404) the template does not exist or
+     *         is another company's
+     * @throws BusinessRuleException     (422) if the template is archived, a
+     *         content rule fails, or the vacancy is to be published and is
+     *         not complete
      */
     @Transactional
     public JobVacancyResponse create(VacancyViewer viewer, JobVacancyRequest request) {
         UUID tenantId = viewer.tenantId();
         shapeValidator.validateCreationShape(request);
+        PipelineSnapshot pipeline = pipelineSnapshots.resolve(tenantId, PipelineSelection.of(request));
         memberValidator.validateMembers(tenantId, request.assignedRecruiterId(), request.hiringManagerId());
 
         LocalDate today = calendar.today(tenantId);
@@ -211,10 +224,15 @@ public class JobVacancyService {
         JobVacancy vacancy = new JobVacancy(tenantId, viewer.userId(), content);
         vacancy.fileUnder(industryPolicy.resolve(tenantId, request.industry(), null));
         startFeatures(vacancy, tenantId, request.aiScreeningEnabled(), request.candidateMatchingEnabled());
+        // Set before the insert: changing the vacancy after it would bump its version past the one returned.
+        vacancy.runOn(pipeline.templateId(), pipeline.autoThreshold(), pipeline.manualThreshold(),
+                pipeline.blindModeEnabled());
         if (request.status() == VacancyStatus.PUBLISHED) {
             vacancy.publish(calendar.now(), today);
         }
-        return stored(vacancy, viewer, "created as " + request.status());
+        JobVacancy saved = save(vacancy, viewer, "created as " + request.status());
+        pipelineSnapshots.copyStages(saved, pipeline);
+        return mapper.toResponse(saved);
     }
 
     /**

@@ -5,6 +5,8 @@ import static com.talentpipe.job.VacancyFixtures.TODAY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,14 +22,19 @@ import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
+import com.talentpipe.job.entity.JobStage;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.validator.JobVacancyMemberValidator;
 import com.talentpipe.job.validator.JobVacancyPublishValidator;
 import com.talentpipe.job.validator.JobVacancyShapeValidator;
+import com.talentpipe.job.repository.JobStageRepository;
 import com.talentpipe.job.repository.JobVacancyRepository;
 import com.talentpipe.job.repository.VacancyStatusCount;
+import com.talentpipe.pipeline.PipelineTemplateFixtures;
+import com.talentpipe.pipeline.entity.PipelineTemplateStatus;
+import com.talentpipe.pipeline.service.PipelineTemplateService;
 import com.talentpipe.tenant.dto.TenantSettingsResponse;
 import com.talentpipe.tenant.service.TenantService;
 import java.util.List;
@@ -41,6 +48,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -88,8 +96,17 @@ class JobVacancyServiceTest {
     @Mock
     private TenantService tenantService;
 
+    @Mock
+    private PipelineTemplateService templates;
+
+    @Mock
+    private JobStageRepository stageRepository;
+
     @Captor
     private ArgumentCaptor<JobVacancy> savedVacancy;
+
+    @Captor
+    private ArgumentCaptor<List<JobStage>> savedStages;
 
     @Captor
     private ArgumentCaptor<Pageable> pageable;
@@ -98,9 +115,11 @@ class JobVacancyServiceTest {
 
     @BeforeEach
     void setUp() {
+        VacancyAccess access = new VacancyAccess(repository);
+        JobVacancyMapper mapper = new JobVacancyMapper();
         service = new JobVacancyService(
                 repository,
-                new VacancyAccess(repository),
+                access,
                 hiringTeam,
                 industryPolicy,
                 new VacancyContentNormalizer(new HtmlSanitizer()),
@@ -110,8 +129,12 @@ class JobVacancyServiceTest {
                 calendar,
                 userDirectory,
                 tenantService,
-                new JobVacancyMapper());
+                new PipelineSnapshotServiceImpl(templates, stageRepository, access, mapper),
+                mapper);
 
+        // Every request is created from this template (80/70, blind mode off) unless a test says otherwise.
+        lenient().when(templates.get(TENANT, VacancyFixtures.PIPELINE_TEMPLATE, true))
+                .thenReturn(PipelineTemplateFixtures.sampleResponse(VacancyFixtures.PIPELINE_TEMPLATE));
         lenient().when(calendar.now()).thenReturn(NOW);
         lenient().when(calendar.today(TENANT)).thenReturn(TODAY);
         lenient().when(tenantService.getSettings(TENANT)).thenReturn(companySwitches(false, false));
@@ -220,6 +243,84 @@ class JobVacancyServiceTest {
                 .hasMessageContaining("must be an active member of your workspace");
 
         verify(repository, never()).saveAndFlush(any());
+    }
+
+    // -------------------------------------------------------- create: pipeline
+
+    @Test
+    void create_putsTheVacancyOnItsTemplatesPipeline_withTheTemplatesSettings() {
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null);
+
+        JobVacancyResponse response = service.create(VIEWER, request);
+
+        assertThat(response.pipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(response.autoThreshold()).isEqualTo(80);
+        assertThat(response.manualThreshold()).isEqualTo(70);
+        assertThat(response.blindModeEnabled()).isFalse();
+    }
+
+    @Test
+    void create_copiesTheTemplatesStagesOntoTheStoredVacancy_afterStoringIt() {
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.PUBLISHED, null);
+
+        JobVacancyResponse response = service.create(VIEWER, request);
+
+        InOrder order = inOrder(repository, stageRepository);
+        order.verify(repository).saveAndFlush(any(JobVacancy.class));
+        order.verify(stageRepository).saveAllAndFlush(savedStages.capture());
+        assertThat(savedStages.getValue())
+                .hasSize(4)
+                .allSatisfy(stage -> {
+                    assertThat(stage.getJobId()).isEqualTo(response.id());
+                    assertThat(stage.getTenantId()).isEqualTo(TENANT);
+                });
+        // The settings went in with the insert, so the version handed back is still the first one.
+        assertThat(response.version()).isZero();
+    }
+
+    @Test
+    void create_onAnArchivedTemplate_isRefused_andNeitherTheVacancyNorAnyStageIsStored() {
+        when(templates.get(TENANT, VacancyFixtures.PIPELINE_TEMPLATE, true)).thenReturn(
+                PipelineTemplateFixtures.templateResponse(VacancyFixtures.PIPELINE_TEMPLATE, 80, 70, false,
+                        PipelineTemplateStatus.ARCHIVED));
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null);
+
+        assertThatThrownBy(() -> service.create(VIEWER, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("The selected pipeline template is archived and cannot be used for new jobs.");
+
+        verify(repository, never()).saveAndFlush(any());
+        verify(stageRepository, never()).saveAllAndFlush(any());
+    }
+
+    @Test
+    void create_withoutATemplate_isABadRequest_andNothingIsStored() {
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(null)
+                .toRequest(VacancyStatus.DRAFT, null);
+
+        assertThatThrownBy(() -> service.create(VIEWER, request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("Choose a pipeline template for this vacancy.");
+
+        verify(repository, never()).saveAndFlush(any());
+        verify(stageRepository, never()).saveAllAndFlush(any());
+    }
+
+    @Test
+    void update_neverTouchesThePipeline_evenIfTheBodyNamesAnotherTemplate() {
+        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        vacancy.runOn(VacancyFixtures.PIPELINE_TEMPLATE, 80, 70, false);
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(UUID.randomUUID())
+                .thresholds(95, 10).blindModeEnabled(true).toRequest(null, 0);
+
+        JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
+
+        assertThat(response.pipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(response.autoThreshold()).isEqualTo(80);
+        assertThat(response.manualThreshold()).isEqualTo(70);
+        assertThat(response.blindModeEnabled()).isFalse();
+        verify(templates, never()).get(any(), any(), anyBoolean());
+        verify(stageRepository, never()).saveAllAndFlush(any());
     }
 
     // -------------------------------------------------------------------- read
@@ -739,7 +840,9 @@ class JobVacancyServiceTest {
                 r.salaryMin(), r.salaryMax(), r.currency(), r.payPeriod(), r.benefits(),
                 r.workingDays(), r.workingHours(), r.shiftType(), r.expectedHoursPerWeek(),
                 r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
-                aiScreening, matching, r.status(), r.version());
+                aiScreening, matching,
+                r.pipelineTemplateId(), r.autoThreshold(), r.manualThreshold(), r.blindModeEnabled(),
+                r.status(), r.version());
     }
 
     private static VacancyStatusCount count(VacancyStatus status, long total) {

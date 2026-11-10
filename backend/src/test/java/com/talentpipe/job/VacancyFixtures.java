@@ -32,6 +32,9 @@ public final class VacancyFixtures {
     /** The instant matching {@link #TODAY}, mid-morning UTC. */
     public static final Instant NOW = Instant.parse("2026-10-03T09:00:00Z");
 
+    /** The pipeline template every request is created from unless a test chooses another. */
+    public static final UUID PIPELINE_TEMPLATE = UUID.fromString("7e3a1c52-0f4b-4d8e-9a61-2b5c8d0e4f17");
+
     private VacancyFixtures() {
         // static helpers only
     }
@@ -111,6 +114,10 @@ public final class VacancyFixtures {
         private UUID assignedRecruiterId;
         private UUID hiringManagerId;
         private String recruitmentPipelineId = "TECHNICAL";
+        private UUID pipelineTemplateId = PIPELINE_TEMPLATE;
+        private Integer autoThreshold;
+        private Integer manualThreshold;
+        private Boolean blindModeEnabled;
 
         public ContentBuilder title(String value) {
             this.title = value;
@@ -213,6 +220,25 @@ public final class VacancyFixtures {
             return this;
         }
 
+        /** Request only: the template the vacancy is created from. */
+        public ContentBuilder pipelineTemplateId(UUID value) {
+            this.pipelineTemplateId = value;
+            return this;
+        }
+
+        /** Request only: the recruiter's own thresholds in place of the template's. */
+        public ContentBuilder thresholds(Integer auto, Integer manual) {
+            this.autoThreshold = auto;
+            this.manualThreshold = manual;
+            return this;
+        }
+
+        /** Request only: the recruiter's own blind-mode choice in place of the template's. */
+        public ContentBuilder blindModeEnabled(Boolean value) {
+            this.blindModeEnabled = value;
+            return this;
+        }
+
         /** The content as the domain sees it — assumed already normalized. */
         public VacancyContent build() {
             return new VacancyContent(
@@ -238,6 +264,7 @@ public final class VacancyFixtures {
                     assignedRecruiterId, hiringManagerId, recruitmentPipelineId,
                     List.of("Do you have the right to work in Sri Lanka?"),
                     null, null,
+                    pipelineTemplateId, autoThreshold, manualThreshold, blindModeEnabled,
                     status, version);
         }
     }
