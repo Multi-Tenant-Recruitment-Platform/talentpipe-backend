@@ -204,7 +204,7 @@ final class DemoVacancy {
     }
 
     /** The vacancy form as a draft: it is published, if at all, by the lifecycle endpoint. */
-    JobVacancyRequest toRequest(LocalDate today) {
+    JobVacancyRequest toRequest(LocalDate today, UUID pipelineTemplateId) {
         return new JobVacancyRequest(
                 title, department, industry, openings, employmentType, workplaceType, location,
                 today.plusDays(deadlineInDays),
@@ -215,6 +215,7 @@ final class DemoVacancy {
                 workingDays, workingHours, shiftType, hoursPerWeek,
                 recruiter, hiringManager, pipeline, screeningQuestions,
                 aiScreening, candidateMatching,
+                pipelineTemplateId, null, null, null,
                 VacancyStatus.DRAFT, null);
     }
 }

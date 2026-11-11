@@ -3,6 +3,7 @@ package com.talentpipe.job.controller;
 import static com.talentpipe.testsupport.WebMvcSecurityTestConfig.asUser;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -21,15 +22,18 @@ import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
+import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.service.JobVacancyService;
+import com.talentpipe.job.service.PipelineSnapshotService;
 import com.talentpipe.job.service.VacancyHiringTeamService;
 import com.talentpipe.job.service.VacancyListFilter;
 import com.talentpipe.job.service.VacancyViewer;
+import com.talentpipe.pipeline.entity.StageType;
 import com.talentpipe.testsupport.WebMvcSecurityTestConfig;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -81,6 +85,9 @@ class JobVacancyControllerTest {
 
     @MockitoBean
     private VacancyHiringTeamService hiringTeamService;
+
+    @MockitoBean
+    private PipelineSnapshotService pipelineSnapshots;
 
     private final JobVacancyResponse draft =
             new JobVacancyMapper().toResponse(VacancyFixtures.draft(TENANT));
@@ -235,12 +242,77 @@ class JobVacancyControllerTest {
     }
 
     @Test
-    void create_acceptsAnAlmostEmptyDraft_nothingButOpeningsAndStatus() throws Exception {
+    void create_acceptsAnAlmostEmptyDraft_nothingButOpeningsStatusAndTemplate() throws Exception {
         when(vacancyService.create(eq(SEES_ALL), any(JobVacancyRequest.class))).thenReturn(draft);
 
-        mockMvc.perform(json(post("/api/v1/jobs"), Map.of("openings", 1, "status", "DRAFT"))
+        mockMvc.perform(json(post("/api/v1/jobs"),
+                        Map.of("openings", 1, "status", "DRAFT", "pipelineTemplateId", VacancyFixtures.PIPELINE_TEMPLATE))
                         .with(as("HR_MANAGER")))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void create_withoutAPipelineTemplate_isABadRequest_andTheServiceIsNeverCalled() throws Exception {
+        Map<String, Object> body = draftBody();
+        body.remove("pipelineTemplateId");
+
+        mockMvc.perform(json(post("/api/v1/jobs"), body).with(as("HR_MANAGER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Choose a pipeline template for this vacancy.")));
+
+        verifyNoInteractions(vacancyService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"autoThreshold", "manualThreshold"})
+    void create_withAThresholdOffTheScale_isABadRequest(String field) throws Exception {
+        Map<String, Object> body = draftBody();
+        body.put(field, 101);
+
+        mockMvc.perform(json(post("/api/v1/jobs"), body).with(as("HR_MANAGER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("between 0 and 100")));
+
+        verifyNoInteractions(vacancyService);
+    }
+
+    @Test
+    void create_passesTheChosenTemplateAndOverridesToTheService() throws Exception {
+        when(vacancyService.create(eq(SEES_ALL), any(JobVacancyRequest.class))).thenReturn(draft);
+        Map<String, Object> body = draftBody();
+        body.put("autoThreshold", 90);
+        body.put("manualThreshold", 65);
+        body.put("blindModeEnabled", true);
+
+        mockMvc.perform(json(post("/api/v1/jobs"), body).with(as("HR_MANAGER")))
+                .andExpect(status().isCreated());
+
+        verify(vacancyService).create(eq(SEES_ALL), argThat(request ->
+                VacancyFixtures.PIPELINE_TEMPLATE.equals(request.pipelineTemplateId())
+                        && request.autoThreshold() == 90
+                        && request.manualThreshold() == 65
+                        && Boolean.TRUE.equals(request.blindModeEnabled())));
+    }
+
+    @Test
+    void create_onAnArchivedTemplate_answers422WithTheExactSentence() throws Exception {
+        String sentence = "The selected pipeline template is archived and cannot be used for new jobs.";
+        when(vacancyService.create(eq(SEES_ALL), any(JobVacancyRequest.class)))
+                .thenThrow(new BusinessRuleException(sentence));
+
+        mockMvc.perform(json(post("/api/v1/jobs"), draftBody()).with(as("HR_MANAGER")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(sentence));
+    }
+
+    @Test
+    void create_onAnUnknownOrAnotherCompanysTemplate_answers404() throws Exception {
+        when(vacancyService.create(eq(SEES_ALL), any(JobVacancyRequest.class)))
+                .thenThrow(new ResourceNotFoundException("Pipeline template not found"));
+
+        mockMvc.perform(json(post("/api/v1/jobs"), draftBody()).with(as("HR_MANAGER")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Pipeline template not found"));
     }
 
     @Test
@@ -331,6 +403,17 @@ class JobVacancyControllerTest {
         mockMvc.perform(json(put("/api/v1/jobs/{id}", VACANCY), body).with(as("COMPANY_ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(draft.id().toString()));
+    }
+
+    @Test
+    void update_doesNotRequireAPipelineTemplate_thePipelineIsFixedAtCreation() throws Exception {
+        when(vacancyService.update(eq(SEES_ALL), eq(VACANCY), any(JobVacancyRequest.class)))
+                .thenReturn(draft);
+        Map<String, Object> body = draftBody();
+        body.remove("pipelineTemplateId");
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}", VACANCY), body).with(as("HR_MANAGER")))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -463,6 +546,42 @@ class JobVacancyControllerTest {
                         .with(as("HR_MANAGER")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString("at most 50")));
+    }
+
+    // ------------------------------------------------------------------ stages
+
+    @Test
+    void stages_areReadableByAnyoneWhoWorksOnTheVacancy_firstToLast() throws Exception {
+        when(pipelineSnapshots.stages(WORKS_ON_IT, VACANCY)).thenReturn(List.of(
+                new JobStageResponse(UUID.randomUUID(), 0, StageType.POST_APPLICATION, "Applied", null),
+                new JobStageResponse(UUID.randomUUID(), 1, StageType.INTERVIEW, "Panel", 75)));
+
+        mockMvc.perform(get("/api/v1/jobs/{id}/stages", VACANCY).with(as("INTERVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].stageType").value("POST_APPLICATION"))
+                .andExpect(jsonPath("$[0].benchmark").isEmpty())
+                .andExpect(jsonPath("$[1].name").value("Panel"))
+                .andExpect(jsonPath("$[1].benchmark").value(75))
+                .andExpect(jsonPath("$[0].tenantId").doesNotExist());
+    }
+
+    @Test
+    void stages_ofAnUnknownOrForeignVacancy_answer404() throws Exception {
+        when(pipelineSnapshots.stages(SEES_ALL, VACANCY)).thenThrow(new ResourceNotFoundException("Vacancy not found"));
+
+        mockMvc.perform(get("/api/v1/jobs/{id}/stages", VACANCY).with(as("HR_MANAGER")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Vacancy not found"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CANDIDATE", "SUPER_ADMIN"})
+    void stages_areForbiddenToAnyoneOutsideACompany(String role) throws Exception {
+        mockMvc.perform(get("/api/v1/jobs/{id}/stages", VACANCY).with(as(role)))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(pipelineSnapshots);
     }
 
     // ----------------------------------------------------------------- helpers

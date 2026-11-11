@@ -169,9 +169,26 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
         body.put("keyResponsibilities", List.of("Run the services"));
         body.put("requiredSkills", List.of("Java"));
         body.put("status", status);
+        body.put("pipelineTemplateId", createPipelineTemplate(accessToken));
         ResponseEntity<Map> created = rest.exchange("/api/v1/jobs", HttpMethod.POST,
                 jsonEntity(body, null, accessToken), Map.class);
         assertThat(created.getStatusCode()).as("vacancy: %s", created.getBody()).isEqualTo(HttpStatus.CREATED);
+        return (String) created.getBody().get("id");
+    }
+
+    /** Creates a minimal pipeline template as the company admin and returns its id; every vacancy needs one. */
+    private String createPipelineTemplate(String adminToken) {
+        Map<String, Object> template = new HashMap<>();
+        template.put("name", unique("Pipeline"));
+        template.put("defaultAutoThreshold", 80);
+        template.put("defaultManualThreshold", 70);
+        template.put("stages", List.of(
+                Map.of("position", 0, "stageType", "POST_APPLICATION", "name", "Applied"),
+                Map.of("position", 1, "stageType", "INTERVIEW", "name", "Interview", "benchmark", 70),
+                Map.of("position", 2, "stageType", "ONBOARD", "name", "Onboard")));
+        ResponseEntity<Map> created = rest.exchange("/api/v1/pipeline-templates", HttpMethod.POST,
+                jsonEntity(template, null, adminToken), Map.class);
+        assertThat(created.getStatusCode()).as("template: %s", created.getBody()).isEqualTo(HttpStatus.CREATED);
         return (String) created.getBody().get("id");
     }
 

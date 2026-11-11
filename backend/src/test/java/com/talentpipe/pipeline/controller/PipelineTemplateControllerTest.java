@@ -3,6 +3,7 @@ package com.talentpipe.pipeline.controller;
 import static com.talentpipe.testsupport.WebMvcSecurityTestConfig.asUser;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,6 +66,34 @@ class PipelineTemplateControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(TEMPLATE_ID.toString()))
                 .andExpect(jsonPath("$.name").value(response.name()));
+    }
+
+    @Test
+    void create_withBlindModeEnabled_passesItOn_andAnswersWithIt() throws Exception {
+        when(templateService.create(eq(TENANT_ID), eq(USER_ID), any(PipelineTemplateRequest.class)))
+                .thenReturn(PipelineTemplateFixtures.sampleResponse(TEMPLATE_ID, true));
+
+        mockMvc.perform(json(post("/api/v1/pipeline-templates"), PipelineTemplateFixtures.requestWithBlindMode(true))
+                        .with(as("COMPANY_ADMIN")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.blindModeEnabled").value(true));
+
+        verify(templateService).create(eq(TENANT_ID), eq(USER_ID),
+                argThat(request -> Boolean.TRUE.equals(request.blindModeEnabled())));
+    }
+
+    @Test
+    void create_withBlindModeLeftOut_sendsItAsOff() throws Exception {
+        when(templateService.create(eq(TENANT_ID), eq(USER_ID), any(PipelineTemplateRequest.class)))
+                .thenReturn(PipelineTemplateFixtures.sampleResponse(TEMPLATE_ID));
+
+        mockMvc.perform(json(post("/api/v1/pipeline-templates"), PipelineTemplateFixtures.requestWithBlindMode(null))
+                        .with(as("COMPANY_ADMIN")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.blindModeEnabled").value(false));
+
+        verify(templateService).create(eq(TENANT_ID), eq(USER_ID),
+                argThat(request -> Boolean.FALSE.equals(request.blindModeEnabled())));
     }
 
     @Test
@@ -148,13 +177,14 @@ class PipelineTemplateControllerTest {
 
     @Test
     void duplicate_asCompanyAdmin_returns201() throws Exception {
-        PipelineTemplateResponse response = PipelineTemplateFixtures.sampleResponse(TEMPLATE_ID);
+        PipelineTemplateResponse response = PipelineTemplateFixtures.sampleResponse(TEMPLATE_ID, true);
         when(templateService.duplicate(TENANT_ID, USER_ID, TEMPLATE_ID)).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/pipeline-templates/{id}/duplicate", TEMPLATE_ID)
                         .with(as("COMPANY_ADMIN")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(TEMPLATE_ID.toString()));
+                .andExpect(jsonPath("$.id").value(TEMPLATE_ID.toString()))
+                .andExpect(jsonPath("$.blindModeEnabled").value(true));
     }
 
     @Test

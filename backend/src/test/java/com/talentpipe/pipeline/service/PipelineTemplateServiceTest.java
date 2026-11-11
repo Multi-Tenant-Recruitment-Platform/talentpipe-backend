@@ -1,6 +1,8 @@
 package com.talentpipe.pipeline.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -27,6 +29,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -46,6 +52,9 @@ class PipelineTemplateServiceTest {
 
     @Mock
     private PipelineTemplateValidator validator;
+
+    @Captor
+    private ArgumentCaptor<PipelineTemplate> savedTemplate;
 
     private PipelineTemplateMapper mapper;
     private PipelineTemplateServiceImpl service;
@@ -70,6 +79,59 @@ class PipelineTemplateServiceTest {
         assertNotNull(response);
         assertEquals(request.name(), response.name());
         assertEquals(4, response.stageCount());
+    }
+
+    @Test
+    void create_withBlindModeEnabled_storesAndReturnsIt() {
+        PipelineTemplateRequest request = PipelineTemplateFixtures.requestWithBlindMode(true);
+        when(templateRepository.save(any(PipelineTemplate.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PipelineTemplateResponse response = service.create(TENANT_ID, USER_ID, request);
+
+        verify(templateRepository).save(savedTemplate.capture());
+        assertTrue(savedTemplate.getValue().isBlindModeEnabled());
+        assertTrue(response.blindModeEnabled());
+    }
+
+    @Test
+    void create_withBlindModeLeftOut_startsWithItOff() {
+        PipelineTemplateRequest request = PipelineTemplateFixtures.requestWithBlindMode(null);
+        when(templateRepository.save(any(PipelineTemplate.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PipelineTemplateResponse response = service.create(TENANT_ID, USER_ID, request);
+
+        assertFalse(response.blindModeEnabled());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void update_replacesBlindMode(boolean blindMode) {
+        PipelineTemplate entity = PipelineTemplateFixtures.createEntity(TENANT_ID, !blindMode);
+        when(templateRepository.findWithStagesByIdAndTenantId(TEMPLATE_ID, TENANT_ID))
+                .thenReturn(Optional.of(entity));
+        when(templateRepository.save(entity)).thenReturn(entity);
+
+        PipelineTemplateResponse response = service.update(TENANT_ID, USER_ID, TEMPLATE_ID,
+                PipelineTemplateFixtures.requestWithBlindMode(blindMode));
+
+        assertEquals(blindMode, entity.isBlindModeEnabled());
+        assertEquals(blindMode, response.blindModeEnabled());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void duplicate_keepsTheSourcesBlindMode(boolean blindMode) {
+        PipelineTemplate source = PipelineTemplateFixtures.createEntity(TENANT_ID, blindMode);
+        when(templateRepository.findWithStagesByIdAndTenantId(TEMPLATE_ID, TENANT_ID))
+                .thenReturn(Optional.of(source));
+        when(templateRepository.save(any(PipelineTemplate.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PipelineTemplateResponse response = service.duplicate(TENANT_ID, USER_ID, TEMPLATE_ID);
+
+        verify(templateRepository).save(savedTemplate.capture());
+        assertNotSame(source, savedTemplate.getValue());
+        assertEquals(blindMode, savedTemplate.getValue().isBlindModeEnabled());
+        assertEquals(blindMode, response.blindModeEnabled());
     }
 
     @Test

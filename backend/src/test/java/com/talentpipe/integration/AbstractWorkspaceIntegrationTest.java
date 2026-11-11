@@ -3,6 +3,7 @@ package com.talentpipe.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.talentpipe.integration.TestEmailConfig.CapturingEmailService;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,15 @@ abstract class AbstractWorkspaceIntegrationTest extends AbstractIntegrationTest 
     @Autowired
     protected JdbcTemplate jdbc;
 
+    /**
+     * The workspaces this test registered, by tenant — so a helper given only
+     * a member's token can still act as that company's admin. A new test
+     * instance per method keeps these in step with the emptied database.
+     */
+    private final Map<UUID, Workspace> workspaces = new HashMap<>();
+    private final Map<String, UUID> tenantOfToken = new HashMap<>();
+    private final Map<UUID, UUID> standardTemplates = new HashMap<>();
+
     @BeforeEach
     void clearEmailCapture() {
         emailCapture.clear();
@@ -78,7 +88,77 @@ abstract class AbstractWorkspaceIntegrationTest extends AbstractIntegrationTest 
 
         String token = login(subdomain, adminEmail);
         Map<String, Object> profile = call(HttpMethod.GET, "/api/v1/tenant", token, null).getBody();
-        return new Workspace(subdomain, companyName, UUID.fromString((String) profile.get("id")), token);
+        Workspace workspace = new Workspace(subdomain, companyName, UUID.fromString((String) profile.get("id")), token);
+        workspaces.put(workspace.tenantId(), workspace);
+        return workspace;
+    }
+
+    // ------------------------------------------------------ pipeline templates
+
+    /**
+     * The four stages of the standard template: application, screening, one
+     * interview round (benchmark 75), onboarding.
+     */
+    protected static List<Map<String, Object>> standardStages() {
+        List<Map<String, Object>> stages = new ArrayList<>();
+        stages.add(stage(0, "POST_APPLICATION", "Applied", null));
+        stages.add(stage(1, "SCREENING", "Screening", null));
+        stages.add(stage(2, "INTERVIEW", "Technical interview", 75));
+        stages.add(stage(3, "ONBOARD", "Onboard", null));
+        return stages;
+    }
+
+    protected static Map<String, Object> stage(int position, String stageType, String name, Integer benchmark) {
+        Map<String, Object> stage = new HashMap<>();
+        stage.put("position", position);
+        stage.put("stageType", stageType);
+        stage.put("name", name);
+        stage.put("benchmark", benchmark);
+        return stage;
+    }
+
+    /** A template body, as a mutable map so a test can change exactly what it is about. */
+    protected static Map<String, Object> templateBody(String name, int autoThreshold, int manualThreshold,
+                                                      boolean blindMode, List<Map<String, Object>> stages) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", name);
+        body.put("description", "How " + name + " hires");
+        body.put("defaultAutoThreshold", autoThreshold);
+        body.put("defaultManualThreshold", manualThreshold);
+        body.put("idealMatchingEnabled", false);
+        body.put("blindModeEnabled", blindMode);
+        body.put("stages", stages);
+        return body;
+    }
+
+    /** Creates a pipeline template as the admin; fails the test unless it answers 201. */
+    protected Map<String, Object> createTemplate(String adminToken, Map<String, Object> body) {
+        ResponseEntity<Map<String, Object>> response =
+                call(HttpMethod.POST, "/api/v1/pipeline-templates", adminToken, body);
+        assertThat(response.getStatusCode()).as("template: %s", response.getBody()).isEqualTo(HttpStatus.CREATED);
+        return response.getBody();
+    }
+
+    /**
+     * The workspace's standard template (four stages, 80/70, blind mode off),
+     * created the first time a test asks for it. Every vacancy needs a
+     * template; tests that are not about which one use this.
+     */
+    protected UUID standardTemplate(Workspace workspace) {
+        return standardTemplates.computeIfAbsent(workspace.tenantId(), tenant -> UUID.fromString((String)
+                createTemplate(workspace.adminToken(), templateBody("Standard hiring", 80, 70, false, standardStages()))
+                        .get("id")));
+    }
+
+    /** The standard template of the workspace the token belongs to — for helpers given only a token. */
+    protected UUID standardTemplate(String token) {
+        UUID tenantId = tenantOfToken.computeIfAbsent(token, t -> UUID.fromString(
+                (String) call(HttpMethod.GET, "/api/v1/auth/me", t, null).getBody().get("tenantId")));
+        Workspace workspace = workspaces.get(tenantId);
+        if (workspace == null) {
+            throw new IllegalStateException("No workspace registered by this test for tenant " + tenantId);
+        }
+        return standardTemplate(workspace);
     }
 
     /**

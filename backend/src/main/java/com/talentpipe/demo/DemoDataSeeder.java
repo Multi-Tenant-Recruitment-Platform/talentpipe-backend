@@ -42,6 +42,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -135,6 +136,8 @@ public class DemoDataSeeder implements ApplicationRunner {
     /** What the seed creates, for the backdating step that follows it. */
     private final List<Posted> posted = new ArrayList<>();
     private final List<Applied> applied = new ArrayList<>();
+    /** Each company's first template, by tenant: the pipeline its vacancies are filed on. */
+    private final Map<UUID, UUID> hiringTemplates = new HashMap<>();
     private String passwordHash;
     private LocalDate today;
 
@@ -187,6 +190,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         }
         posted.clear();
         applied.clear();
+        hiringTemplates.clear();
         transactions.executeWithoutResult(status -> seed());
         transactions.executeWithoutResult(status -> backdate(Instant.now()));
         log.info("Demo data seeded: 3 companies, {} vacancies, {} applications. The logins are listed "
@@ -783,8 +787,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         for (int i = 0; i < stages.length; i++) {
             positioned.add(new PipelineStageRequest(i, stages[i].stageType(), stages[i].name(), stages[i].benchmark()));
         }
-        pipelineTemplateService.create(company.tenantId, company.ownerId,
-                new PipelineTemplateRequest(name, description, auto, manual, idealMatching, positioned));
+        UUID id = pipelineTemplateService.create(company.tenantId, company.ownerId,
+                new PipelineTemplateRequest(name, description, auto, manual, idealMatching, false, positioned)).id();
+        hiringTemplates.putIfAbsent(company.tenantId, id);
     }
 
     private static PipelineStageRequest stage(StageType type, String name, Integer benchmark) {
@@ -806,7 +811,7 @@ public class DemoDataSeeder implements ApplicationRunner {
      */
     private Posted post(Company company, UUID actor, DemoVacancy advert) {
         VacancyViewer viewer = new VacancyViewer(company.tenantId, actor, true);
-        UUID id = vacancyService.create(viewer, advert.toRequest(today)).id();
+        UUID id = vacancyService.create(viewer, advert.toRequest(today, hiringTemplates.get(company.tenantId))).id();
         if (!advert.team.isEmpty()) {
             hiringTeamService.replace(viewer, id, new HiringTeamRequest(advert.team));
         }

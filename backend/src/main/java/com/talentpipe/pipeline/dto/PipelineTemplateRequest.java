@@ -32,6 +32,9 @@ public record PipelineTemplateRequest(
 
         Boolean idealMatchingEnabled,
 
+        /** Hide who applicants are while they are screened; vacancies created from the template start with it. */
+        Boolean blindModeEnabled,
+
         @NotEmpty(message = "Stages are required")
         @Valid
         List<PipelineStageRequest> stages
@@ -39,6 +42,9 @@ public record PipelineTemplateRequest(
     public PipelineTemplateRequest {
         if (idealMatchingEnabled == null) {
             idealMatchingEnabled = false;
+        }
+        if (blindModeEnabled == null) {
+            blindModeEnabled = false;
         }
     }
 }

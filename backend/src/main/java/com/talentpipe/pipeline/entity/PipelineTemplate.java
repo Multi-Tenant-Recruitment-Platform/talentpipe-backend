@@ -42,6 +42,9 @@ public class PipelineTemplate extends BaseEntity {
     @Column(name = "ideal_matching_enabled", nullable = false)
     private boolean idealMatchingEnabled;
 
+    @Column(name = "blind_mode_enabled", nullable = false)
+    private boolean blindModeEnabled;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private PipelineTemplateStatus status = PipelineTemplateStatus.ACTIVE;
@@ -66,13 +69,14 @@ public class PipelineTemplate extends BaseEntity {
 
     public PipelineTemplate(UUID tenantId, String name, String description,
                             int defaultAutoThreshold, int defaultManualThreshold,
-                            boolean idealMatchingEnabled, UUID createdBy) {
+                            boolean idealMatchingEnabled, boolean blindModeEnabled, UUID createdBy) {
         this.tenantId = tenantId;
         this.name = name;
         this.description = description;
         this.defaultAutoThreshold = defaultAutoThreshold;
         this.defaultManualThreshold = defaultManualThreshold;
         this.idealMatchingEnabled = idealMatchingEnabled;
+        this.blindModeEnabled = blindModeEnabled;
         this.createdBy = createdBy;
         this.status = PipelineTemplateStatus.ACTIVE;
     }
@@ -159,6 +163,14 @@ public class PipelineTemplate extends BaseEntity {
 
     public void setIdealMatchingEnabled(boolean idealMatchingEnabled) {
         this.idealMatchingEnabled = idealMatchingEnabled;
+    }
+
+    public boolean isBlindModeEnabled() {
+        return blindModeEnabled;
+    }
+
+    public void setBlindModeEnabled(boolean blindModeEnabled) {
+        this.blindModeEnabled = blindModeEnabled;
     }
 
     public PipelineTemplateStatus getStatus() {

@@ -63,7 +63,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         assertThat(interviewerList.getBody()).containsEntry("totalElements", 0);
         assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + created.get("id"), interviewer, null).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(call(HttpMethod.POST, "/api/v1/jobs", interviewer, completeVacancy("Nope")).getStatusCode())
+        assertThat(attemptCreate(interviewer, completeVacancy("Nope")).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
 
         ResponseEntity<Map<String, Object>> anonymous = call(HttpMethod.GET, "/api/v1/jobs", null, null);
@@ -108,7 +108,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         assertThat(create(acme.adminToken(), body)).containsEntry("status", "DRAFT");
 
         body.put("status", "PUBLISHED");
-        ResponseEntity<Map<String, Object>> refused = call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), body);
+        ResponseEntity<Map<String, Object>> refused = attemptCreate(acme.adminToken(), body);
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(refused.getBody())
@@ -136,7 +136,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         Map<String, Object> body = completeVacancy("Born closed");
         body.put("status", "CLOSED");
 
-        assertThat(call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), body).getStatusCode())
+        assertThat(attemptCreate(acme.adminToken(), body).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
@@ -162,7 +162,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
 
         Map<String, Object> body = completeVacancy("Needs a recruiter");
         body.put("assignedRecruiterId", globexAdmin.toString());
-        ResponseEntity<Map<String, Object>> refused = call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), body);
+        ResponseEntity<Map<String, Object>> refused = attemptCreate(acme.adminToken(), body);
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(refused.getBody())
@@ -179,7 +179,7 @@ class JobVacancyFlowIntegrationTest extends AbstractJobIntegrationTest {
         body.put("salaryMin", 450000);
         body.put("salaryMax", 650000);
 
-        ResponseEntity<Map<String, Object>> refused = call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), body);
+        ResponseEntity<Map<String, Object>> refused = attemptCreate(acme.adminToken(), body);
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(refused.getBody()).containsEntry("message", "Choose a currency for the salary range you entered.");

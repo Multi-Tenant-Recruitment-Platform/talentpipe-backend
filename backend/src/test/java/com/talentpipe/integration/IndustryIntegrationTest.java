@@ -57,7 +57,7 @@ class IndustryIntegrationTest extends AbstractJobIntegrationTest {
 
         Map<String, Object> nurse = completeVacancy("Nurse");
         nurse.put("industry", "Healthcare");
-        ResponseEntity<Map<String, Object>> refused = call(HttpMethod.POST, "/api/v1/jobs", acme.adminToken(), nurse);
+        ResponseEntity<Map<String, Object>> refused = attemptCreate(acme.adminToken(), nurse);
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(refused.getBody()).containsEntry("message",
                 "Choose one of your company's industries: Information Technology, Finance & Banking.");

@@ -94,7 +94,7 @@ class RolesAndPermissionsIntegrationTest extends AbstractWorkspaceIntegrationTes
         // ...but cannot edit the company profile or manage vacancies.
         assertThat(call(HttpMethod.PATCH, "/api/v1/tenant", alice.token(),
                 Map.of("name", "Hijacked", "email", "x@y.io")).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(call(HttpMethod.POST, "/api/v1/jobs", alice.token(), Map.of("openings", 1, "status", "DRAFT"))
+        assertThat(call(HttpMethod.POST, "/api/v1/jobs", alice.token(), minimalVacancy(acme))
                 .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
         // Bob can do none of that, but is still a member of the workspace.
@@ -125,7 +125,7 @@ class RolesAndPermissionsIntegrationTest extends AbstractWorkspaceIntegrationTes
     void movingSomeoneToAnotherRole_alsoAppliesAtOnce() {
         Workspace acme = newWorkspace("Acme");
         Member member = newMemberWithRole(acme, roleId(acme, "Interviewer"));
-        assertThat(call(HttpMethod.POST, "/api/v1/jobs", member.token(), Map.of("openings", 1, "status", "DRAFT"))
+        assertThat(call(HttpMethod.POST, "/api/v1/jobs", member.token(), minimalVacancy(acme))
                 .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
         ResponseEntity<Map<String, Object>> moved = call(HttpMethod.PUT, "/api/v1/team/members/" + member.id() + "/role",
@@ -133,8 +133,14 @@ class RolesAndPermissionsIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(moved.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(moved.getBody()).containsEntry("roleName", "Recruiter").containsEntry("role", "HR_MANAGER");
-        assertThat(call(HttpMethod.POST, "/api/v1/jobs", member.token(), Map.of("openings", 1, "status", "DRAFT"))
+        assertThat(call(HttpMethod.POST, "/api/v1/jobs", member.token(), minimalVacancy(acme))
                 .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    /** The least a new draft needs: an opening, a status and the pipeline it runs on. */
+    private Map<String, Object> minimalVacancy(Workspace workspace) {
+        return Map.of("openings", 1, "status", "DRAFT",
+                "pipelineTemplateId", standardTemplate(workspace).toString());
     }
 
     // -------------------------------------------------------------- guardrails
