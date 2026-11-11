@@ -15,6 +15,8 @@ import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.JobStageResponse;
+import com.talentpipe.job.dto.JobVacancyRequest;
+import com.talentpipe.job.entity.VacancyPipeline;
 import com.talentpipe.job.entity.JobStage;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.mapper.JobVacancyMapper;
@@ -99,10 +101,13 @@ class PipelineSnapshotServiceTest {
             PipelineSnapshot snapshot = service.resolve(TENANT, choose(null, null, null));
 
             assertThat(snapshot.templateId()).isEqualTo(TEMPLATE);
+            assertThat(snapshot.templateName()).isEqualTo(template.name());
             assertThat(snapshot.autoThreshold()).isEqualTo(80);
             assertThat(snapshot.manualThreshold()).isEqualTo(70);
             assertThat(snapshot.blindModeEnabled()).isTrue();
             assertThat(snapshot.stages()).isEqualTo(template.stages());
+            assertThat(snapshot.stageCount()).isEqualTo(4);
+            assertThat(snapshot.interviewRoundCount()).isEqualTo(1);
         }
 
         @Test
@@ -187,7 +192,7 @@ class PipelineSnapshotServiceTest {
 
             assertThatThrownBy(() -> service.resolve(TENANT, selection))
                     .isInstanceOf(InvalidRequestException.class)
-                    .hasMessage("Choose a pipeline template for this vacancy.");
+                    .hasMessage(JobVacancyRequest.PIPELINE_TEMPLATE_REQUIRED);
 
             verifyNoInteractions(templates);
         }
@@ -243,12 +248,34 @@ class PipelineSnapshotServiceTest {
     }
 
     @Nested
+    class Summary {
+
+        private final PipelineSnapshot twoRounds = new PipelineSnapshot(TEMPLATE, "Engineering", 90, 60, true, List.of(
+                new PipelineStageResponse(UUID.randomUUID(), 0, StageType.POST_APPLICATION, "Applied", null),
+                new PipelineStageResponse(UUID.randomUUID(), 1, StageType.INTERVIEW, "Technical", 70),
+                new PipelineStageResponse(UUID.randomUUID(), 2, StageType.INTERVIEW, "Panel", 75),
+                new PipelineStageResponse(UUID.randomUUID(), 3, StageType.ONBOARD, "Onboard", null)));
+
+        @Test
+        void countsEveryStage_andOnlyInterviewRoundsAsRounds() {
+            assertThat(twoRounds.stageCount()).isEqualTo(4);
+            assertThat(twoRounds.interviewRoundCount()).isEqualTo(2);
+        }
+
+        @Test
+        void whatTheVacancyStores_isTheSnapshotsSettingsAndShape() {
+            assertThat(twoRounds.toVacancyPipeline())
+                    .isEqualTo(new VacancyPipeline(TEMPLATE, "Engineering", 90, 60, true, 4, 2));
+        }
+    }
+
+    @Nested
     class CopyingStages {
 
         @Test
         void everyStageIsCopiedExactly_ontoTheVacancy_inTheVacancysTenant() {
             JobVacancy vacancy = VacancyFixtures.draft(TENANT);
-            PipelineSnapshot snapshot = new PipelineSnapshot(TEMPLATE, 80, 70, false,
+            PipelineSnapshot snapshot = new PipelineSnapshot(TEMPLATE, "Standard", 80, 70, false,
                     PipelineTemplateFixtures.sampleResponse(TEMPLATE).stages());
 
             service.copyStages(vacancy, snapshot);
@@ -267,7 +294,7 @@ class PipelineSnapshotServiceTest {
         @Test
         void stagesAreStoredInPipelineOrder_whateverOrderTheyArriveIn() {
             JobVacancy vacancy = VacancyFixtures.draft(TENANT);
-            PipelineSnapshot snapshot = new PipelineSnapshot(TEMPLATE, 80, 70, false, List.of(
+            PipelineSnapshot snapshot = new PipelineSnapshot(TEMPLATE, "Standard", 80, 70, false, List.of(
                     new PipelineStageResponse(UUID.randomUUID(), 2, StageType.ONBOARD, "Onboard", null),
                     new PipelineStageResponse(UUID.randomUUID(), 0, StageType.POST_APPLICATION, "Applied", null),
                     new PipelineStageResponse(UUID.randomUUID(), 1, StageType.INTERVIEW, "Panel", 60)));

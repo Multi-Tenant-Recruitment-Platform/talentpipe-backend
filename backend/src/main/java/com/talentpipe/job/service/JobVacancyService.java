@@ -225,8 +225,7 @@ public class JobVacancyService {
         vacancy.fileUnder(industryPolicy.resolve(tenantId, request.industry(), null));
         startFeatures(vacancy, tenantId, request.aiScreeningEnabled(), request.candidateMatchingEnabled());
         // Set before the insert: changing the vacancy after it would bump its version past the one returned.
-        vacancy.runOn(pipeline.templateId(), pipeline.autoThreshold(), pipeline.manualThreshold(),
-                pipeline.blindModeEnabled());
+        vacancy.runOn(pipeline.toVacancyPipeline());
         if (request.status() == VacancyStatus.PUBLISHED) {
             vacancy.publish(calendar.now(), today);
         }

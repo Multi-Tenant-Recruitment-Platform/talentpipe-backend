@@ -5,6 +5,7 @@ import com.talentpipe.job.entity.EmploymentType;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.PayPeriod;
 import com.talentpipe.job.entity.ShiftType;
+import com.talentpipe.job.entity.VacancyPipeline;
 import com.talentpipe.job.entity.VacancyContent;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.entity.WeekDay;
@@ -35,6 +36,9 @@ public final class VacancyFixtures {
     /** The pipeline template every request is created from unless a test chooses another. */
     public static final UUID PIPELINE_TEMPLATE = UUID.fromString("7e3a1c52-0f4b-4d8e-9a61-2b5c8d0e4f17");
 
+    /** The name {@link #pipeline()} records for {@link #PIPELINE_TEMPLATE}. */
+    public static final String PIPELINE_TEMPLATE_NAME = "Standard Engineering Pipeline";
+
     private VacancyFixtures() {
         // static helpers only
     }
@@ -51,6 +55,21 @@ public final class VacancyFixtures {
                 .employmentType(null).workplaceType(null).applicationDeadline(null)
                 .jobSummary("").jobDescription("")
                 .keyResponsibilities(List.of()).requiredSkills(List.of());
+    }
+
+    /**
+     * What a vacancy created from {@link #PIPELINE_TEMPLATE} stores: 80/70,
+     * blind mode off, four stages of which one is an interview round.
+     */
+    public static VacancyPipeline pipeline() {
+        return new VacancyPipeline(PIPELINE_TEMPLATE, PIPELINE_TEMPLATE_NAME, 80, 70, false, 4, 1);
+    }
+
+    /** A stored DRAFT on {@link #pipeline()}, as a vacancy created today would be. */
+    public static JobVacancy draftOnPipeline(UUID tenantId) {
+        JobVacancy vacancy = draft(tenantId);
+        vacancy.runOn(pipeline());
+        return vacancy;
     }
 
     /** A stored DRAFT, as a repository would hand it back: id set, version 0. */

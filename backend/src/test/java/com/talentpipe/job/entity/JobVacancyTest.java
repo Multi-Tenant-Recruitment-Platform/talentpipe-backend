@@ -305,6 +305,42 @@ class JobVacancyTest {
         assertThat(vacancy.isAcceptingApplications(TODAY)).as("archived").isFalse();
     }
 
+    // ---------------------------------------------------------------- pipeline
+
+    @Test
+    void runOn_storesEveryPipelineValue() {
+        JobVacancy vacancy = VacancyFixtures.draft(TENANT);
+
+        vacancy.runOn(new VacancyPipeline(VacancyFixtures.PIPELINE_TEMPLATE, "Engineering", 90, 60, true, 5, 2));
+
+        assertThat(vacancy.getPipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(vacancy.getPipelineTemplateName()).isEqualTo("Engineering");
+        assertThat(vacancy.getAutoThreshold()).isEqualTo(90);
+        assertThat(vacancy.getManualThreshold()).isEqualTo(60);
+        assertThat(vacancy.isBlindModeEnabled()).isTrue();
+        assertThat(vacancy.getStageCount()).isEqualTo(5);
+        assertThat(vacancy.getInterviewRoundCount()).isEqualTo(2);
+    }
+
+    @Test
+    void runOn_happensOnce_aVacancyKeepsThePipelineItWasCreatedOn() {
+        JobVacancy vacancy = VacancyFixtures.draftOnPipeline(TENANT);
+        VacancyPipeline another = new VacancyPipeline(UUID.randomUUID(), "Other", 90, 60, true, 3, 1);
+
+        assertThatThrownBy(() -> vacancy.runOn(another)).isInstanceOf(IllegalStateException.class);
+        assertThat(vacancy.getPipelineTemplateName()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE_NAME);
+    }
+
+    @Test
+    void aPipelineAlwaysNamesItsTemplate() {
+        UUID template = VacancyFixtures.PIPELINE_TEMPLATE;
+
+        assertThatThrownBy(() -> new VacancyPipeline(template, null, 80, 70, false, 4, 1))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new VacancyPipeline(null, "Standard", 80, 70, false, 4, 1))
+                .isInstanceOf(NullPointerException.class);
+    }
+
     // ------------------------------------------------------------------- other
 
     @Test

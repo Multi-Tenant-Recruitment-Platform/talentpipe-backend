@@ -60,6 +60,29 @@ class JobVacancyMapperTest {
     }
 
     @Test
+    void toResponse_carriesThePipelineFrozenOnTheVacancy() {
+        JobVacancyResponse response = mapper.toResponse(VacancyFixtures.draftOnPipeline(TENANT));
+
+        assertThat(response.pipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(response.pipelineTemplateName()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE_NAME);
+        assertThat(response.stageCount()).isEqualTo(4);
+        assertThat(response.interviewRoundCount()).isEqualTo(1);
+        assertThat(response.autoThreshold()).isEqualTo(80);
+        assertThat(response.manualThreshold()).isEqualTo(70);
+        assertThat(response.blindModeEnabled()).isFalse();
+    }
+
+    @Test
+    void toResponse_ofAVacancyOlderThanTemplates_hasNoPipeline_nullNotZero() {
+        JobVacancyResponse response = mapper.toResponse(VacancyFixtures.draft(TENANT));
+
+        assertThat(response.pipelineTemplateId()).isNull();
+        assertThat(response.pipelineTemplateName()).isNull();
+        assertThat(response.stageCount()).isNull();
+        assertThat(response.interviewRoundCount()).isNull();
+    }
+
+    @Test
     void toResponse_neverSerializesATenantId() {
         JsonNode body = json.valueToTree(mapper.toResponse(VacancyFixtures.draft(TENANT)));
 
@@ -100,7 +123,8 @@ class JobVacancyMapperTest {
         assertThat(fieldNames(body)).doesNotContain(
                 "tenantId", "status", "version", "assignedRecruiterId", "hiringManagerId",
                 "recruitmentPipelineId", "screeningQuestions", "createdAt", "updatedAt",
-                "pipelineTemplateId", "autoThreshold", "manualThreshold", "blindModeEnabled");
+                "pipelineTemplateId", "pipelineTemplateName", "stageCount", "interviewRoundCount",
+                "autoThreshold", "manualThreshold", "blindModeEnabled");
     }
 
     @Test
@@ -132,7 +156,8 @@ class JobVacancyMapperTest {
         assertThat(fieldNames(body)).doesNotContain(
                 "tenantId", "status", "version", "assignedRecruiterId", "hiringManagerId",
                 "recruitmentPipelineId", "screeningQuestions",
-                "pipelineTemplateId", "autoThreshold", "manualThreshold", "blindModeEnabled");
+                "pipelineTemplateId", "pipelineTemplateName", "stageCount", "interviewRoundCount",
+                "autoThreshold", "manualThreshold", "blindModeEnabled");
     }
 
     private static List<String> fieldNames(JsonNode node) {

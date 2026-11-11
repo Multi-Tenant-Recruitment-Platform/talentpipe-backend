@@ -17,11 +17,12 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The schema of V22 and V23 as PostgreSQL enforces it, independent of the
+ * The schema of V22 to V24 as PostgreSQL enforces it, independent of the
  * application code: the constraints on {@code job_stages}, its Row-Level
  * Security, how it and the vacancy columns behave when a vacancy or template
- * is deleted, and that both migrations apply to a database already holding
- * templates and vacancies.
+ * is deleted, and that the migrations apply to a database already holding
+ * templates and vacancies — V24 filling in the pipeline summary of the
+ * vacancies created before it.
  *
  * <p>Rows are written with plain SQL on purpose: these are the rules that
  * hold even for a write that never went through the service layer.</p>
@@ -89,6 +90,17 @@ class JobStagesMigrationIntegrationTest extends AbstractIntegrationTest {
                 "UPDATE job_vacancies SET auto_threshold = 70, manual_threshold = 70 WHERE id = ?", vacancy))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("chk_job_vacancies_thresholds");
+    }
+
+    @Test
+    void aVacancysStageCounts_cannotBeNegative() {
+        assertThatThrownBy(() -> jdbc.update("UPDATE job_vacancies SET stage_count = -1 WHERE id = ?", vacancy))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_job_vacancies_stage_count");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE job_vacancies SET interview_round_count = -1 WHERE id = ?", vacancy))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chk_job_vacancies_interview_round_count");
     }
 
     // --------------------------------------------------------------- deletes
@@ -197,6 +209,53 @@ class JobStagesMigrationIntegrationTest extends AbstractIntegrationTest {
                     .containsEntry("manual_threshold", null)
                     .containsEntry("blind_mode_enabled", false);
             assertThat(after.queryForObject("SELECT count(*) FROM job_stages", Long.class)).isZero();
+        } finally {
+            jdbc.execute("DROP DATABASE IF EXISTS " + database + " WITH (FORCE)");
+        }
+    }
+
+    @Test
+    void v24_fillsInThePipelineSummary_ofVacanciesCreatedBeforeIt() {
+        String database = "populated_" + UUID.randomUUID().toString().replace("-", "");
+        jdbc.execute("CREATE DATABASE " + database);
+        try {
+            DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                    "jdbc:postgresql://" + POSTGRES.getHost() + ":" + POSTGRES.getMappedPort(5432) + "/" + database,
+                    POSTGRES.getUsername(), POSTGRES.getPassword());
+            migrate(dataSource, "23");
+
+            // Data as it stood before V24: one vacancy on a template with copied stages, one older than templates.
+            JdbcTemplate before = new JdbcTemplate(dataSource);
+            UUID company = before.queryForObject(
+                    "INSERT INTO tenants (name, subdomain) VALUES ('Acme', 'acme') RETURNING id", UUID.class);
+            UUID template = before.queryForObject(
+                    "INSERT INTO pipeline_templates (tenant_id, name) VALUES (?, 'Engineering') RETURNING id",
+                    UUID.class, company);
+            UUID onTemplate = before.queryForObject("INSERT INTO job_vacancies (tenant_id, pipeline_template_id, "
+                    + "auto_threshold, manual_threshold) VALUES (?, ?, 80, 70) RETURNING id",
+                    UUID.class, company, template);
+            UUID legacy = before.queryForObject(
+                    "INSERT INTO job_vacancies (tenant_id) VALUES (?) RETURNING id", UUID.class, company);
+            String stage = "INSERT INTO job_stages (tenant_id, job_id, position, stage_type, name, benchmark) "
+                    + "VALUES (?, ?, ?, ?, ?, ?)";
+            before.update(stage, company, onTemplate, 0, "POST_APPLICATION", "Applied", null);
+            before.update(stage, company, onTemplate, 1, "INTERVIEW", "Technical interview", 75);
+            before.update(stage, company, onTemplate, 2, "INTERVIEW", "Panel interview", 70);
+            before.update(stage, company, onTemplate, 3, "ONBOARD", "Onboard", null);
+
+            migrate(dataSource, "latest");
+
+            String summary = "SELECT pipeline_template_name, stage_count, interview_round_count "
+                    + "FROM job_vacancies WHERE id = ?";
+            JdbcTemplate after = new JdbcTemplate(dataSource);
+            assertThat(after.queryForMap(summary, onTemplate))
+                    .containsEntry("pipeline_template_name", "Engineering")
+                    .containsEntry("stage_count", 4)
+                    .containsEntry("interview_round_count", 2);
+            assertThat(after.queryForMap(summary, legacy))
+                    .containsEntry("pipeline_template_name", null)
+                    .containsEntry("stage_count", null)
+                    .containsEntry("interview_round_count", null);
         } finally {
             jdbc.execute("DROP DATABASE IF EXISTS " + database + " WITH (FORCE)");
         }

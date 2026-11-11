@@ -254,6 +254,9 @@ class JobVacancyServiceTest {
         JobVacancyResponse response = service.create(VIEWER, request);
 
         assertThat(response.pipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(response.pipelineTemplateName()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE_NAME);
+        assertThat(response.stageCount()).isEqualTo(4);
+        assertThat(response.interviewRoundCount()).isEqualTo(1);
         assertThat(response.autoThreshold()).isEqualTo(80);
         assertThat(response.manualThreshold()).isEqualTo(70);
         assertThat(response.blindModeEnabled()).isFalse();
@@ -300,7 +303,7 @@ class JobVacancyServiceTest {
 
         assertThatThrownBy(() -> service.create(VIEWER, request))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessage("Choose a pipeline template for this vacancy.");
+                .hasMessage(JobVacancyRequest.PIPELINE_TEMPLATE_REQUIRED);
 
         verify(repository, never()).saveAndFlush(any());
         verify(stageRepository, never()).saveAllAndFlush(any());
@@ -309,7 +312,7 @@ class JobVacancyServiceTest {
     @Test
     void update_neverTouchesThePipeline_evenIfTheBodyNamesAnotherTemplate() {
         JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
-        vacancy.runOn(VacancyFixtures.PIPELINE_TEMPLATE, 80, 70, false);
+        vacancy.runOn(VacancyFixtures.pipeline());
         JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(UUID.randomUUID())
                 .thresholds(95, 10).blindModeEnabled(true).toRequest(null, 0);
 
