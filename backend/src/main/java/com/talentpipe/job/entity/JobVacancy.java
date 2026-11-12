@@ -231,6 +231,20 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "blind_mode_enabled", nullable = false)
     private boolean blindModeEnabled;
 
+    /**
+     * The template's name when the vacancy was created (V24) — kept, not read
+     * live, so a renamed or deleted template does not change it.
+     */
+    @Column(name = "pipeline_template_name", updatable = false, length = 120)
+    private String pipelineTemplateName;
+
+    /** How many stages were copied to {@link JobStage}; stages never change, so neither does this. */
+    @Column(name = "stage_count", updatable = false)
+    private Integer stageCount;
+
+    @Column(name = "interview_round_count", updatable = false)
+    private Integer interviewRoundCount;
+
     // ---------------------------------------------------- lifecycle timestamps
 
     /** Set on entering each state and never cleared, so the history survives archiving. */
@@ -350,14 +364,18 @@ public class JobVacancy extends BaseEntity {
      *
      * @throws IllegalStateException if the vacancy is already on a pipeline
      */
-    public void runOn(UUID templateId, int autoThreshold, int manualThreshold, boolean blindModeEnabled) {
+    public void runOn(VacancyPipeline pipeline) {
+        Objects.requireNonNull(pipeline, "pipeline");
         if (this.pipelineTemplateId != null) {
             throw new IllegalStateException("Vacancy " + getId() + " is already on pipeline " + pipelineTemplateId);
         }
-        this.pipelineTemplateId = Objects.requireNonNull(templateId, "templateId");
-        this.autoThreshold = autoThreshold;
-        this.manualThreshold = manualThreshold;
-        this.blindModeEnabled = blindModeEnabled;
+        this.pipelineTemplateId = pipeline.templateId();
+        this.pipelineTemplateName = pipeline.templateName();
+        this.autoThreshold = pipeline.autoThreshold();
+        this.manualThreshold = pipeline.manualThreshold();
+        this.blindModeEnabled = pipeline.blindModeEnabled();
+        this.stageCount = pipeline.stageCount();
+        this.interviewRoundCount = pipeline.interviewRoundCount();
     }
 
     /** The advert as currently stored — the inverse of {@link #applyContent}. */
@@ -465,6 +483,18 @@ public class JobVacancy extends BaseEntity {
 
     public boolean isBlindModeEnabled() {
         return blindModeEnabled;
+    }
+
+    public String getPipelineTemplateName() {
+        return pipelineTemplateName;
+    }
+
+    public Integer getStageCount() {
+        return stageCount;
+    }
+
+    public Integer getInterviewRoundCount() {
+        return interviewRoundCount;
     }
 
     public int getVersion() {

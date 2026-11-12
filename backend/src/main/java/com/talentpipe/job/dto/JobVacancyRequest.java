@@ -177,7 +177,7 @@ public record JobVacancyRequest(
         // template's stages; a threshold or blind mode left out is taken from
         // the template. An edit ignores all four: the pipeline is fixed when
         // the vacancy is created.
-        @NotNull(groups = OnCreate.class, message = "Choose a pipeline template for this vacancy.")
+        @NotNull(groups = OnCreate.class, message = JobVacancyRequest.PIPELINE_TEMPLATE_REQUIRED)
         UUID pipelineTemplateId,
 
         @Min(value = 0, message = "Set the auto threshold between 0 and 100.")
@@ -201,6 +201,13 @@ public record JobVacancyRequest(
                 message = "The vacancy's version is not valid. Reload the page and try again.")
         Integer version
 ) {
+
+    /**
+     * Said when a new vacancy names no template — by the validation above, and
+     * by {@code PipelineSnapshotService} for callers that skip it — so both
+     * paths answer with the same sentence.
+     */
+    public static final String PIPELINE_TEMPLATE_REQUIRED = "Pipeline template is required.";
 
     /** Validation group for {@code POST /jobs}: {@code status} and {@code pipelineTemplateId} are required. */
     public interface OnCreate {

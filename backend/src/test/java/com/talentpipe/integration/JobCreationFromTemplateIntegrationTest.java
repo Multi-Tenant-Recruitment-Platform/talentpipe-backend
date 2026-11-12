@@ -37,6 +37,9 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
 
         assertThat(job)
                 .containsEntry("pipelineTemplateId", template.get("id"))
+                .containsEntry("pipelineTemplateName", "Engineering pipeline")
+                .containsEntry("stageCount", 4)
+                .containsEntry("interviewRoundCount", 1)
                 .containsEntry("autoThreshold", 80)
                 .containsEntry("manualThreshold", 70)
                 .containsEntry("blindModeEnabled", true)
@@ -106,15 +109,37 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
 
         assertThat(stagesOf(acme.adminToken(), jobId).getBody()).hasSize(4).isEqualTo(before);
         assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + jobId, acme.adminToken(), null).getBody())
+                .containsEntry("stageCount", 4)
+                .containsEntry("interviewRoundCount", 1)
                 .containsEntry("autoThreshold", 80)
                 .containsEntry("manualThreshold", 70)
                 .containsEntry("blindModeEnabled", false);
 
         // The copy is taken when a job is created: a new job gets the template as it is now.
-        Object newJobId = create(acme.adminToken(), from(template, completeVacancy("Frontend Engineer"))).get("id");
+        Map<String, Object> newJob = create(acme.adminToken(), from(template, completeVacancy("Frontend Engineer")));
+        assertThat(newJob).containsEntry("stageCount", 5).containsEntry("interviewRoundCount", 2);
+        Object newJobId = newJob.get("id");
         assertThat(stagesOf(acme.adminToken(), newJobId).getBody())
                 .extracting("name")
                 .containsExactly("Applied", "Screening", "Coding interview", "Culture interview", "Onboard");
+    }
+
+    @Test
+    void renamingTheTemplate_leavesAnExistingJobWithTheNameItWasCreatedUnder() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Object jobId = create(acme.adminToken(), from(template, completeVacancy("Backend Engineer"))).get("id");
+
+        // Written to the template's table for the reason given in the editing test above.
+        jdbc.update("UPDATE pipeline_templates SET name = 'Platform pipeline' WHERE id = ?", uuid(template.get("id")));
+        assertThat(templateAsStored(acme, template)).containsEntry("name", "Platform pipeline");
+
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + jobId, acme.adminToken(), null).getBody())
+                .containsEntry("pipelineTemplateId", template.get("id"))
+                .containsEntry("pipelineTemplateName", "Engineering pipeline");
+        assertThat(create(acme.adminToken(), from(template, completeVacancy("Frontend Engineer"))))
+                .containsEntry("pipelineTemplateName", "Platform pipeline");
     }
 
     @Test
@@ -156,6 +181,9 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
         assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + jobId, acme.adminToken(), null).getBody())
                 .containsEntry("pipelineTemplateId", null)
                 // What the job took from the template is its own and stays.
+                .containsEntry("pipelineTemplateName", "Engineering pipeline")
+                .containsEntry("stageCount", 4)
+                .containsEntry("interviewRoundCount", 1)
                 .containsEntry("autoThreshold", 80)
                 .containsEntry("manualThreshold", 70)
                 .containsEntry("blindModeEnabled", true);
@@ -173,7 +201,7 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
         ResponseEntity<Map<String, Object>> refused = attemptCreate(acme.adminToken(), body);
 
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat((String) refused.getBody().get("message")).contains("Choose a pipeline template for this vacancy.");
+        assertThat((String) refused.getBody().get("message")).contains("Pipeline template is required.");
         assertThat(jobsStoredFor(acme)).isZero();
     }
 

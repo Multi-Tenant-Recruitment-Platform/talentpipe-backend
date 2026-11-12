@@ -2,16 +2,20 @@ package com.talentpipe.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.talentpipe.job.controller.JobVacancyController;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -68,7 +72,31 @@ class EndpointAuthorizationDriftTest {
     @Test
     void theScanActuallyFindsTheControllers() throws Exception {
         assertThat(controllers()).extracting(Class::getSimpleName)
-                .contains("JobVacancyController", "TeamController", "RoleController", "TenantController");
+                .contains("JobVacancyController", "PipelineTemplateController", "TeamController",
+                        "RoleController", "TenantController");
+    }
+
+    /**
+     * The rules above accept any guard, so they would also pass with the wrong
+     * one. A vacancy's stages are read under the same rule as the vacancy
+     * itself — any company member, narrowed by the service to what they may
+     * see — and this pins that: a stricter guard would hide the pipeline
+     * from interviewers on their own vacancies, a looser one would open it
+     * to candidates.
+     */
+    @Test
+    void jobStagesEndpointIsGuardedForCompanyMembers() throws Exception {
+        Method stages = JobVacancyController.class.getDeclaredMethod("stages", Authentication.class, UUID.class);
+
+        GetMapping mapping = AnnotatedElementUtils.findMergedAnnotation(stages, GetMapping.class);
+        assertThat(mapping).as("stages is a GET endpoint").isNotNull();
+        assertThat(mapping.path()).containsExactly("/{id}/stages");
+        assertThat(AnnotatedElementUtils.hasAnnotation(stages, RequireCompanyMember.class))
+                .as("GET /api/v1/jobs/{id}/stages is guarded by @RequireCompanyMember")
+                .isTrue();
+        assertThat(stages.isAnnotationPresent(RequirePermission.class))
+                .as("no permission on top: reading stages follows reading the vacancy")
+                .isFalse();
     }
 
     // ----------------------------------------------------------------- helpers

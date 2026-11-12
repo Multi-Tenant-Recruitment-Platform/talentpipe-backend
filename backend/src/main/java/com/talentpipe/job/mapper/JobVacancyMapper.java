@@ -71,6 +71,9 @@ public class JobVacancyMapper {
                 vacancy.isCandidateMatchingEnabled(),
 
                 vacancy.getPipelineTemplateId(),
+                vacancy.getPipelineTemplateName(),
+                vacancy.getStageCount(),
+                vacancy.getInterviewRoundCount(),
                 vacancy.getAutoThreshold(),
                 vacancy.getManualThreshold(),
                 vacancy.isBlindModeEnabled(),

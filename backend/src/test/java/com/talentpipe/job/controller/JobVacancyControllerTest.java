@@ -1,6 +1,7 @@
 package com.talentpipe.job.controller;
 
 import static com.talentpipe.testsupport.WebMvcSecurityTestConfig.asUser;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -258,7 +259,9 @@ class JobVacancyControllerTest {
 
         mockMvc.perform(json(post("/api/v1/jobs"), body).with(as("HR_MANAGER")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("Choose a pipeline template for this vacancy.")));
+                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'pipelineTemplateId')].message")
+                        .value(contains(JobVacancyRequest.PIPELINE_TEMPLATE_REQUIRED)))
+                .andExpect(jsonPath("$.message", containsString("Pipeline template is required.")));
 
         verifyNoInteractions(vacancyService);
     }
@@ -564,6 +567,40 @@ class JobVacancyControllerTest {
                 .andExpect(jsonPath("$[1].name").value("Panel"))
                 .andExpect(jsonPath("$[1].benchmark").value(75))
                 .andExpect(jsonPath("$[0].tenantId").doesNotExist());
+    }
+
+    @Test
+    void stages_ofAFourStagePipeline_comeBackInPositionOrder() throws Exception {
+        when(pipelineSnapshots.stages(SEES_ALL, VACANCY)).thenReturn(List.of(
+                new JobStageResponse(UUID.randomUUID(), 0, StageType.POST_APPLICATION, "Applied", null),
+                new JobStageResponse(UUID.randomUUID(), 1, StageType.SCREENING, "Screening", null),
+                new JobStageResponse(UUID.randomUUID(), 2, StageType.INTERVIEW, "Technical interview", 75),
+                new JobStageResponse(UUID.randomUUID(), 3, StageType.ONBOARD, "Onboard", null)));
+
+        mockMvc.perform(get("/api/v1/jobs/{id}/stages", VACANCY).with(as("HR_MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(4))
+                .andExpect(jsonPath("$[*].position").value(contains(0, 1, 2, 3)))
+                .andExpect(jsonPath("$[*].stageType")
+                        .value(contains("POST_APPLICATION", "SCREENING", "INTERVIEW", "ONBOARD")))
+                .andExpect(jsonPath("$[2].benchmark").value(75))
+                .andExpect(jsonPath("$[*].tenantId").isEmpty());
+    }
+
+    @Test
+    void get_reportsThePipelineTheVacancyRunsOn() throws Exception {
+        JobVacancyResponse onPipeline = new JobVacancyMapper().toResponse(VacancyFixtures.draftOnPipeline(TENANT));
+        when(vacancyService.get(SEES_ALL, VACANCY)).thenReturn(onPipeline);
+
+        mockMvc.perform(get("/api/v1/jobs/{id}", VACANCY).with(as("HR_MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pipelineTemplateId").value(VacancyFixtures.PIPELINE_TEMPLATE.toString()))
+                .andExpect(jsonPath("$.pipelineTemplateName").value(VacancyFixtures.PIPELINE_TEMPLATE_NAME))
+                .andExpect(jsonPath("$.stageCount").value(4))
+                .andExpect(jsonPath("$.interviewRoundCount").value(1))
+                .andExpect(jsonPath("$.autoThreshold").value(80))
+                .andExpect(jsonPath("$.manualThreshold").value(70))
+                .andExpect(jsonPath("$.blindModeEnabled").value(false));
     }
 
     @Test

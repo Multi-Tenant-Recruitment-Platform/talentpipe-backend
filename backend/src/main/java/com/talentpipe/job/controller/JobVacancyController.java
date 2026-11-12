@@ -127,8 +127,11 @@ public class JobVacancyController {
     }
 
     /**
-     * The stages the vacancy runs on, first to last: the copy taken from its
-     * template when it was created, unaffected by later template changes.
+     * The stages the vacancy runs on, ordered by position ascending: the copy
+     * taken from its template when it was created, unaffected by later
+     * template changes. Readable by any company member who may see the
+     * vacancy itself — the same rule as {@link #get} — and 404, never 403,
+     * for one they may not. Empty for vacancies older than templates.
      */
     @RequireCompanyMember
     @GetMapping("/{id}/stages")

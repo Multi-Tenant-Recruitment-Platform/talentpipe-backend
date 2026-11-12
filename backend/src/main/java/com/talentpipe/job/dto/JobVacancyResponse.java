@@ -28,6 +28,13 @@ import java.util.UUID;
  *                       stages are at {@code GET /jobs/{id}/stages}. {@code null}
  *                       for vacancies older than templates, or once the
  *                       template is deleted — the stages stay either way
+ * @param pipelineTemplateName the template's name when the vacancy was
+ *                       created. Frozen: renaming or deleting the template
+ *                       later does not change it. {@code null} for vacancies
+ *                       older than templates
+ * @param stageCount     how many stages the vacancy runs on, and
+ *                       {@code interviewRoundCount} how many of them are
+ *                       interview rounds; both {@code null} with no template
  * @param autoThreshold  as resolved from the template when the vacancy was
  *                       created; {@code null} with no template, as is
  *                       {@code manualThreshold}
@@ -86,6 +93,9 @@ public record JobVacancyResponse(
         boolean candidateMatchingEnabled,
 
         UUID pipelineTemplateId,
+        String pipelineTemplateName,
+        Integer stageCount,
+        Integer interviewRoundCount,
         Integer autoThreshold,
         Integer manualThreshold,
         boolean blindModeEnabled,

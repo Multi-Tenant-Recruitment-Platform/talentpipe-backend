@@ -3,6 +3,7 @@ package com.talentpipe.job.service;
 import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.job.dto.JobStageResponse;
+import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.entity.JobStage;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.mapper.JobVacancyMapper;
@@ -31,7 +32,6 @@ public class PipelineSnapshotServiceImpl implements PipelineSnapshotService {
 
     private static final Logger log = LoggerFactory.getLogger(PipelineSnapshotServiceImpl.class);
 
-    static final String TEMPLATE_REQUIRED = "Choose a pipeline template for this vacancy.";
     static final String TEMPLATE_ARCHIVED =
             "The selected pipeline template is archived and cannot be used for new jobs.";
     static final String THRESHOLDS_OUT_OF_ORDER = "The manual threshold must be lower than the auto threshold.";
@@ -57,7 +57,7 @@ public class PipelineSnapshotServiceImpl implements PipelineSnapshotService {
     @Override
     public PipelineSnapshot resolve(UUID tenantId, PipelineSelection selection) {
         if (selection.templateId() == null) {
-            throw new InvalidRequestException(TEMPLATE_REQUIRED);
+            throw new InvalidRequestException(JobVacancyRequest.PIPELINE_TEMPLATE_REQUIRED);
         }
         PipelineTemplateResponse template = templates.get(tenantId, selection.templateId(), INCLUDING_ARCHIVED);
         if (template.status() == PipelineTemplateStatus.ARCHIVED) {
@@ -71,7 +71,8 @@ public class PipelineSnapshotServiceImpl implements PipelineSnapshotService {
         if (manualThreshold >= autoThreshold) {
             throw new BusinessRuleException(THRESHOLDS_OUT_OF_ORDER);
         }
-        return new PipelineSnapshot(template.id(), autoThreshold, manualThreshold, blindMode, template.stages());
+        return new PipelineSnapshot(template.id(), template.name(), autoThreshold, manualThreshold, blindMode,
+                template.stages());
     }
 
     @Override
