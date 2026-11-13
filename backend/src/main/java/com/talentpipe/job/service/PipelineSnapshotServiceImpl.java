@@ -6,6 +6,7 @@ import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.entity.JobStage;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.ScreeningThresholds;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.repository.JobStageRepository;
 import com.talentpipe.pipeline.dto.PipelineStageResponse;
@@ -34,7 +35,6 @@ public class PipelineSnapshotServiceImpl implements PipelineSnapshotService {
 
     static final String TEMPLATE_ARCHIVED =
             "The selected pipeline template is archived and cannot be used for new jobs.";
-    static final String THRESHOLDS_OUT_OF_ORDER = "The manual threshold must be lower than the auto threshold.";
 
     /** Archived templates are read too, so choosing one is refused for being archived rather than reported missing. */
     private static final boolean INCLUDING_ARCHIVED = true;
@@ -68,9 +68,7 @@ public class PipelineSnapshotServiceImpl implements PipelineSnapshotService {
         int manualThreshold = Objects.requireNonNullElse(selection.manualThreshold(), template.defaultManualThreshold());
         boolean blindMode = Objects.requireNonNullElse(selection.blindModeEnabled(), template.blindModeEnabled());
         // Same rule as the template's own thresholds; an override of one can break it against the other.
-        if (manualThreshold >= autoThreshold) {
-            throw new BusinessRuleException(THRESHOLDS_OUT_OF_ORDER);
-        }
+        ScreeningThresholds.requireValid(autoThreshold, manualThreshold);
         return new PipelineSnapshot(template.id(), template.name(), autoThreshold, manualThreshold, blindMode,
                 template.stages());
     }

@@ -190,6 +190,120 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
         assertThat(stagesOf(acme.adminToken(), jobId).getBody()).isEqualTo(before);
     }
 
+    // ------------------------------------------------ editing the pipeline settings
+
+    @Test
+    void editingTheThresholds_savesThemOnTheJob_andLeavesTheTemplateAlone() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Map<String, Object> body = from(template, completeVacancy("Backend Engineer"));
+        Object jobId = create(acme.adminToken(), body).get("id");
+
+        // The body still names the job's own template: sending it back unchanged is fine.
+        body.put("version", 0);
+        body.put("autoThreshold", 85);
+        body.put("manualThreshold", 65);
+        body.put("blindModeEnabled", true);
+        ResponseEntity<Map<String, Object>> saved = call(HttpMethod.PUT, "/api/v1/jobs/" + jobId, acme.adminToken(), body);
+
+        assertThat(saved.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(saved.getBody()).containsEntry("version", 1);
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + jobId, acme.adminToken(), null).getBody())
+                .containsEntry("autoThreshold", 85)
+                .containsEntry("manualThreshold", 65)
+                .containsEntry("blindModeEnabled", true)
+                .containsEntry("pipelineTemplateId", template.get("id"))
+                .containsEntry("stageCount", 4);
+        assertThat(templateAsStored(acme, template))
+                .containsEntry("defaultAutoThreshold", 80)
+                .containsEntry("defaultManualThreshold", 70)
+                .containsEntry("blindModeEnabled", false);
+    }
+
+    @Test
+    void namingAnotherTemplate_onAnEdit_isRefused_andTheJobIsUnchanged() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Map<String, Object> other = createTemplate(acme.adminToken(),
+                templateBody("Sales pipeline", 90, 60, true, standardStages()));
+        Map<String, Object> body = from(template, completeVacancy("Backend Engineer"));
+        Object jobId = create(acme.adminToken(), body).get("id");
+        List<Map<String, Object>> stagesBefore = stagesOf(acme.adminToken(), jobId).getBody();
+
+        body.put("version", 0);
+        body.put("pipelineTemplateId", other.get("id"));
+        body.put("title", "Renamed on the way");
+        ResponseEntity<Map<String, Object>> refused =
+                call(HttpMethod.PUT, "/api/v1/jobs/" + jobId, acme.adminToken(), body);
+
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(refused.getBody())
+                .containsEntry("message", "The pipeline template cannot be changed after a job is created.");
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + jobId, acme.adminToken(), null).getBody())
+                .containsEntry("pipelineTemplateId", template.get("id"))
+                .containsEntry("autoThreshold", 80)
+                .containsEntry("manualThreshold", 70)
+                .containsEntry("title", "Backend Engineer")
+                .containsEntry("version", 0);
+        assertThat(stagesOf(acme.adminToken(), jobId).getBody()).isEqualTo(stagesBefore);
+    }
+
+    @Test
+    void aJobWhoseTemplateWasDeleted_canStillChangeItsThresholds_butCannotNameATemplate() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Map<String, Object> body = from(template, completeVacancy("Backend Engineer"));
+        Object jobId = create(acme.adminToken(), body).get("id");
+        assertThat(call(HttpMethod.DELETE, TEMPLATES + "/" + template.get("id"), acme.adminToken(), null)
+                .getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        // The frontend now holds pipelineTemplateId: null, and sends back what it holds.
+        Map<String, Object> edit = completeVacancy("Backend Engineer");
+        edit.put("version", 0);
+        edit.put("pipelineTemplateId", null);
+        edit.put("autoThreshold", 85);
+        edit.put("manualThreshold", 65);
+        ResponseEntity<Map<String, Object>> saved =
+                call(HttpMethod.PUT, "/api/v1/jobs/" + jobId, acme.adminToken(), edit);
+        assertThat(saved.getStatusCode()).as("edit: %s", saved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(saved.getBody())
+                .containsEntry("autoThreshold", 85)
+                .containsEntry("manualThreshold", 65)
+                .containsEntry("pipelineTemplateId", null)
+                .containsEntry("pipelineTemplateName", "Engineering pipeline");
+
+        // The deleted template's id is no longer the job's: sending it is a change.
+        edit.put("version", 1);
+        edit.put("pipelineTemplateId", template.get("id"));
+        assertThat(call(HttpMethod.PUT, "/api/v1/jobs/" + jobId, acme.adminToken(), edit).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
+    @Test
+    void aSingleThresholdThatBreaksTheOrderAgainstTheStoredOne_isRefused_andNothingChanges() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Object jobId = create(acme.adminToken(), from(template, completeVacancy("Backend Engineer"))).get("id");
+
+        Map<String, Object> edit = completeVacancy("Backend Engineer");
+        edit.put("version", 0);
+        edit.put("manualThreshold", 85); // above the stored auto threshold of 80
+        ResponseEntity<Map<String, Object>> refused =
+                call(HttpMethod.PUT, "/api/v1/jobs/" + jobId, acme.adminToken(), edit);
+
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(refused.getBody())
+                .containsEntry("message", "The manual threshold must be lower than the auto threshold.");
+        assertThat(call(HttpMethod.GET, "/api/v1/jobs/" + jobId, acme.adminToken(), null).getBody())
+                .containsEntry("autoThreshold", 80)
+                .containsEntry("manualThreshold", 70)
+                .containsEntry("version", 0);
+    }
+
     // ------------------------------------------------------------------ refusals
 
     @Test

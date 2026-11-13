@@ -24,6 +24,7 @@ import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.JobStage;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.ScreeningThresholds;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.validator.JobVacancyMemberValidator;
@@ -45,6 +46,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -309,21 +311,169 @@ class JobVacancyServiceTest {
         verify(stageRepository, never()).saveAllAndFlush(any());
     }
 
+    // ---------------------------------------------------- update: pipeline
+
     @Test
-    void update_neverTouchesThePipeline_evenIfTheBodyNamesAnotherTemplate() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
-        vacancy.runOn(VacancyFixtures.pipeline());
-        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(UUID.randomUUID())
-                .thresholds(95, 10).blindModeEnabled(true).toRequest(null, 0);
+    void update_withNewThresholds_savesThem_andNeverTouchesTheTemplateOrStages() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().thresholds(85, 65).toRequest(null, 0);
 
         JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
 
+        assertThat(response.autoThreshold()).isEqualTo(85);
+        assertThat(response.manualThreshold()).isEqualTo(65);
         assertThat(response.pipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(response.stageCount()).isEqualTo(4);
+        verify(repository).saveAndFlush(vacancy);
+        verify(templates, never()).get(any(), any(), anyBoolean());
+        verify(stageRepository, never()).saveAllAndFlush(any());
+    }
+
+    @Test
+    void update_withOnlyTheManualThreshold_keepsTheStoredAuto() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().thresholds(null, 60).toRequest(null, 0);
+
+        JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
+
+        assertThat(response.autoThreshold()).isEqualTo(80);
+        assertThat(response.manualThreshold()).isEqualTo(60);
+    }
+
+    @Test
+    void update_withBlindModeOnly_keepsBothThresholds() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().blindModeEnabled(true).toRequest(null, 0);
+
+        JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
+
+        assertThat(response.blindModeEnabled()).isTrue();
+        assertThat(response.autoThreshold()).isEqualTo(80);
+        assertThat(response.manualThreshold()).isEqualTo(70);
+    }
+
+    @Test
+    void update_leavingTheSettingsOut_keepsThem() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().thresholds(null, null).blindModeEnabled(null)
+                .pipelineTemplateId(null).toRequest(null, 0);
+
+        JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
+
         assertThat(response.autoThreshold()).isEqualTo(80);
         assertThat(response.manualThreshold()).isEqualTo(70);
         assertThat(response.blindModeEnabled()).isFalse();
+        assertThat(response.pipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {
+            "NULL, 85",   // manual override above the stored auto threshold of 80
+            "NULL, 80",   // manual override equal to it
+            "60, NULL",   // auto override below the stored manual threshold of 70
+            "50, 50",     // both given, equal
+    }, nullValues = "NULL")
+    void update_withThresholdsThatEndUpOutOfOrder_isRefused_andNothingChanges(Integer auto, Integer manual) {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().thresholds(auto, manual).toRequest(null, 0);
+        UUID vacancyId = vacancy.getId();
+
+        assertThatThrownBy(() -> service.update(VIEWER, vacancyId, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(ScreeningThresholds.OUT_OF_ORDER);
+
+        assertThat(vacancy.getAutoThreshold()).isEqualTo(80);
+        assertThat(vacancy.getManualThreshold()).isEqualTo(70);
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void update_onAPublishedVacancy_mayChangeTheSettings() {
+        JobVacancy vacancy = stored(VacancyFixtures.publishedOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().thresholds(90, 75).blindModeEnabled(true)
+                .toRequest(null, 0);
+
+        JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
+
+        assertThat(response.status()).isEqualTo(VacancyStatus.PUBLISHED);
+        assertThat(response.autoThreshold()).isEqualTo(90);
+        assertThat(response.manualThreshold()).isEqualTo(75);
+        assertThat(response.blindModeEnabled()).isTrue();
+    }
+
+    @Test
+    void update_namingAnotherTemplate_isRefused_andNothingIsStored() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(UUID.randomUUID())
+                .thresholds(85, 65).title("Renamed").toRequest(null, 0);
+        UUID vacancyId = vacancy.getId();
+
+        assertThatThrownBy(() -> service.update(VIEWER, vacancyId, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(JobVacancy.TEMPLATE_CHANGE_REFUSED);
+
+        assertThat(vacancy.getPipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(vacancy.getAutoThreshold()).isEqualTo(80);
+        assertThat(vacancy.content().title()).isEqualTo("Senior Backend Engineer");
+        verify(repository, never()).saveAndFlush(any());
         verify(templates, never()).get(any(), any(), anyBoolean());
-        verify(stageRepository, never()).saveAllAndFlush(any());
+    }
+
+    @Test
+    void update_namingTheSameTemplate_isFine() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(VacancyFixtures.PIPELINE_TEMPLATE)
+                .toRequest(null, 0);
+
+        assertThat(service.update(VIEWER, vacancy.getId(), request).pipelineTemplateId())
+                .isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+    }
+
+    @Test
+    void update_ofAVacancyWithoutAPipeline_refusesScreeningSettings() {
+        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(null).blindModeEnabled(true)
+                .toRequest(null, 0);
+        UUID vacancyId = vacancy.getId();
+
+        assertThatThrownBy(() -> service.update(VIEWER, vacancyId, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(JobVacancy.NO_PIPELINE);
+
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void update_ofAVacancyWithoutAPipeline_stillEditsItsContent_whenNoSettingIsSent() {
+        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(null).title("Edited")
+                .toRequest(null, 0);
+
+        JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
+
+        assertThat(response.title()).isEqualTo("Edited");
+        assertThat(response.autoThreshold()).isNull();
+    }
+
+    @Test
+    void update_ofAClosedVacancy_namingAnotherTemplate_reportsClosed() {
+        UUID vacancyId = stored(VacancyFixtures.closed(TENANT)).getId();
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(UUID.randomUUID())
+                .toRequest(null, 0);
+
+        assertThatThrownBy(() -> service.update(VIEWER, vacancyId, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("This vacancy is closed and can no longer be edited.");
+    }
+
+    @Test
+    void update_withAStaleVersion_namingAnotherTemplate_reportsTheConflict() {
+        UUID vacancyId = stored(VacancyFixtures.draftOnPipeline(TENANT)).getId();
+        JobVacancyRequest request = VacancyFixtures.complete().pipelineTemplateId(UUID.randomUUID())
+                .toRequest(null, 7);
+
+        assertThatThrownBy(() -> service.update(VIEWER, vacancyId, request))
+                .isInstanceOf(ConcurrentUpdateException.class);
     }
 
     // -------------------------------------------------------------------- read
@@ -462,7 +612,7 @@ class JobVacancyServiceTest {
 
     @Test
     void update_withTheCurrentVersion_replacesTheContent() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
         JobVacancyRequest request = VacancyFixtures.complete().title("Staff Engineer").toRequest(null, 0);
 
         JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
@@ -474,7 +624,7 @@ class JobVacancyServiceTest {
 
     @Test
     void update_neverChangesStatus_evenIfTheBodyCarriesOne() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
         JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.PUBLISHED, 0);
 
         JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
@@ -485,7 +635,7 @@ class JobVacancyServiceTest {
 
     @Test
     void update_withAStaleVersion_isAConflictAndNothingIsStored() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
         JobVacancyRequest request = VacancyFixtures.complete().title("Lost the race").toRequest(null, 7);
         UUID vacancyId = vacancy.getId();
 
@@ -499,7 +649,7 @@ class JobVacancyServiceTest {
 
     @Test
     void update_onAPublishedVacancy_keepsItLive() {
-        JobVacancy vacancy = stored(VacancyFixtures.published(TENANT));
+        JobVacancy vacancy = stored(VacancyFixtures.publishedOnPipeline(TENANT));
         JobVacancyRequest request = VacancyFixtures.complete().jobSummary("A sharper summary.").toRequest(null, 0);
 
         JobVacancyResponse response = service.update(VIEWER, vacancy.getId(), request);
@@ -510,7 +660,7 @@ class JobVacancyServiceTest {
 
     @Test
     void update_onAPublishedVacancy_thatWouldLeaveItIncomplete_isRefused() {
-        UUID vacancyId = stored(VacancyFixtures.published(TENANT)).getId();
+        UUID vacancyId = stored(VacancyFixtures.publishedOnPipeline(TENANT)).getId();
         JobVacancyRequest request = VacancyFixtures.complete().requiredSkills(List.of()).toRequest(null, 0);
 
         assertThatThrownBy(() -> service.update(VIEWER, vacancyId, request))
@@ -747,7 +897,7 @@ class JobVacancyServiceTest {
 
     @Test
     void update_keepsTheSwitches_whenTheRequestLeavesThemOut() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
         vacancy.switchFeatures(true, true);
         JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, vacancy.getVersion());
 
@@ -800,7 +950,7 @@ class JobVacancyServiceTest {
 
     @Test
     void update_letsThePolicyKeepTheCurrentIndustry() {
-        JobVacancy vacancy = stored(VacancyFixtures.draft(TENANT));
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
         vacancy.fileUnder("Healthcare");
         JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, vacancy.getVersion());
         when(industryPolicy.resolve(TENANT, null, "Healthcare")).thenReturn("Healthcare");
