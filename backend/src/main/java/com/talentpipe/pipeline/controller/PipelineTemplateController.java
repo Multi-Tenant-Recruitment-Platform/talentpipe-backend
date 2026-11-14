@@ -5,6 +5,7 @@ import com.talentpipe.pipeline.dto.PipelineTemplateRequest;
 import com.talentpipe.pipeline.dto.PipelineTemplateResponse;
 import com.talentpipe.pipeline.dto.PipelineTemplateSummaryResponse;
 import com.talentpipe.pipeline.service.PipelineTemplateService;
+import com.talentpipe.security.Permission;
 import com.talentpipe.security.UserPrincipal;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -35,6 +36,16 @@ public class PipelineTemplateController {
 
     private static final int MAX_PAGE_SIZE = 100;
 
+    /**
+     * Who may read templates: the old admin and recruiter roles, and anyone
+     * whose role can create vacancies, because a vacancy cannot be created
+     * without choosing a template. Readers other than the company admin see
+     * active templates only (the service hides archived ones), and every
+     * write stays with the company admin.
+     */
+    static final String CAN_READ_TEMPLATES =
+            "hasAnyRole('COMPANY_ADMIN', 'HR_MANAGER') or hasAuthority('" + Permission.Keys.JOBS_MANAGE + "')";
+
     private final PipelineTemplateService templateService;
 
     public PipelineTemplateController(PipelineTemplateService templateService) {
@@ -51,7 +62,7 @@ public class PipelineTemplateController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('COMPANY_ADMIN', 'HR_MANAGER')")
+    @PreAuthorize(CAN_READ_TEMPLATES)
     public PageResponse<PipelineTemplateSummaryResponse> list(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(name = "search", required = false) String search,
@@ -66,7 +77,7 @@ public class PipelineTemplateController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COMPANY_ADMIN', 'HR_MANAGER')")
+    @PreAuthorize(CAN_READ_TEMPLATES)
     public PipelineTemplateResponse get(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable("id") UUID id) {

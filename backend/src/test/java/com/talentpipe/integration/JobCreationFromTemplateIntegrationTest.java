@@ -304,6 +304,42 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
                 .containsEntry("version", 0);
     }
 
+    // ------------------------------------------------------- who may choose a template
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCustomRoleThatCreatesVacancies_readsActiveTemplatesOnly_andCreatesAJobFromOne() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> active = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Map<String, Object> archived = createTemplate(acme.adminToken(),
+                templateBody("Retired pipeline", 80, 70, false, standardStages()));
+        assertThat(call(HttpMethod.POST, TEMPLATES + "/" + archived.get("id") + "/archive", acme.adminToken(), null)
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<Map<String, Object>> role = call(HttpMethod.POST, "/api/v1/roles", acme.adminToken(),
+                Map.of("name", "Vacancy coordinator", "permissions", List.of("jobs.manage")));
+        assertThat(role.getStatusCode()).as("role: %s", role.getBody()).isEqualTo(HttpStatus.CREATED);
+        Member coordinator = newMemberWithRole(acme, uuid(role.getBody().get("id")));
+
+        // Archived templates stay hidden even when asked for: only an admin sees them.
+        ResponseEntity<Map<String, Object>> listed =
+                call(HttpMethod.GET, TEMPLATES + "?includeArchived=true", coordinator.token(), null);
+        assertThat(listed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat((List<Map<String, Object>>) listed.getBody().get("content"))
+                .extracting("id").contains(active.get("id")).doesNotContain(archived.get("id"));
+        assertThat(statusOf(HttpMethod.GET, TEMPLATES + "/" + active.get("id"), coordinator.token()))
+                .isEqualTo(HttpStatus.OK);
+        assertThat(statusOf(HttpMethod.GET, TEMPLATES + "/" + archived.get("id"), coordinator.token()))
+                .isEqualTo(HttpStatus.NOT_FOUND);
+
+        Map<String, Object> job = create(coordinator.token(), from(active, completeVacancy("Backend Engineer")));
+        assertThat(job).containsEntry("pipelineTemplateId", active.get("id"));
+
+        // Reading is all the role gains: the template itself stays the admin's to change.
+        assertThat(call(HttpMethod.POST, TEMPLATES + "/" + active.get("id") + "/archive", coordinator.token(), null)
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
     // ------------------------------------------------------------------ refusals
 
     @Test
