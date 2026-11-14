@@ -13,6 +13,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for the {@link JobVacancy} aggregate: the lifecycle it enforces
@@ -339,6 +342,114 @@ class JobVacancyTest {
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new VacancyPipeline(null, "Standard", 80, 70, false, 4, 1))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    // ------------------------------------------------------ pipeline settings
+
+    @Test
+    void updatePipelineSettings_replacesThresholdsAndBlindMode_andNothingElseOfThePipeline() {
+        JobVacancy vacancy = VacancyFixtures.draftOnPipeline(TENANT);
+
+        vacancy.updatePipelineSettings(85, 65, true);
+
+        assertThat(vacancy.getAutoThreshold()).isEqualTo(85);
+        assertThat(vacancy.getManualThreshold()).isEqualTo(65);
+        assertThat(vacancy.isBlindModeEnabled()).isTrue();
+        assertThat(vacancy.getPipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(vacancy.getPipelineTemplateName()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE_NAME);
+        assertThat(vacancy.getStageCount()).isEqualTo(4);
+        assertThat(vacancy.getInterviewRoundCount()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"70, 80", "70, 70"})
+    void updatePipelineSettings_refusesAManualThresholdNotBelowTheAuto_andChangesNothing(int auto, int manual) {
+        JobVacancy vacancy = VacancyFixtures.draftOnPipeline(TENANT);
+
+        assertThatThrownBy(() -> vacancy.updatePipelineSettings(auto, manual, true))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(ScreeningThresholds.OUT_OF_ORDER);
+
+        assertThat(vacancy.getAutoThreshold()).isEqualTo(80);
+        assertThat(vacancy.getManualThreshold()).isEqualTo(70);
+        assertThat(vacancy.isBlindModeEnabled()).isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"101, 70", "80, -1"})
+    void updatePipelineSettings_refusesThresholdsOffTheScale(int auto, int manual) {
+        JobVacancy vacancy = VacancyFixtures.draftOnPipeline(TENANT);
+
+        assertThatThrownBy(() -> vacancy.updatePipelineSettings(auto, manual, false))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(ScreeningThresholds.OUT_OF_RANGE);
+    }
+
+    @Test
+    void updatePipelineSettings_isRefusedOnceTheVacancyIsClosedOrArchived() {
+        JobVacancy closed = VacancyFixtures.publishedOnPipeline(TENANT);
+        closed.close(LATER);
+        JobVacancy archived = VacancyFixtures.publishedOnPipeline(TENANT);
+        archived.close(LATER);
+        archived.archive(LATER);
+
+        assertThatThrownBy(() -> closed.updatePipelineSettings(85, 65, true))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("This vacancy is closed and can no longer be edited.");
+        assertThatThrownBy(() -> archived.updatePipelineSettings(85, 65, true))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("can no longer be edited");
+        assertThat(closed.getAutoThreshold()).isEqualTo(80);
+    }
+
+    @Test
+    void updatePipelineSettings_isRefusedOnAVacancyWithoutAPipeline() {
+        JobVacancy vacancy = VacancyFixtures.draft(TENANT);
+
+        assertThat(vacancy.isOnPipeline()).isFalse();
+        assertThatThrownBy(() -> vacancy.updatePipelineSettings(85, 65, true))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(JobVacancy.NO_PIPELINE);
+        assertThat(vacancy.getAutoThreshold()).isNull();
+    }
+
+    @Test
+    void aVacancyWhoseTemplateWasDeleted_isStillOnItsPipeline_andItsSettingsStillChange() {
+        JobVacancy vacancy = VacancyFixtures.draftOnPipeline(TENANT);
+        // What ON DELETE SET NULL (V23) does to the row when the template is deleted.
+        ReflectionTestUtils.setField(vacancy, "pipelineTemplateId", null);
+
+        assertThat(vacancy.isOnPipeline()).isTrue();
+        vacancy.updatePipelineSettings(85, 65, true);
+        assertThat(vacancy.getAutoThreshold()).isEqualTo(85);
+    }
+
+    @Test
+    void requireTemplateUnchanged_acceptsNothingOrTheSameTemplate_andRefusesAnyOther() {
+        JobVacancy vacancy = VacancyFixtures.draftOnPipeline(TENANT);
+        UUID another = UUID.randomUUID();
+
+        assertThatCode(() -> vacancy.requireTemplateUnchanged(null)).doesNotThrowAnyException();
+        assertThatCode(() -> vacancy.requireTemplateUnchanged(VacancyFixtures.PIPELINE_TEMPLATE))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> vacancy.requireTemplateUnchanged(another))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(JobVacancy.TEMPLATE_CHANGE_REFUSED);
+    }
+
+    @Test
+    void requireTemplateUnchanged_withNoStoredTemplate_refusesAnyTemplateSent() {
+        JobVacancy deletedTemplate = VacancyFixtures.draftOnPipeline(TENANT);
+        ReflectionTestUtils.setField(deletedTemplate, "pipelineTemplateId", null);
+        JobVacancy olderThanTemplates = VacancyFixtures.draft(TENANT);
+
+        assertThatThrownBy(() -> deletedTemplate.requireTemplateUnchanged(VacancyFixtures.PIPELINE_TEMPLATE))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(JobVacancy.TEMPLATE_CHANGE_REFUSED);
+        assertThatThrownBy(() -> olderThanTemplates.requireTemplateUnchanged(UUID.randomUUID()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage(JobVacancy.TEMPLATE_CHANGE_REFUSED);
+        assertThatCode(() -> olderThanTemplates.requireTemplateUnchanged(null)).doesNotThrowAnyException();
     }
 
     // ------------------------------------------------------------------- other

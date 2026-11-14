@@ -247,9 +247,17 @@ public class JobVacancyService {
      * hears the reason that matters: not found, then not editable, then
      * stale, then invalid content.</p>
      *
+     * <p>The pipeline itself is fixed when the vacancy is created: the
+     * template id may be left out or sent back unchanged, nothing more. Its
+     * screening settings — both thresholds and blind mode — may change while
+     * the vacancy is editable; one left out keeps its value.</p>
+     *
      * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see
-     * @throws BusinessRuleException     (422) closed or archived; a content
-     *         rule fails; or the vacancy is live and would become incomplete
+     * @throws BusinessRuleException     (422) closed or archived; the request
+     *         names another pipeline template; it changes screening settings
+     *         on a vacancy without a pipeline, or leaves the manual threshold
+     *         not below the auto one; a content rule fails; or the vacancy is
+     *         live and would become incomplete
      * @throws ConcurrentUpdateException (409) {@code request.version()} is not
      *         the stored version — someone else saved first
      */
@@ -265,6 +273,7 @@ public class JobVacancyService {
         }
 
         shapeValidator.validateUpdateShape(request);
+        vacancy.requireTemplateUnchanged(request.pipelineTemplateId());
         memberValidator.validateMembersForUpdate(
                 tenantId,
                 request.assignedRecruiterId(), vacancy.content().assignedRecruiterId(),
@@ -276,6 +285,7 @@ public class JobVacancyService {
             publishValidator.validateForStayComplete(request, today);
         }
 
+        changeScreeningSettings(vacancy, request);
         String industry = industryPolicy.resolve(tenantId, request.industry(), vacancy.getIndustry());
         VacancyContent content = normalizer.normalize(request);
         vacancy.applyContent(content, today);
@@ -375,6 +385,26 @@ public class JobVacancyService {
     }
 
     // ---------------------------------------------------------------- private
+
+    /**
+     * An edit's screening settings. One left out keeps its stored value, and
+     * the threshold rule is checked on the result, so a single override can
+     * still be refused against the stored other. An edit that sends none of
+     * them changes nothing — which keeps vacancies older than pipelines
+     * editable.
+     */
+    private static void changeScreeningSettings(JobVacancy vacancy, JobVacancyRequest request) {
+        if (request.autoThreshold() == null && request.manualThreshold() == null
+                && request.blindModeEnabled() == null) {
+            return;
+        }
+        // Before the stored values are read: a vacancy without a pipeline has none.
+        vacancy.requireOnPipeline();
+        vacancy.updatePipelineSettings(
+                Objects.requireNonNullElse(request.autoThreshold(), vacancy.getAutoThreshold()),
+                Objects.requireNonNullElse(request.manualThreshold(), vacancy.getManualThreshold()),
+                Objects.requireNonNullElse(request.blindModeEnabled(), vacancy.isBlindModeEnabled()));
+    }
 
     /** A new vacancy's switches: as requested, or the company's default for any left out. */
     private void startFeatures(JobVacancy vacancy, UUID tenantId, Boolean aiScreening, Boolean candidateMatching) {

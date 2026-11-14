@@ -153,8 +153,11 @@ public class JobVacancyController {
     }
 
     /**
-     * Replaces a vacancy's content; status is untouched. 409 when the
-     * {@code version} sent is stale, 422 when the vacancy is closed or archived.
+     * Replaces a vacancy's content; status is untouched. Its thresholds and
+     * blind mode may change too (one left out keeps its value); its pipeline
+     * template may not. 409 when the {@code version} sent is stale, 422 when
+     * the vacancy is closed or archived, the body names another template, or
+     * the thresholds end up out of order.
      */
     @RequirePermission(Permission.Keys.JOBS_MANAGE)
     @PutMapping("/{id}")

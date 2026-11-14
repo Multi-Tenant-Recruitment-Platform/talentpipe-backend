@@ -173,10 +173,11 @@ public record JobVacancyRequest(
 
         Boolean candidateMatchingEnabled,
 
-        // ---- pipeline (create only). The vacancy runs on a copy of the
-        // template's stages; a threshold or blind mode left out is taken from
-        // the template. An edit ignores all four: the pipeline is fixed when
-        // the vacancy is created.
+        // ---- pipeline. The vacancy runs on a copy of the template's stages.
+        // On create a threshold or blind mode left out is the template's; on
+        // edit one left out keeps its value. The template is fixed at
+        // creation: an edit may leave its id out or send it back unchanged,
+        // and any other id is refused (422).
         @NotNull(groups = OnCreate.class, message = JobVacancyRequest.PIPELINE_TEMPLATE_REQUIRED)
         UUID pipelineTemplateId,
 
