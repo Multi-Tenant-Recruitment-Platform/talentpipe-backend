@@ -27,6 +27,8 @@ import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
+import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.ScreeningThresholds;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.service.JobVacancyService;
@@ -43,6 +45,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -417,6 +420,57 @@ class JobVacancyControllerTest {
 
         mockMvc.perform(json(put("/api/v1/jobs/{id}", VACANCY), body).with(as("HR_MANAGER")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void update_withNewThresholds_passesThemToTheService_andAnswers200() throws Exception {
+        when(vacancyService.update(eq(SEES_ALL), eq(VACANCY), any(JobVacancyRequest.class))).thenReturn(draft);
+        Map<String, Object> body = draftBody();
+        body.put("autoThreshold", 85);
+        body.put("manualThreshold", 65);
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}", VACANCY), body).with(as("HR_MANAGER")))
+                .andExpect(status().isOk());
+
+        verify(vacancyService).update(eq(SEES_ALL), eq(VACANCY), argThat(request ->
+                request.autoThreshold() == 85 && request.manualThreshold() == 65));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"autoThreshold, 101", "autoThreshold, -1", "manualThreshold, 101", "manualThreshold, -1"})
+    void update_withAThresholdOffTheScale_isABadRequest(String field, int value) throws Exception {
+        Map<String, Object> body = draftBody();
+        body.put(field, value);
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}", VACANCY), body).with(as("HR_MANAGER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("between 0 and 100")));
+
+        verifyNoInteractions(vacancyService);
+    }
+
+    @Test
+    void update_namingAnotherTemplate_answers422WithTheExactSentence() throws Exception {
+        when(vacancyService.update(eq(SEES_ALL), eq(VACANCY), any(JobVacancyRequest.class)))
+                .thenThrow(new BusinessRuleException(JobVacancy.TEMPLATE_CHANGE_REFUSED));
+        Map<String, Object> body = draftBody();
+        body.put("pipelineTemplateId", UUID.randomUUID());
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}", VACANCY), body).with(as("HR_MANAGER")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value("The pipeline template cannot be changed after a job is created."));
+    }
+
+    @Test
+    void update_withThresholdsOutOfOrder_answers422WithTheExactSentence() throws Exception {
+        when(vacancyService.update(eq(SEES_ALL), eq(VACANCY), any(JobVacancyRequest.class)))
+                .thenThrow(new BusinessRuleException(ScreeningThresholds.OUT_OF_ORDER));
+        Map<String, Object> body = draftBody();
+        body.put("manualThreshold", 90);
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}", VACANCY), body).with(as("HR_MANAGER")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value(ScreeningThresholds.OUT_OF_ORDER));
     }
 
     @Test

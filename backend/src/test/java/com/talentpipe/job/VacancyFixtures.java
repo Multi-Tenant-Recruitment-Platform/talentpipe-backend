@@ -72,6 +72,13 @@ public final class VacancyFixtures {
         return vacancy;
     }
 
+    /** A stored PUBLISHED vacancy on {@link #pipeline()}. */
+    public static JobVacancy publishedOnPipeline(UUID tenantId) {
+        JobVacancy vacancy = published(tenantId);
+        vacancy.runOn(pipeline());
+        return vacancy;
+    }
+
     /** A stored DRAFT, as a repository would hand it back: id set, version 0. */
     public static JobVacancy draft(UUID tenantId) {
         return persisted(new JobVacancy(tenantId, complete().build()));

@@ -60,6 +60,11 @@ import org.hibernate.type.SqlTypes;
 @SuppressWarnings("java:S2160") // Entity identity is defined solely by persistent ID in BaseEntity
 public class JobVacancy extends BaseEntity {
 
+    public static final String TEMPLATE_CHANGE_REFUSED =
+            "The pipeline template cannot be changed after a job is created.";
+    public static final String NO_PIPELINE =
+            "This vacancy has no pipeline, so its screening settings cannot be changed.";
+
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private UUID tenantId;
 
@@ -376,6 +381,58 @@ public class JobVacancy extends BaseEntity {
         this.blindModeEnabled = pipeline.blindModeEnabled();
         this.stageCount = pipeline.stageCount();
         this.interviewRoundCount = pipeline.interviewRoundCount();
+    }
+
+    /**
+     * Whether the vacancy runs on a pipeline. Judged by the thresholds, not
+     * the template id: deleting a template clears {@code pipelineTemplateId}
+     * (V23), yet the vacancy keeps its settings and stages. {@link #runOn}
+     * always sets the thresholds and nothing clears them, so only vacancies
+     * created before pipeline templates have none.
+     */
+    public boolean isOnPipeline() {
+        return autoThreshold != null;
+    }
+
+    /** @throws BusinessRuleException (422) if the vacancy was created before pipeline templates */
+    public void requireOnPipeline() {
+        if (!isOnPipeline()) {
+            throw new BusinessRuleException(NO_PIPELINE);
+        }
+    }
+
+    /**
+     * Refuses an edit that names a template other than the one the vacancy was
+     * created from: the stages were copied from that template, so a different
+     * one would describe a pipeline the vacancy does not run on. Leaving the
+     * id out, or sending back the stored one, is fine; with no stored id (the
+     * template was deleted, or the vacancy is older than templates) any id
+     * sent is a change.
+     *
+     * @throws BusinessRuleException (422) if {@code requested} is another template
+     */
+    public void requireTemplateUnchanged(UUID requested) {
+        if (requested != null && !requested.equals(pipelineTemplateId)) {
+            throw new BusinessRuleException(TEMPLATE_CHANGE_REFUSED);
+        }
+    }
+
+    /**
+     * Replaces the screening settings: both thresholds and blind mode. The
+     * template, its name, the stage counts and the stages stay as they were
+     * copied. Every check runs before anything changes, so a refusal leaves
+     * the vacancy untouched.
+     *
+     * @throws BusinessRuleException (422) if the vacancy is closed or archived,
+     *         has no pipeline, or the thresholds break {@link ScreeningThresholds}
+     */
+    public void updatePipelineSettings(int auto, int manual, boolean blind) {
+        requireEditable();
+        requireOnPipeline();
+        ScreeningThresholds.requireValid(auto, manual);
+        this.autoThreshold = auto;
+        this.manualThreshold = manual;
+        this.blindModeEnabled = blind;
     }
 
     /** The advert as currently stored — the inverse of {@link #applyContent}. */
