@@ -3,6 +3,7 @@ package com.talentpipe.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.talentpipe.job.controller.JobVacancyController;
+import com.talentpipe.pipeline.controller.PipelineTemplateController;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -97,6 +98,26 @@ class EndpointAuthorizationDriftTest {
         assertThat(stages.isAnnotationPresent(RequirePermission.class))
                 .as("no permission on top: reading stages follows reading the vacancy")
                 .isFalse();
+    }
+
+    /**
+     * Whoever can create a vacancy must be able to read the templates it is
+     * created from, or the job form's template picker is empty for them. The
+     * writes stay with the company admin, so a role that creates vacancies
+     * never edits the pipelines other vacancies follow.
+     */
+    @Test
+    void pipelineTemplatesAreReadableByVacancyCreators_butOnlyAdminsChangeThem() {
+        for (Method method : PipelineTemplateController.class.getDeclaredMethods()) {
+            PreAuthorize guard = AnnotatedElementUtils.findMergedAnnotation(method, PreAuthorize.class);
+            if (!isHandler(method) || guard == null) {
+                continue;
+            }
+            boolean read = AnnotatedElementUtils.hasAnnotation(method, GetMapping.class);
+            assertThat(guard.value().contains(Permission.Keys.JOBS_MANAGE))
+                    .as("%s %s jobs.manage", method.getName(), read ? "allows" : "must not allow")
+                    .isEqualTo(read);
+        }
     }
 
     // ----------------------------------------------------------------- helpers

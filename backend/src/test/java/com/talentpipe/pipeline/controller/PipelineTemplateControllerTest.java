@@ -1,5 +1,6 @@
 package com.talentpipe.pipeline.controller;
 
+import static com.talentpipe.testsupport.WebMvcSecurityTestConfig.asMemberWith;
 import static com.talentpipe.testsupport.WebMvcSecurityTestConfig.asUser;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -20,6 +21,7 @@ import com.talentpipe.pipeline.dto.PipelineTemplateRequest;
 import com.talentpipe.pipeline.dto.PipelineTemplateResponse;
 import com.talentpipe.pipeline.dto.PipelineTemplateSummaryResponse;
 import com.talentpipe.pipeline.service.PipelineTemplateService;
+import com.talentpipe.security.Permission;
 import com.talentpipe.testsupport.WebMvcSecurityTestConfig;
 import java.util.List;
 import java.util.UUID;
@@ -129,6 +131,50 @@ class PipelineTemplateControllerTest {
     @ValueSource(strings = {"INTERVIEWER", "CANDIDATE"})
     void list_asUnauthorizedRole_returns403(String role) throws Exception {
         mockMvc.perform(get("/api/v1/pipeline-templates").with(as(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void list_asACustomRoleThatCreatesVacancies_returns200_activeTemplatesOnly() throws Exception {
+        PipelineTemplateSummaryResponse summary = PipelineTemplateFixtures.sampleSummaryResponse(TEMPLATE_ID);
+        when(templateService.list(eq(TENANT_ID), any(), anyBoolean(), eq(false), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(summary)));
+
+        mockMvc.perform(get("/api/v1/pipeline-templates").with(asMemberWith(USER_ID, TENANT_ID, Permission.JOBS_MANAGE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(TEMPLATE_ID.toString()));
+
+        // Not an admin: the service is asked for active templates only.
+        verify(templateService).list(eq(TENANT_ID), any(), anyBoolean(), eq(false), any(Pageable.class));
+    }
+
+    @Test
+    void get_asACustomRoleThatCreatesVacancies_returns200_asANonAdmin() throws Exception {
+        PipelineTemplateResponse response = PipelineTemplateFixtures.sampleResponse(TEMPLATE_ID);
+        when(templateService.get(TENANT_ID, TEMPLATE_ID, false)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/pipeline-templates/{id}", TEMPLATE_ID)
+                        .with(asMemberWith(USER_ID, TENANT_ID, Permission.JOBS_MANAGE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(TEMPLATE_ID.toString()));
+    }
+
+    @Test
+    void readingTemplates_asACustomRoleWithoutJobsManage_returns403() throws Exception {
+        mockMvc.perform(get("/api/v1/pipeline-templates").with(asMemberWith(USER_ID, TENANT_ID, Permission.TEAM_VIEW)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/pipeline-templates/{id}", TEMPLATE_ID)
+                        .with(asMemberWith(USER_ID, TENANT_ID, Permission.JOBS_VIEW_ALL)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void writingTemplates_asACustomRoleWithJobsManage_staysForbidden() throws Exception {
+        mockMvc.perform(json(post("/api/v1/pipeline-templates"), PipelineTemplateFixtures.validRequest())
+                        .with(asMemberWith(USER_ID, TENANT_ID, Permission.JOBS_MANAGE)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/v1/pipeline-templates/{id}", TEMPLATE_ID)
+                        .with(asMemberWith(USER_ID, TENANT_ID, Permission.JOBS_MANAGE)))
                 .andExpect(status().isForbidden());
     }
 
