@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.talentpipe.auth.dto.MemberSummary;
 import com.talentpipe.auth.service.UserDirectoryService;
 import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.ConcurrentUpdateException;
@@ -41,6 +42,7 @@ import com.talentpipe.tenant.service.TenantService;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link JobVacancyService}. Pure Mockito — no Spring context.
@@ -871,6 +874,42 @@ class JobVacancyServiceTest {
         assertThat(response.createdBy()).isEqualTo(ACTOR);
     }
 
+    @Test
+    void get_namesTheCreator_soNoScreenNeedsTheTeamRoster() {
+        UUID creator = UUID.randomUUID();
+        JobVacancy vacancy = stored(createdBy(VacancyFixtures.draft(TENANT), creator));
+        when(userDirectory.describe(TENANT, List.of(creator))).thenReturn(Map.of(
+                creator, new MemberSummary(creator, "Dilini", "Wickramasinghe", "d@lumora.test", "Owner", "ACTIVE")));
+
+        assertThat(service.get(VIEWER, vacancy.getId()).createdByName()).isEqualTo("Dilini Wickramasinghe");
+    }
+
+    @Test
+    void get_aCreatorWhoNoLongerExists_isNamedAsNobody() {
+        JobVacancy vacancy = stored(createdBy(VacancyFixtures.draft(TENANT), UUID.randomUUID()));
+
+        JobVacancyResponse response = service.get(VIEWER, vacancy.getId());
+
+        assertThat(response.createdBy()).isNotNull();
+        assertThat(response.createdByName()).isNull();
+    }
+
+    @Test
+    void list_namesEveryCreatorOnThePage_inOneLookup() {
+        UUID creator = UUID.randomUUID();
+        JobVacancy first = createdBy(VacancyFixtures.draft(TENANT), creator);
+        JobVacancy second = createdBy(VacancyFixtures.draft(TENANT), creator);
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(first, second)));
+        when(userDirectory.describe(TENANT, Set.of(creator))).thenReturn(Map.of(
+                creator, new MemberSummary(creator, "Ada", "Lovelace", "ada@acme.io", "Recruiter", "ACTIVE")));
+
+        assertThat(service.list(VIEWER, VacancyListFilter.none(), 0, 20).getContent())
+                .extracting(JobVacancyResponse::createdByName)
+                .containsExactly("Ada Lovelace", "Ada Lovelace");
+        verify(userDirectory).describe(TENANT, Set.of(creator));
+    }
+
     // -------------------------------------------------------- feature switches
 
     @Test
@@ -981,6 +1020,12 @@ class JobVacancyServiceTest {
 
     private static TenantSettingsResponse companySwitches(boolean aiScreening, boolean candidateMatching) {
         return new TenantSettingsResponse(false, aiScreening, candidateMatching, null);
+    }
+
+    /** The vacancy as filed by {@code creator}. */
+    private static JobVacancy createdBy(JobVacancy vacancy, UUID creator) {
+        ReflectionTestUtils.setField(vacancy, "createdBy", creator);
+        return vacancy;
     }
 
     /** The request with its two feature switches set; everything else as given. */

@@ -1,5 +1,6 @@
 package com.talentpipe.job.service;
 
+import com.talentpipe.auth.dto.MemberSummary;
 import com.talentpipe.auth.service.UserDirectoryService;
 import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.ConcurrentUpdateException;
@@ -23,6 +24,7 @@ import com.talentpipe.tenant.service.TenantService;
 import java.time.LocalDate;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -156,7 +158,16 @@ public class JobVacancyService {
         if (filter.department() != null && !filter.department().isBlank()) {
             query = query.and(VacancySpecifications.inDepartment(filter.department()));
         }
-        return vacancyRepository.findAll(query, pageable).map(mapper::toResponse);
+        Page<JobVacancy> found = vacancyRepository.findAll(query, pageable);
+        // One lookup for the page's creators rather than one per row.
+        Set<UUID> creators = new HashSet<>();
+        found.forEach(vacancy -> {
+            if (vacancy.getCreatedBy() != null) {
+                creators.add(vacancy.getCreatedBy());
+            }
+        });
+        Map<UUID, MemberSummary> people = userDirectory.describe(viewer.tenantId(), creators);
+        return found.map(vacancy -> mapper.toResponse(vacancy, nameOf(people.get(vacancy.getCreatedBy()))));
     }
 
     /**
@@ -181,7 +192,7 @@ public class JobVacancyService {
     /** @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see */
     @Transactional(readOnly = true)
     public JobVacancyResponse get(VacancyViewer viewer, UUID vacancyId) {
-        return mapper.toResponse(access.require(viewer, vacancyId));
+        return respond(access.require(viewer, vacancyId));
     }
 
     // ----------------------------------------------------------------- writes
@@ -231,7 +242,7 @@ public class JobVacancyService {
         }
         JobVacancy saved = save(vacancy, viewer, "created as " + request.status());
         pipelineSnapshots.copyStages(saved, pipeline);
-        return mapper.toResponse(saved);
+        return respond(saved);
     }
 
     /**
@@ -366,7 +377,7 @@ public class JobVacancyService {
         draft.switchFeatures(source.isAiScreeningEnabled(), source.isCandidateMatchingEnabled());
         JobVacancy copy = save(draft, viewer, "duplicated from " + vacancyId);
         hiringTeam.copyTeam(tenantId, source.getId(), copy.getId(), viewer.userId());
-        return mapper.toResponse(copy);
+        return respond(copy);
     }
 
     /**
@@ -420,7 +431,27 @@ public class JobVacancyService {
 
     /** {@link #save}, answered as the stored vacancy. */
     private JobVacancyResponse stored(JobVacancy vacancy, VacancyViewer viewer, String action) {
-        return mapper.toResponse(save(vacancy, viewer, action));
+        return respond(save(vacancy, viewer, action));
+    }
+
+    /** The vacancy as the dashboard sees it, its creator named. */
+    private JobVacancyResponse respond(JobVacancy vacancy) {
+        UUID creator = vacancy.getCreatedBy();
+        if (creator == null) {
+            return mapper.toResponse(vacancy, null);
+        }
+        return mapper.toResponse(vacancy,
+                nameOf(userDirectory.describe(vacancy.getTenantId(), List.of(creator)).get(creator)));
+    }
+
+    /** "First Last", or {@code null} for someone the directory no longer has. */
+    private static String nameOf(MemberSummary person) {
+        if (person == null) {
+            return null;
+        }
+        String name = (Objects.toString(person.firstName(), "") + " "
+                + Objects.toString(person.lastName(), "")).trim();
+        return name.isEmpty() ? null : name;
     }
 
     /**
