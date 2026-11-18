@@ -1,15 +1,19 @@
 package com.talentpipe.auth.service;
 
 import com.talentpipe.auth.dto.MemberSummary;
+import com.talentpipe.auth.entity.RoleName;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.auth.repository.UserRepository;
 import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +67,57 @@ public class UserDirectoryService {
                 .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                 .map(User::getId)
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * {@link #activeMembersAmong}, for choosing people who work on a hire: also
+     * leaves out any account holding the candidate role. Candidates have their
+     * own model and are never users, so this is defence in depth.
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> activeStaffAmong(UUID tenantId, Collection<UUID> userIds) {
+        if (tenantId == null || userIds == null || userIds.isEmpty()) {
+            return Set.of();
+        }
+        return userRepository.findAllByTenantIdAndIdIn(tenantId, userIds).stream()
+                .filter(UserDirectoryService::isActiveStaff)
+                .map(User::getId)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Active members of {@code tenantId} whose first name, last name, full name
+     * or email starts with {@code query}, ignoring case, sorted by name — for
+     * a picker that searches as someone types. Never another company's people,
+     * and never a candidate.
+     *
+     * @param limit the most to return; capped at {@value #MAX_SEARCH_RESULTS}
+     * @return empty for a blank query
+     */
+    @Transactional(readOnly = true)
+    public List<MemberSummary> searchActiveMembers(UUID tenantId, String query, int limit) {
+        if (tenantId == null || query == null || query.isBlank()) {
+            return List.of();
+        }
+        String prefix = escapeLike(query.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT)) + "%";
+        int size = Math.max(1, Math.min(limit, MAX_SEARCH_RESULTS));
+        return userRepository.searchActiveByPrefix(tenantId, prefix, PageRequest.of(0, size)).stream()
+                .filter(UserDirectoryService::isActiveStaff)
+                .map(UserDirectoryService::toSummary)
+                .toList();
+    }
+
+    /** The most people one search returns. */
+    public static final int MAX_SEARCH_RESULTS = 50;
+
+    /** LIKE's own characters, matched literally: someone typing "%" means a percent sign. */
+    private static String escapeLike(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    private static boolean isActiveStaff(User user) {
+        return user.getStatus() == UserStatus.ACTIVE
+                && (user.getRole() == null || user.getRole().getName() != RoleName.CANDIDATE);
     }
 
     /**
