@@ -1,5 +1,6 @@
 package com.talentpipe.job.repository;
 
+import com.talentpipe.job.entity.JobStageInterviewer;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.entity.VacancyTeamMember;
@@ -44,8 +45,8 @@ public final class VacancySpecifications {
     }
 
     /**
-     * Vacancies the user works on: created, recruits for, manages, or is on
-     * the hiring team of. Same rule as {@link JobVacancyRepository#WORKS_ON}.
+     * Vacancies the user works on: created, recruits for, manages, is on
+     * the hiring team of, or sits on an interview panel of. Same rule as {@link JobVacancyRepository#WORKS_ON}.
      */
     public static Specification<JobVacancy> worksOn(UUID userId) {
         return (root, query, cb) -> cb.or(
@@ -54,8 +55,8 @@ public final class VacancySpecifications {
     }
 
     /**
-     * Vacancies the user has been put on: as recruiter, hiring manager or
-     * hiring team member. Unlike {@link #worksOn}, having created a vacancy
+     * Vacancies the user has been put on: as recruiter, hiring manager,
+     * hiring team member or interviewer on one of its panels. Unlike {@link #worksOn}, having created a vacancy
      * does not count — "assigned to me" is about the work handed to you.
      */
     public static Specification<JobVacancy> assignedTo(UUID userId) {
@@ -69,9 +70,15 @@ public final class VacancySpecifications {
         onTeam.select(cb.literal(1)).where(
                 cb.equal(member.get("vacancyId"), root.get("id")),
                 cb.equal(member.get("userId"), userId));
+        Subquery<Integer> onPanel = query.subquery(Integer.class);
+        Root<JobStageInterviewer> interviewer = onPanel.from(JobStageInterviewer.class);
+        onPanel.select(cb.literal(1)).where(
+                cb.equal(interviewer.get("jobId"), root.get("id")),
+                cb.equal(interviewer.get("userId"), userId));
         return cb.or(
                 cb.equal(root.get(RECRUITER_ID), userId),
                 cb.equal(root.get(MANAGER_ID), userId),
-                cb.exists(onTeam));
+                cb.exists(onTeam),
+                cb.exists(onPanel));
     }
 }
