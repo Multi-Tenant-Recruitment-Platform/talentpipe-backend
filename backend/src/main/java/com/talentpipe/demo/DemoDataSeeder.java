@@ -18,12 +18,15 @@ import com.talentpipe.candidate.repository.CandidateRepository;
 import com.talentpipe.candidate.validator.CandidateNicValidator;
 import com.talentpipe.common.util.SecureTokens;
 import com.talentpipe.job.dto.HiringTeamRequest;
+import com.talentpipe.job.dto.InterviewPanelRequest;
+import com.talentpipe.job.dto.InterviewPanelResponse;
 import com.talentpipe.job.entity.EmploymentType;
 import com.talentpipe.job.entity.PayPeriod;
 import com.talentpipe.job.entity.ShiftType;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.entity.WeekDay;
 import com.talentpipe.job.entity.WorkplaceType;
+import com.talentpipe.job.service.InterviewPanelService;
 import com.talentpipe.job.service.JobVacancyService;
 import com.talentpipe.job.service.VacancyHiringTeamService;
 import com.talentpipe.job.service.VacancyViewer;
@@ -43,9 +46,13 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -125,6 +132,7 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final CandidateRepository candidateRepository;
     private final JobVacancyService vacancyService;
     private final VacancyHiringTeamService hiringTeamService;
+    private final InterviewPanelService interviewPanelService;
     private final PipelineTemplateService pipelineTemplateService;
     private final ApplicationService applicationService;
     private final PasswordEncoder passwordEncoder;
@@ -150,6 +158,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                           CandidateRepository candidateRepository,
                           JobVacancyService vacancyService,
                           VacancyHiringTeamService hiringTeamService,
+                          InterviewPanelService interviewPanelService,
                           PipelineTemplateService pipelineTemplateService,
                           ApplicationService applicationService,
                           PasswordEncoder passwordEncoder,
@@ -164,6 +173,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         this.candidateRepository = candidateRepository;
         this.vacancyService = vacancyService;
         this.hiringTeamService = hiringTeamService;
+        this.interviewPanelService = interviewPanelService;
         this.pipelineTemplateService = pipelineTemplateService;
         this.applicationService = applicationService;
         this.passwordEncoder = passwordEncoder;
@@ -816,11 +826,34 @@ public class DemoDataSeeder implements ApplicationRunner {
             hiringTeamService.replace(viewer, id, new HiringTeamRequest(advert.team));
         }
         if (advert.finalStatus != VacancyStatus.DRAFT) {
+            // Publishing needs every interview round staffed.
+            staffInterviewRounds(viewer, id, advert, actor);
             vacancyService.publish(viewer, id);
         }
         Posted vacancy = new Posted(id, company.tenantId, viewer, advert.finalStatus, advert.daysAgo);
         posted.add(vacancy);
         return vacancy;
+    }
+
+    /**
+     * Puts up to two of the people working on the vacancy on each of its
+     * interview panels: its recruiter, hiring manager and hiring team, then
+     * whoever filed it.
+     */
+    private void staffInterviewRounds(VacancyViewer viewer, UUID vacancyId, DemoVacancy advert, UUID actor) {
+        Set<UUID> people = new LinkedHashSet<>();
+        Stream.concat(Stream.of(advert.recruiter, advert.hiringManager), advert.team.stream())
+                .filter(Objects::nonNull)
+                .forEach(people::add);
+        people.add(actor);
+        List<UUID> chosen = people.stream().limit(2).toList();
+        List<InterviewPanelRequest> panels = interviewPanelService.get(viewer, vacancyId).stream()
+                .map(InterviewPanelResponse::position)
+                .map(position -> new InterviewPanelRequest(position, chosen.size(), chosen))
+                .toList();
+        if (!panels.isEmpty()) {
+            interviewPanelService.replace(viewer, vacancyId, panels);
+        }
     }
 
     private void apply(UUID candidateId, Posted vacancy, ApplicationStatus status, int daysAfterPublishing) {

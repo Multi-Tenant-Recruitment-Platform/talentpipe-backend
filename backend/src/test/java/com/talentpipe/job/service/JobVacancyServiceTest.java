@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -20,10 +21,13 @@ import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.common.util.HtmlSanitizer;
 import com.talentpipe.job.VacancyFixtures;
+import com.talentpipe.job.dto.InterviewPanelRequest;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.JobStage;
+import com.talentpipe.job.entity.JobStageInterviewer;
+import com.talentpipe.job.entity.JobStagePanel;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.ScreeningThresholds;
 import com.talentpipe.job.entity.VacancyStatus;
@@ -31,14 +35,20 @@ import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.validator.JobVacancyMemberValidator;
 import com.talentpipe.job.validator.JobVacancyPublishValidator;
 import com.talentpipe.job.validator.JobVacancyShapeValidator;
+import com.talentpipe.job.repository.JobStageInterviewerRepository;
+import com.talentpipe.job.repository.JobStagePanelRepository;
 import com.talentpipe.job.repository.JobStageRepository;
 import com.talentpipe.job.repository.JobVacancyRepository;
 import com.talentpipe.job.repository.VacancyStatusCount;
 import com.talentpipe.pipeline.PipelineTemplateFixtures;
 import com.talentpipe.pipeline.entity.PipelineTemplateStatus;
+import com.talentpipe.pipeline.entity.StageType;
 import com.talentpipe.pipeline.service.PipelineTemplateService;
 import com.talentpipe.tenant.dto.TenantSettingsResponse;
 import com.talentpipe.tenant.service.TenantService;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -107,6 +117,12 @@ class JobVacancyServiceTest {
     @Mock
     private JobStageRepository stageRepository;
 
+    @Mock
+    private JobStagePanelRepository panelRepository;
+
+    @Mock
+    private JobStageInterviewerRepository interviewerRepository;
+
     @Captor
     private ArgumentCaptor<JobVacancy> savedVacancy;
 
@@ -117,6 +133,12 @@ class JobVacancyServiceTest {
     private ArgumentCaptor<Pageable> pageable;
 
     private JobVacancyService service;
+
+    /** What {@code stageRepository} was asked to store, by vacancy. */
+    private final Map<UUID, List<JobStage>> copiedStages = new HashMap<>();
+
+    /** Who interviews in the sample template's one interview round (position 2). */
+    private static final UUID INTERVIEWER = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -135,6 +157,8 @@ class JobVacancyServiceTest {
                 userDirectory,
                 tenantService,
                 new PipelineSnapshotServiceImpl(templates, stageRepository, access, mapper),
+                new InterviewPanelService(access, stageRepository, panelRepository, interviewerRepository,
+                        userDirectory),
                 mapper);
 
         // Every request is created from this template (80/70, blind mode off) unless a test says otherwise.
@@ -143,6 +167,20 @@ class JobVacancyServiceTest {
         lenient().when(calendar.now()).thenReturn(NOW);
         lenient().when(calendar.today(TENANT)).thenReturn(TODAY);
         lenient().when(tenantService.getSettings(TENANT)).thenReturn(companySwitches(false, false));
+        // Stages behave like a real save too: given ids, and read back by vacancy.
+        lenient().when(stageRepository.saveAllAndFlush(any())).thenAnswer(invocation -> {
+            List<JobStage> stages = invocation.getArgument(0);
+            stages.forEach(stage -> {
+                ReflectionTestUtils.setField(stage, "id", UUID.randomUUID());
+                copiedStages.computeIfAbsent(stage.getJobId(), id -> new ArrayList<>()).add(stage);
+            });
+            return stages;
+        });
+        lenient().when(stageRepository.findAllByJobIdOrderByPositionAsc(any())).thenAnswer(invocation ->
+                copiedStages.getOrDefault(invocation.<UUID>getArgument(0), List.of()));
+        // Everyone a panel names is an active member unless a test says otherwise.
+        lenient().when(userDirectory.activeStaffAmong(any(), anyCollection())).thenAnswer(invocation ->
+                Set.copyOf(invocation.<Collection<UUID>>getArgument(1)));
         // Behave like a real save: hand the entity back, with an id if it is new.
         lenient().when(repository.saveAndFlush(any(JobVacancy.class))).thenAnswer(invocation -> {
             JobVacancy vacancy = invocation.getArgument(0);
@@ -182,7 +220,7 @@ class JobVacancyServiceTest {
 
     @Test
     void create_asPublished_goesLiveInTheSameRequestWithPublishedAtSet() {
-        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.PUBLISHED, null);
+        JobVacancyRequest request = staffed(VacancyFixtures.complete().toRequest(VacancyStatus.PUBLISHED, null));
 
         JobVacancyResponse response = service.create(VIEWER, request);
 
@@ -228,8 +266,8 @@ class JobVacancyServiceTest {
 
     @Test
     void create_markupOnlyTitle_cannotBePublished_becauseItNormalizesToNothing() {
-        JobVacancyRequest request = VacancyFixtures.complete().title("<b></b>")
-                .toRequest(VacancyStatus.PUBLISHED, null);
+        JobVacancyRequest request = staffed(VacancyFixtures.complete().title("<b></b>")
+                .toRequest(VacancyStatus.PUBLISHED, null));
 
         assertThatThrownBy(() -> service.create(VIEWER, request))
                 .isInstanceOf(BusinessRuleException.class)
@@ -269,7 +307,7 @@ class JobVacancyServiceTest {
 
     @Test
     void create_copiesTheTemplatesStagesOntoTheStoredVacancy_afterStoringIt() {
-        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.PUBLISHED, null);
+        JobVacancyRequest request = staffed(VacancyFixtures.complete().toRequest(VacancyStatus.PUBLISHED, null));
 
         JobVacancyResponse response = service.create(VIEWER, request);
 
@@ -910,6 +948,53 @@ class JobVacancyServiceTest {
         verify(userDirectory).describe(TENANT, Set.of(creator));
     }
 
+    // --------------------------------------------------------- interview panels
+
+    @Test
+    void create_storesTheInterviewPanelsItCarries() {
+        JobVacancyRequest request = staffed(VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null));
+
+        service.create(VIEWER, request);
+
+        verify(panelRepository).save(any(JobStagePanel.class));
+        verify(interviewerRepository).save(any(JobStageInterviewer.class));
+    }
+
+    @Test
+    void create_asPublished_withAnInterviewRoundUnstaffed_isRefusedAndNothingIsStored() {
+        JobVacancyRequest request = VacancyFixtures.complete().toRequest(VacancyStatus.PUBLISHED, null);
+
+        assertThatThrownBy(() -> service.create(VIEWER, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("This vacancy can't be published yet: Technical Round needs its interviewers.");
+
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void create_asDraft_mayLeaveAnInterviewRoundShort() {
+        JobVacancyRequest request = withPanels(VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null),
+                List.of(new InterviewPanelRequest(2, 3, List.of(INTERVIEWER))));
+
+        assertThat(service.create(VIEWER, request).status()).isEqualTo(VacancyStatus.DRAFT);
+    }
+
+    @Test
+    void publish_withAnInterviewRoundShort_isRefusedAndNothingIsStored() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        JobStage round = new JobStage(TENANT, vacancy.getId(), 2, StageType.INTERVIEW, "Technical Round", 75);
+        ReflectionTestUtils.setField(round, "id", UUID.randomUUID());
+        copiedStages.put(vacancy.getId(), List.of(round));
+        when(panelRepository.findAllByJobId(vacancy.getId()))
+                .thenReturn(List.of(new JobStagePanel(TENANT, vacancy.getId(), round.getId(), 2, ACTOR)));
+
+        assertThatThrownBy(() -> service.publish(VIEWER, vacancy.getId()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("This vacancy can't be published yet: Technical Round needs 2 interviewers, 0 chosen.");
+
+        verify(repository, never()).saveAndFlush(any());
+    }
+
     // -------------------------------------------------------- feature switches
 
     @Test
@@ -1028,6 +1113,26 @@ class JobVacancyServiceTest {
         return vacancy;
     }
 
+    /** The request with the sample template's interview round fully staffed. */
+    private static JobVacancyRequest staffed(JobVacancyRequest r) {
+        return withPanels(r, List.of(new InterviewPanelRequest(2, 1, List.of(INTERVIEWER))));
+    }
+
+    /** The request carrying the given interview panels; everything else as given. */
+    private static JobVacancyRequest withPanels(JobVacancyRequest r, List<InterviewPanelRequest> panels) {
+        return new JobVacancyRequest(
+                r.title(), r.department(), r.industry(), r.openings(), r.employmentType(), r.workplaceType(),
+                r.location(), r.applicationDeadline(), r.jobSummary(), r.jobDescription(), r.keyResponsibilities(),
+                r.requiredSkills(), r.preferredSkills(), r.minimumExperienceYears(), r.education(),
+                r.certifications(), r.languageRequirements(), r.otherRequirements(),
+                r.salaryMin(), r.salaryMax(), r.currency(), r.payPeriod(), r.benefits(),
+                r.workingDays(), r.workingHours(), r.shiftType(), r.expectedHoursPerWeek(),
+                r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
+                r.aiScreeningEnabled(), r.candidateMatchingEnabled(),
+                r.pipelineTemplateId(), r.autoThreshold(), r.manualThreshold(), r.blindModeEnabled(),
+                r.status(), r.version(), panels);
+    }
+
     /** The request with its two feature switches set; everything else as given. */
     private static JobVacancyRequest withSwitches(JobVacancyRequest r, boolean aiScreening, boolean matching) {
         return new JobVacancyRequest(
@@ -1040,7 +1145,7 @@ class JobVacancyServiceTest {
                 r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
                 aiScreening, matching,
                 r.pipelineTemplateId(), r.autoThreshold(), r.manualThreshold(), r.blindModeEnabled(),
-                r.status(), r.version());
+                r.status(), r.version(), r.interviewPanels());
     }
 
     private static VacancyStatusCount count(VacancyStatus status, long total) {

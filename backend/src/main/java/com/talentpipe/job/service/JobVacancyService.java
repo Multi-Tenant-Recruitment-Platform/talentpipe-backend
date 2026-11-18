@@ -93,6 +93,7 @@ public class JobVacancyService {
     private final UserDirectoryService userDirectory;
     private final TenantService tenantService;
     private final PipelineSnapshotService pipelineSnapshots;
+    private final InterviewPanelService interviewPanels;
     private final JobVacancyMapper mapper;
 
     public JobVacancyService(JobVacancyRepository vacancyRepository,
@@ -107,6 +108,7 @@ public class JobVacancyService {
                              UserDirectoryService userDirectory,
                              TenantService tenantService,
                              PipelineSnapshotService pipelineSnapshots,
+                             InterviewPanelService interviewPanels,
                              JobVacancyMapper mapper) {
         this.vacancyRepository = vacancyRepository;
         this.access = access;
@@ -120,6 +122,7 @@ public class JobVacancyService {
         this.userDirectory = userDirectory;
         this.tenantService = tenantService;
         this.pipelineSnapshots = pipelineSnapshots;
+        this.interviewPanels = interviewPanels;
         this.mapper = mapper;
     }
 
@@ -209,15 +212,17 @@ public class JobVacancyService {
      * <p>The template's stages are copied to the vacancy in this same
      * transaction ({@link PipelineSnapshotService}), so a vacancy is never
      * stored without its stages, and its thresholds and blind mode are the
-     * template's unless the request overrides them.</p>
+     * template's unless the request overrides them. The interview panels the
+     * request carries are stored with them; published at once, every
+     * interview round must be fully staffed ({@link InterviewPanelService}).</p>
      *
      * @throws InvalidRequestException   (400) if the requested status is
      *         anything but DRAFT or PUBLISHED, or no template is named
      * @throws ResourceNotFoundException (404) the template does not exist or
      *         is another company's
      * @throws BusinessRuleException     (422) if the template is archived, a
-     *         content rule fails, or the vacancy is to be published and is
-     *         not complete
+     *         content rule fails, a panel is refused, or the vacancy is to be
+     *         published and is not complete
      */
     @Transactional
     public JobVacancyResponse create(VacancyViewer viewer, JobVacancyRequest request) {
@@ -229,6 +234,8 @@ public class JobVacancyService {
         LocalDate today = calendar.today(tenantId);
         if (request.status() == VacancyStatus.PUBLISHED) {
             publishValidator.validateForPublish(request, today);
+            InterviewPanelService.requireComplete(pipeline.stages(), request.interviewPanels(),
+                    InterviewPanelService.NOT_READY_TO_PUBLISH);
         }
 
         VacancyContent content = normalizer.normalize(request);
@@ -242,6 +249,9 @@ public class JobVacancyService {
         }
         JobVacancy saved = save(vacancy, viewer, "created as " + request.status());
         pipelineSnapshots.copyStages(saved, pipeline);
+        if (request.interviewPanels() != null) {
+            interviewPanels.apply(saved, request.interviewPanels(), viewer.userId());
+        }
         return respond(saved);
     }
 
@@ -262,6 +272,9 @@ public class JobVacancyService {
      * template id may be left out or sent back unchanged, nothing more. Its
      * screening settings — both thresholds and blind mode — may change while
      * the vacancy is editable; one left out keeps its value.</p>
+     *
+     * <p>Interview panels sent with the edit replace the stored ones, and a
+     * live vacancy's must stay complete; left out, they are not touched.</p>
      *
      * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see
      * @throws BusinessRuleException     (422) closed or archived; the request
@@ -302,7 +315,14 @@ public class JobVacancyService {
         vacancy.applyContent(content, today);
         vacancy.fileUnder(industry);
         vacancy.switchFeatures(request.aiScreeningEnabled(), request.candidateMatchingEnabled());
-        return stored(vacancy, viewer, "edited");
+        JobVacancy saved = save(vacancy, viewer, "edited");
+        if (request.interviewPanels() != null) {
+            interviewPanels.apply(saved, request.interviewPanels(), viewer.userId());
+            if (saved.getStatus() == VacancyStatus.PUBLISHED) {
+                interviewPanels.requireComplete(saved, InterviewPanelService.MUST_STAY_COMPLETE);
+            }
+        }
+        return respond(saved);
     }
 
     /**
@@ -311,13 +331,15 @@ public class JobVacancyService {
      * there is nothing further to synchronize.
      *
      * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see
-     * @throws BusinessRuleException     (422) not a draft, or not complete
+     * @throws BusinessRuleException     (422) not a draft, not complete, or an
+     *         interview round is not fully staffed
      */
     @Transactional
     public JobVacancyResponse publish(VacancyViewer viewer, UUID vacancyId) {
         JobVacancy vacancy = access.require(viewer, vacancyId);
         LocalDate today = calendar.today(viewer.tenantId());
         publishValidator.validateForPublish(vacancy, today);
+        interviewPanels.requireComplete(vacancy, InterviewPanelService.NOT_READY_TO_PUBLISH);
         vacancy.publish(calendar.now(), today);
         return stored(vacancy, viewer, "published");
     }
