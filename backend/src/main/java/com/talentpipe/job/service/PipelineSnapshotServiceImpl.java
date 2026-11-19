@@ -88,6 +88,22 @@ public class PipelineSnapshotServiceImpl implements PipelineSnapshotService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void copyStagesOf(JobVacancy source, JobVacancy copy) {
+        List<JobStage> copies = stageRepository.findAllByJobIdOrderByPositionAsc(source.getId()).stream()
+                .map(stage -> new JobStage(copy.getTenantId(), copy.getId(), stage.getPosition(),
+                        stage.getStageType(), stage.getName(), stage.getBenchmark()))
+                .toList();
+        if (copies.isEmpty()) {
+            return;
+        }
+        // Flushed here so a refused insert fails this call, not the commit after it.
+        stageRepository.saveAllAndFlush(copies);
+        log.info("Vacancy {} duplicated from {}: {} stages copied [tenant={}]",
+                copy.getId(), source.getId(), copies.size(), copy.getTenantId());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<JobStageResponse> stages(VacancyViewer viewer, UUID vacancyId) {
         JobVacancy vacancy = access.require(viewer, vacancyId);
