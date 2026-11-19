@@ -22,8 +22,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class JobVacancyMapper {
 
-    /** The recruiter dashboard's view of a vacancy. */
+    /** The recruiter dashboard's view of a vacancy, without its creator's name. */
     public JobVacancyResponse toResponse(JobVacancy vacancy) {
+        return toResponse(vacancy, null);
+    }
+
+    /**
+     * The recruiter dashboard's view of a vacancy.
+     *
+     * @param createdByName its creator's name, resolved by the caller (the
+     *                      user directory belongs to the auth module); {@code null} when unknown
+     */
+    public JobVacancyResponse toResponse(JobVacancy vacancy, String createdByName) {
         VacancyContent content = vacancy.content();
         return new JobVacancyResponse(
                 vacancy.getId(),
@@ -79,6 +89,7 @@ public class JobVacancyMapper {
                 vacancy.isBlindModeEnabled(),
 
                 vacancy.getCreatedBy(),
+                createdByName,
                 vacancy.getCreatedAt(),
                 vacancy.getUpdatedAt(),
                 vacancy.getPublishedAt(),

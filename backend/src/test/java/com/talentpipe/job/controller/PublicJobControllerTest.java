@@ -1,5 +1,6 @@
 package com.talentpipe.job.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static com.talentpipe.testsupport.WebMvcSecurityTestConfig.asUser;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -229,7 +230,27 @@ class PublicJobControllerTest {
                 .andExpect(jsonPath("$.keyResponsibilities[0]").value("Own the matching service"))
                 .andExpect(jsonPath("$.workingDays[0]").value("MON"))
                 .andExpect(jsonPath("$.screeningQuestions").doesNotExist())
-                .andExpect(jsonPath("$.tenantId").doesNotExist());
+                .andExpect(jsonPath("$.tenantId").doesNotExist())
+                // The hiring process is company-side only: no stages, panels,
+                // interviewers or who filed the advert.
+                .andExpect(jsonPath("$.stages").doesNotExist())
+                .andExpect(jsonPath("$.interviewPanels").doesNotExist())
+                .andExpect(jsonPath("$.interviewers").doesNotExist())
+                .andExpect(jsonPath("$.createdBy").doesNotExist())
+                .andExpect(jsonPath("$.createdByName").doesNotExist());
+    }
+
+    @Test
+    void theAdvertsShape_hasNoPipelineOrPanelFieldsAtAll() {
+        for (Class<?> advert : List.of(JobDetailResponse.class, JobSummaryResponse.class)) {
+            assertThat(java.util.Arrays.stream(advert.getRecordComponents())
+                    .map(java.lang.reflect.RecordComponent::getName)
+                    .map(name -> name.toLowerCase(java.util.Locale.ROOT)))
+                    .as(advert.getSimpleName())
+                    .noneMatch(name -> name.contains("stage") || name.contains("panel")
+                            || name.contains("interview") || name.contains("createdby")
+                            || name.contains("pipeline"));
+        }
     }
 
     @Test

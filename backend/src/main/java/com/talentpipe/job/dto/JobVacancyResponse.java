@@ -40,6 +40,10 @@ import java.util.UUID;
  *                       {@code manualThreshold}
  * @param createdBy      who filed it; {@code null} for vacancies filed before
  *                       this was recorded
+ * @param createdByName  their name, so a screen can say who filed it without
+ *                       reading the team roster (which not every role may);
+ *                       {@code null} when {@code createdBy} is, or the person
+ *                       no longer exists
  * @param publishedAt    when the vacancy went live; {@code null} until then
  * @param closedAt       when it was closed; {@code null} until then
  * @param archivedAt     when it was archived; {@code null} until then
@@ -101,6 +105,7 @@ public record JobVacancyResponse(
         boolean blindModeEnabled,
 
         UUID createdBy,
+        String createdByName,
         Instant createdAt,
         Instant updatedAt,
         Instant publishedAt,

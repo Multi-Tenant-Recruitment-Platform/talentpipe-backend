@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -62,4 +63,23 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<Object[]> countMembersByRole(@Param("tenantId") UUID tenantId);
 
     List<User> findAllByTenantIdAndRoleNameIn(UUID tenantId, Collection<RoleName> roles);
+
+    /**
+     * Active members of one company whose first name, last name, full name or
+     * email starts with {@code prefix}, by name. {@code prefix} is already
+     * lower-cased, has LIKE's wildcards escaped with {@code \}, and ends in
+     * {@code %}. The V25 prefix indexes serve the first three tests.
+     */
+    @Query("""
+            select u from User u
+            where u.tenantId = :tenantId
+              and u.status = com.talentpipe.auth.entity.UserStatus.ACTIVE
+              and (lower(u.firstName) like :prefix escape '\\'
+                   or lower(u.lastName) like :prefix escape '\\'
+                   or lower(u.email) like :prefix escape '\\'
+                   or lower(concat(u.firstName, ' ', u.lastName)) like :prefix escape '\\')
+            order by lower(u.firstName), lower(u.lastName), u.id
+            """)
+    List<User> searchActiveByPrefix(@Param("tenantId") UUID tenantId, @Param("prefix") String prefix,
+                                    Pageable limit);
 }

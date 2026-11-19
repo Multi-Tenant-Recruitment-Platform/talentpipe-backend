@@ -291,7 +291,7 @@ public final class VacancyFixtures {
                     List.of("Do you have the right to work in Sri Lanka?"),
                     null, null,
                     pipelineTemplateId, autoThreshold, manualThreshold, blindModeEnabled,
-                    status, version);
+                    status, version, null);
         }
     }
 }
