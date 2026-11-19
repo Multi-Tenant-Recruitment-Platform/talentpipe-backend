@@ -158,6 +158,17 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
                 });
     }
 
+    /**
+     * Swaps a template's stages for the requested ones.
+     *
+     * <p>The old stages are removed and flushed before the new ones are added.
+     * Every edit sends the whole list, so the new stages reuse the old
+     * positions, and the table is unique on (template, position). Left to
+     * itself Hibernate writes the inserts before the orphan deletes, so
+     * position 0 collided with the old position 0 and every save — a rename
+     * included — failed with 409 (BUG-01). This runs in the update's
+     * transaction, so a later failure still rolls the removal back.</p>
+     */
     private void replaceStages(UUID tenantId, PipelineTemplate template, List<PipelineStageRequest> stageReqs) {
         List<PipelineTemplateStage> newStages = stageReqs.stream()
                 .sorted(Comparator.comparingInt(PipelineStageRequest::position))
@@ -166,6 +177,8 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
                     return mapper.toStageEntity(tenantId, stageReq, cleanName);
                 })
                 .toList();
+        template.clearStages();
+        templateRepository.flush();
         template.setStages(newStages);
     }
 

@@ -353,6 +353,10 @@ public class JobVacancyService {
      * hiring team comes along too, minus anyone no longer active. The person
      * duplicating it is recorded as the copy's creator.</p>
      *
+     * <p>The pipeline comes along whole (BUG-02): the source's template link,
+     * screening settings and its own copied stages, in this same transaction,
+     * so the copy runs on exactly the pipeline the original does.</p>
+     *
      * @throws ResourceNotFoundException (404) source missing, another company's, or not the viewer's to see
      */
     @Transactional
@@ -364,7 +368,10 @@ public class JobVacancyService {
         JobVacancy draft = new JobVacancy(tenantId, viewer.userId(), template);
         draft.fileUnder(industryPolicy.forDuplicate(tenantId, source.getIndustry()));
         draft.switchFeatures(source.isAiScreeningEnabled(), source.isCandidateMatchingEnabled());
+        // Set before the insert: changing the vacancy after it would bump its version past the one returned.
+        draft.runOnCopyOf(source);
         JobVacancy copy = save(draft, viewer, "duplicated from " + vacancyId);
+        pipelineSnapshots.copyStagesOf(source, copy);
         hiringTeam.copyTeam(tenantId, source.getId(), copy.getId(), viewer.userId());
         return mapper.toResponse(copy);
     }

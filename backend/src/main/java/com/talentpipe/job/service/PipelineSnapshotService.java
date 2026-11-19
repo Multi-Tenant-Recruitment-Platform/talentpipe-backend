@@ -39,6 +39,14 @@ public interface PipelineSnapshotService {
     void copyStages(JobVacancy vacancy, PipelineSnapshot snapshot);
 
     /**
+     * Copies a vacancy's own stages onto its duplicate, which has just been
+     * stored. The source's stages, not its template's: the copy runs on the
+     * pipeline the original runs on. Copies nothing for a source without
+     * stages. Must run in the transaction that stored the copy.
+     */
+    void copyStagesOf(JobVacancy source, JobVacancy copy);
+
+    /**
      * The stages the vacancy runs on, first to last.
      *
      * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see

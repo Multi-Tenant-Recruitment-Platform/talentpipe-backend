@@ -92,19 +92,15 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
         Object jobId = create(acme.adminToken(), from(template, completeVacancy("Backend Engineer"))).get("id");
         List<Map<String, Object>> before = stagesOf(acme.adminToken(), jobId).getBody();
 
-        // The template gains a fifth stage, its interview is renamed and made harder, and its settings change.
-        // Written to the template's own tables: replacing stages through PUT /pipeline-templates/{id}
-        // currently fails on uq_pipeline_template_stages_pos (the new stages are inserted before the old
-        // ones are deleted), and what is under test here is the job's copy, not the template editor.
-        UUID templateId = uuid(template.get("id"));
-        jdbc.update("UPDATE pipeline_template_stages SET position = 4 WHERE template_id = ? AND position = 3",
-                templateId);
-        jdbc.update("UPDATE pipeline_template_stages SET name = 'Coding interview', benchmark = 90 "
-                + "WHERE template_id = ? AND position = 2", templateId);
-        jdbc.update("INSERT INTO pipeline_template_stages (tenant_id, template_id, position, stage_type, name, benchmark) "
-                + "VALUES (?, ?, 3, 'INTERVIEW', 'Culture interview', 60)", acme.tenantId(), templateId);
-        jdbc.update("UPDATE pipeline_templates SET default_auto_threshold = 85, default_manual_threshold = 75, "
-                + "blind_mode_enabled = true WHERE id = ?", templateId);
+        // The template gains a fifth stage, its interview is renamed and made harder, and its settings change —
+        // through the template editor's own endpoint.
+        List<Map<String, Object>> edited = standardStages();
+        edited.set(2, stage(2, "INTERVIEW", "Coding interview", 90));
+        edited.set(3, stage(3, "INTERVIEW", "Culture interview", 60));
+        edited.add(stage(4, "ONBOARD", "Onboard", null));
+        ResponseEntity<Map<String, Object>> saved = call(HttpMethod.PUT, TEMPLATES + "/" + template.get("id"),
+                acme.adminToken(), templateBody("Engineering pipeline", 85, 75, true, edited));
+        assertThat(saved.getStatusCode()).as("template edit: %s", saved.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(templateAsStored(acme, template)).containsEntry("stageCount", 5);
 
         assertThat(stagesOf(acme.adminToken(), jobId).getBody()).hasSize(4).isEqualTo(before);
@@ -338,6 +334,88 @@ class JobCreationFromTemplateIntegrationTest extends AbstractJobIntegrationTest 
         // Reading is all the role gains: the template itself stays the admin's to change.
         assertThat(call(HttpMethod.POST, TEMPLATES + "/" + active.get("id") + "/archive", coordinator.token(), null)
                 .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ------------------------------------------------------ duplicating (BUG-02)
+
+    @Test
+    void duplicatingThroughTheApi_keepsTheTemplate_theSettings_andACopyOfTheStages() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Map<String, Object> body = from(template, completeVacancy("Backend Engineer"));
+        body.put("autoThreshold", 85);
+        body.put("manualThreshold", 65);
+        body.put("blindModeEnabled", true);
+        Object sourceId = create(acme.adminToken(), body).get("id");
+
+        ResponseEntity<Map<String, Object>> duplicated = move(acme.adminToken(), sourceId, "duplicate");
+
+        assertThat(duplicated.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        Object copyId = duplicated.getBody().get("id");
+        assertThat(duplicated.getBody())
+                .containsEntry("pipelineTemplateId", template.get("id"))
+                .containsEntry("pipelineTemplateName", "Engineering pipeline")
+                .containsEntry("autoThreshold", 85)
+                .containsEntry("manualThreshold", 65)
+                .containsEntry("blindModeEnabled", true)
+                .containsEntry("stageCount", 4)
+                .containsEntry("interviewRoundCount", 1);
+        List<Map<String, Object>> sourceStages = stagesOf(acme.adminToken(), sourceId).getBody();
+        List<Map<String, Object>> copyStages = stagesOf(acme.adminToken(), copyId).getBody();
+        assertThat(copyStages)
+                .extracting("position", "stageType", "name", "benchmark")
+                .containsExactlyElementsOf(sourceStages.stream()
+                        .map(stage -> tuple(stage.get("position"), stage.get("stageType"), stage.get("name"),
+                                stage.get("benchmark")))
+                        .toList());
+        // Rows of the copy's own, in its own company.
+        assertThat(copyStages).extracting("id").doesNotContainAnyElementsOf(
+                sourceStages.stream().map(stage -> stage.get("id")).toList());
+        assertThat(jdbc.queryForList("SELECT DISTINCT tenant_id FROM job_stages WHERE job_id = ?",
+                UUID.class, uuid(copyId))).containsExactly(acme.tenantId());
+    }
+
+    @Test
+    void aDuplicate_runsOnTheOriginalsPipeline_notOnWhatTheTemplateHasBecome() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Object sourceId = create(acme.adminToken(), from(template, completeVacancy("Backend Engineer"))).get("id");
+        List<Map<String, Object>> edited = standardStages();
+        edited.set(3, stage(3, "INTERVIEW", "Culture interview", 60));
+        edited.add(stage(4, "ONBOARD", "Onboard", null));
+        assertThat(call(HttpMethod.PUT, TEMPLATES + "/" + template.get("id"), acme.adminToken(),
+                templateBody("Engineering pipeline v2", 90, 60, true, edited)).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<Map<String, Object>> duplicated = move(acme.adminToken(), sourceId, "duplicate");
+
+        assertThat(duplicated.getBody())
+                .containsEntry("pipelineTemplateName", "Engineering pipeline")
+                .containsEntry("autoThreshold", 80)
+                .containsEntry("stageCount", 4);
+        assertThat(stagesOf(acme.adminToken(), duplicated.getBody().get("id")).getBody())
+                .extracting("name")
+                .containsExactly("Applied", "Screening", "Technical interview", "Onboard");
+    }
+
+    @Test
+    void aJobWhoseTemplateWasDeleted_duplicatesWithItsStages_andNoTemplateLink() {
+        Workspace acme = newWorkspace("Acme");
+        Map<String, Object> template = createTemplate(acme.adminToken(),
+                templateBody("Engineering pipeline", 80, 70, false, standardStages()));
+        Object sourceId = create(acme.adminToken(), from(template, completeVacancy("Backend Engineer"))).get("id");
+        assertThat(call(HttpMethod.DELETE, TEMPLATES + "/" + template.get("id"), acme.adminToken(), null)
+                .getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        ResponseEntity<Map<String, Object>> duplicated = move(acme.adminToken(), sourceId, "duplicate");
+
+        assertThat(duplicated.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(duplicated.getBody())
+                .containsEntry("pipelineTemplateId", null)
+                .containsEntry("pipelineTemplateName", "Engineering pipeline")
+                .containsEntry("autoThreshold", 80);
+        assertThat(stagesOf(acme.adminToken(), duplicated.getBody().get("id")).getBody()).hasSize(4);
     }
 
     // ------------------------------------------------------------------ refusals

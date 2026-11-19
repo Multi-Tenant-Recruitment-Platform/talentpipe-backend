@@ -384,6 +384,34 @@ public class JobVacancy extends BaseEntity {
     }
 
     /**
+     * Puts a duplicate on the pipeline of the vacancy it was copied from: the
+     * same template link, name, screening settings and stage counts. Taken
+     * from the source's own snapshot, not from the template as it is now, so
+     * the copy runs on exactly the pipeline the original does — whether the
+     * template has since been edited, archived or deleted. A source created
+     * before pipeline templates has no pipeline and passes none on. Its stages
+     * are copied separately ({@code PipelineSnapshotService#copyStagesOf}).
+     *
+     * @throws IllegalStateException if this vacancy is already on a pipeline
+     */
+    public void runOnCopyOf(JobVacancy source) {
+        Objects.requireNonNull(source, "source");
+        if (isOnPipeline()) {
+            throw new IllegalStateException("Vacancy " + getId() + " is already on a pipeline");
+        }
+        if (!source.isOnPipeline()) {
+            return;
+        }
+        this.pipelineTemplateId = source.pipelineTemplateId;
+        this.pipelineTemplateName = source.pipelineTemplateName;
+        this.autoThreshold = source.autoThreshold;
+        this.manualThreshold = source.manualThreshold;
+        this.blindModeEnabled = source.blindModeEnabled;
+        this.stageCount = source.stageCount;
+        this.interviewRoundCount = source.interviewRoundCount;
+    }
+
+    /**
      * Whether the vacancy runs on a pipeline. Judged by the thresholds, not
      * the template id: deleting a template clears {@code pipelineTemplateId}
      * (V23), yet the vacancy keeps its settings and stages. {@link #runOn}

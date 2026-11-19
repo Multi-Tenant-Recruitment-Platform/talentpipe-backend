@@ -4,6 +4,7 @@ import static com.talentpipe.job.VacancyFixtures.NOW;
 import static com.talentpipe.job.VacancyFixtures.TODAY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.inOrder;
@@ -35,6 +36,7 @@ import com.talentpipe.job.repository.JobVacancyRepository;
 import com.talentpipe.job.repository.VacancyStatusCount;
 import com.talentpipe.pipeline.PipelineTemplateFixtures;
 import com.talentpipe.pipeline.entity.PipelineTemplateStatus;
+import com.talentpipe.pipeline.entity.StageType;
 import com.talentpipe.pipeline.service.PipelineTemplateService;
 import com.talentpipe.tenant.dto.TenantSettingsResponse;
 import com.talentpipe.tenant.service.TenantService;
@@ -802,6 +804,47 @@ class JobVacancyServiceTest {
     }
 
     // --------------------------------------------------------------- duplicate
+
+    @Test
+    void duplicate_putsTheCopyOnTheSourcesPipeline_withTheSourcesOwnStages() {
+        JobVacancy source = stored(VacancyFixtures.publishedOnPipeline(TENANT));
+        source.updatePipelineSettings(85, 65, true);
+        when(stageRepository.findAllByJobIdOrderByPositionAsc(source.getId())).thenReturn(List.of(
+                new JobStage(TENANT, source.getId(), 0, StageType.POST_APPLICATION, "Applied", null),
+                new JobStage(TENANT, source.getId(), 1, StageType.INTERVIEW, "Panel", 70),
+                new JobStage(TENANT, source.getId(), 2, StageType.ONBOARD, "Onboard", null)));
+        ArgumentCaptor<List<JobStage>> copied = ArgumentCaptor.captor();
+
+        JobVacancyResponse copy = service.duplicate(VIEWER, source.getId());
+
+        assertThat(copy.pipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(copy.pipelineTemplateName()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE_NAME);
+        assertThat(copy.autoThreshold()).isEqualTo(85);
+        assertThat(copy.manualThreshold()).isEqualTo(65);
+        assertThat(copy.blindModeEnabled()).isTrue();
+        assertThat(copy.stageCount()).isEqualTo(4);
+        verify(stageRepository).saveAllAndFlush(copied.capture());
+        assertThat(copied.getValue())
+                .extracting(JobStage::getTenantId, JobStage::getJobId, JobStage::getPosition,
+                        JobStage::getStageType, JobStage::getName, JobStage::getBenchmark)
+                .containsExactly(
+                        tuple(TENANT, copy.id(), 0, StageType.POST_APPLICATION, "Applied", null),
+                        tuple(TENANT, copy.id(), 1, StageType.INTERVIEW, "Panel", 70),
+                        tuple(TENANT, copy.id(), 2, StageType.ONBOARD, "Onboard", null));
+        // The copy is the source's snapshot: the template is never read again.
+        verify(templates, never()).get(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void duplicate_ofAVacancyOlderThanTemplates_hasNoPipeline_andCopiesNoStages() {
+        JobVacancy source = stored(VacancyFixtures.published(TENANT));
+
+        JobVacancyResponse copy = service.duplicate(VIEWER, source.getId());
+
+        assertThat(copy.pipelineTemplateId()).isNull();
+        assertThat(copy.autoThreshold()).isNull();
+        verify(stageRepository, never()).saveAllAndFlush(any());
+    }
 
     @Test
     void duplicate_createsANewDraftPrefilledFromTheSource() {
