@@ -2,6 +2,8 @@ package com.talentpipe.security;
 
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
+import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -78,6 +80,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/password-reset/confirm",
                                 "/api/v1/auth/accept-invite").permitAll()
                         .requestMatchers("/api/v1/public/**").permitAll()
+                        // Probed by the load balancer and the container runtime,
+                        // which hold no token. Answers UP/DOWN only, no details.
+                        .requestMatchers(EndpointRequest.to(HealthEndpoint.class)).permitAll()
                         // Everything else needs a token; what the caller may do is
                         // enforced per endpoint with @RequirePermission (PB-002).
                         .anyRequest().authenticated())
