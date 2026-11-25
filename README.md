@@ -26,9 +26,10 @@ kernel and `security` infrastructure. Architectural ground rules and rationale:
 ## Repository layout
 
 ```
-backend/    Spring Boot application + Flyway migrations
-infra/      docker-compose.yml + .env.example
-docs/       API reference, architecture decisions, quality setup
+backend/          Spring Boot application, Flyway migrations, Dockerfile
+infra/            docker-compose.yml (local stack) + .env.example
+infra/terraform/  production on AWS (CloudFront, ECS Fargate, RDS, S3)
+docs/             API reference, architecture decisions, deployment, quality setup
 ```
 
 ## Branching & contributing
@@ -59,6 +60,17 @@ $env:JWT_SECRET = "dev-only-secret-at-least-32-bytes-long-change-me"   # PowerSh
 ```
 
 API: `http://localhost:8080/api/v1`. Flyway migrates the schema on first boot.
+
+To run everything (database, API and frontend) in Docker:
+
+```bash
+cd infra
+docker compose --profile full up -d --build     # then open http://localhost:5173
+```
+
+This needs `talentpipe-frontend` cloned next to this repo. More in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), which also covers production on AWS.
+
 Emailed links (verification/reset/invite) are printed to the log in the default
 console email mode — see [docs/API.md](docs/API.md#email-linked-flows-verification-reset-invitations).
 
@@ -83,10 +95,12 @@ All settings come from environment variables (see `infra/.env.example`):
 | `RESEND_API_KEY` | empty ⇒ console email mode | email transport |
 | `MAIL_FROM` | `onboarding@resend.dev` | sender address |
 | `FRONTEND_BASE_URL` | `http://localhost:5173` | base for emailed links |
+| `FORWARD_HEADERS_STRATEGY` / `CLIENT_IP_HEADER` | `none` / `X-Forwarded-For` | how to get the client IP behind a proxy (production uses `native` / `X-Viewer-Ip`) |
 
 ## Documentation
 
 - [docs/API.md](docs/API.md) — endpoint reference, error model, security behavior
 - [docs/DECISIONS.md](docs/DECISIONS.md) — architecture decision records
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — running locally, AWS setup and operations
 - [docs/QUALITY.md](docs/QUALITY.md) — SonarQube/SonarCloud setup
 - [CONTRIBUTING.md](CONTRIBUTING.md) — branching model, PR rules, commit style

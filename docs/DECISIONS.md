@@ -539,6 +539,70 @@ company A got 401 signing in to company B).
 
 ---
 
+## ADR-16 — Production runs on AWS behind one CloudFront distribution
+
+**Date:** 2026-11-26 · **Status:** Accepted
+
+### Context
+
+So far the platform has only run on our own machines. Production needs HTTPS
+for the SPA, the API and uploaded images, a managed PostgreSQL with pgvector,
+somewhere safe for secrets, and deploys that don't need anyone on a server and
+don't take the site down.
+
+### Decision
+
+Everything runs on AWS. It's written in Terraform (`infra/terraform`) and
+deployed from GitHub Actions. Details are in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+- One CloudFront distribution sits in front of everything. `/api/*` goes to
+  the backend, `/media/*` to the media bucket and the rest to the SPA bucket.
+  The browser sees one origin, same as with nginx locally, so the frontend
+  keeps calling `/api/v1`.
+- The backend has no public address. The load balancer is internal and
+  CloudFront reaches it through a VPC origin. The tasks and the database are
+  in private subnets, and the database subnets can't reach the internet.
+- The backend runs on ECS Fargate with the same image `docker compose` builds.
+  Deploys are rolling: a new task only gets traffic once its readiness check
+  passes (database included), and ECS rolls back if the new tasks never get
+  healthy.
+- RDS PostgreSQL 15, the version we use everywhere else. Encrypted, TLS only,
+  automated backups and deletion protection.
+- Secrets stay out of the code, CI and the Terraform state. Terraform
+  generates the database password and the JWT key with ephemeral values and
+  write-only arguments, and ECS passes them to the tasks from Secrets Manager.
+  The Resend key is added by hand.
+- GitHub deploys through OIDC, so there are no AWS keys in GitHub. Each repo
+  can only assume its own role, and only from its `production` environment.
+- The client IP comes from CloudFront. Behind the load balancer the socket
+  address isn't the visitor's, and anyone can send an `X-Forwarded-For`. A
+  CloudFront function sets `X-Viewer-Ip` instead, and the backend only trusts
+  that header on requests from inside the VPC (`FORWARD_HEADERS_STRATEGY=native`,
+  `CLIENT_IP_HEADER`).
+
+### Consequences
+
+- About US$110–140 a month at low traffic, mostly the NAT gateway, the load
+  balancer and the two tasks that are always running.
+- Media URLs look like `<site>/media/<key>` (`AWS_CDN_BASE_URL`). Only logos,
+  covers and photos can be fetched that way. CVs only go through the API.
+- SPA routes are rewritten to `index.html` by a CloudFront function. CloudFront
+  error pages would do the same, but they'd also replace the API's real 403
+  and 404 responses.
+- The deploy workflow decides which image the service runs, not Terraform. A
+  Terraform change to the backend's settings reaches the tasks on the next
+  deploy.
+- Flyway still migrates on startup while the old tasks are serving, so a
+  migration has to keep working with the previous release.
+- New endpoints: `/actuator/health/liveness` and `/readiness`. They don't need
+  a token, and they're only reachable inside the VPC since CloudFront only
+  forwards `/api/*`.
+- The Terraform has offline tests against a mocked provider. They check the
+  security rules we care about: no public database, no public CVs, no caching
+  of the API, no secrets in plain environment variables.
+
+---
+
 ## Standing conventions (not individually numbered)
 
 - **Deferred-work marker:** `// TODO(sprint2): ...` — grep for it at sprint
