@@ -452,6 +452,56 @@ class JobVacancyTest {
         assertThatCode(() -> olderThanTemplates.requireTemplateUnchanged(null)).doesNotThrowAnyException();
     }
 
+    // ------------------------------------------------------------ duplicating
+
+    @Test
+    void runOnCopyOf_takesTheSourcesWholePipeline_asTheSourceHasIt() {
+        JobVacancy source = VacancyFixtures.draftOnPipeline(TENANT);
+        source.updatePipelineSettings(85, 65, true);
+        JobVacancy copy = VacancyFixtures.draft(TENANT);
+
+        copy.runOnCopyOf(source);
+
+        assertThat(copy.getPipelineTemplateId()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE);
+        assertThat(copy.getPipelineTemplateName()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE_NAME);
+        assertThat(copy.getAutoThreshold()).isEqualTo(85);
+        assertThat(copy.getManualThreshold()).isEqualTo(65);
+        assertThat(copy.isBlindModeEnabled()).isTrue();
+        assertThat(copy.getStageCount()).isEqualTo(4);
+        assertThat(copy.getInterviewRoundCount()).isEqualTo(1);
+    }
+
+    @Test
+    void runOnCopyOf_aSourceWhoseTemplateWasDeleted_keepsItsPipeline_withNoTemplateLink() {
+        JobVacancy source = VacancyFixtures.draftOnPipeline(TENANT);
+        ReflectionTestUtils.setField(source, "pipelineTemplateId", null);
+        JobVacancy copy = VacancyFixtures.draft(TENANT);
+
+        copy.runOnCopyOf(source);
+
+        assertThat(copy.isOnPipeline()).isTrue();
+        assertThat(copy.getPipelineTemplateId()).isNull();
+        assertThat(copy.getPipelineTemplateName()).isEqualTo(VacancyFixtures.PIPELINE_TEMPLATE_NAME);
+    }
+
+    @Test
+    void runOnCopyOf_aSourceOlderThanTemplates_leavesTheCopyWithoutAPipeline() {
+        JobVacancy copy = VacancyFixtures.draft(TENANT);
+
+        copy.runOnCopyOf(VacancyFixtures.draft(TENANT));
+
+        assertThat(copy.isOnPipeline()).isFalse();
+        assertThat(copy.getPipelineTemplateName()).isNull();
+    }
+
+    @Test
+    void runOnCopyOf_refusesAVacancyAlreadyOnAPipeline() {
+        JobVacancy copy = VacancyFixtures.draftOnPipeline(TENANT);
+        JobVacancy source = VacancyFixtures.draftOnPipeline(TENANT);
+
+        assertThatThrownBy(() -> copy.runOnCopyOf(source)).isInstanceOf(IllegalStateException.class);
+    }
+
     // ------------------------------------------------------------------- other
 
     @Test
