@@ -170,6 +170,11 @@ class TenantIsolationIntegrationTest extends AbstractIntegrationTest {
         body.put("requiredSkills", List.of("Java"));
         body.put("status", status);
         body.put("pipelineTemplateId", createPipelineTemplate(accessToken));
+        // The template's one interview round (position 1), staffed by the caller so it can go live.
+        Object caller = rest.exchange("/api/v1/auth/me", HttpMethod.GET,
+                jsonEntity(null, null, accessToken), Map.class).getBody().get("id");
+        body.put("interviewPanels", List.of(Map.of(
+                "stagePosition", 1, "interviewerCount", 1, "interviewerIds", List.of(caller))));
         ResponseEntity<Map> created = rest.exchange("/api/v1/jobs", HttpMethod.POST,
                 jsonEntity(body, null, accessToken), Map.class);
         assertThat(created.getStatusCode()).as("vacancy: %s", created.getBody()).isEqualTo(HttpStatus.CREATED);

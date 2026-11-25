@@ -1,13 +1,19 @@
 package com.talentpipe.job.controller;
 
+import com.talentpipe.auth.dto.MemberSummary;
+import com.talentpipe.auth.service.UserDirectoryService;
 import com.talentpipe.common.dto.PageResponse;
+import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
+import com.talentpipe.job.dto.InterviewPanelResponse;
+import com.talentpipe.job.dto.InterviewPanelsRequest;
 import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.VacancyStatus;
+import com.talentpipe.job.service.InterviewPanelService;
 import com.talentpipe.job.service.JobVacancyService;
 import com.talentpipe.job.service.PipelineSnapshotService;
 import com.talentpipe.job.service.VacancyHiringTeamService;
@@ -66,12 +72,17 @@ public class JobVacancyController {
     private final JobVacancyService vacancyService;
     private final VacancyHiringTeamService hiringTeamService;
     private final PipelineSnapshotService pipelineSnapshots;
+    private final InterviewPanelService interviewPanels;
+    private final UserDirectoryService userDirectory;
 
     public JobVacancyController(JobVacancyService vacancyService, VacancyHiringTeamService hiringTeamService,
-                                PipelineSnapshotService pipelineSnapshots) {
+                                PipelineSnapshotService pipelineSnapshots, InterviewPanelService interviewPanels,
+                                UserDirectoryService userDirectory) {
         this.vacancyService = vacancyService;
         this.hiringTeamService = hiringTeamService;
         this.pipelineSnapshots = pipelineSnapshots;
+        this.interviewPanels = interviewPanels;
+        this.userDirectory = userDirectory;
     }
 
     // ------------------------------------------------------------------ reads
@@ -112,6 +123,28 @@ public class JobVacancyController {
         return vacancyService.countByStatus(viewer(authentication));
     }
 
+    /**
+     * The company's active members whose first name, last name, full name or
+     * email starts with {@code q}, by name — who can be put on a vacancy's
+     * interview panels. Any role; never another company's people, pending
+     * invitees, disabled accounts or candidates. Meant for the people who
+     * staff vacancies, which is why it needs {@code jobs.manage} rather than
+     * {@code team.view}.
+     *
+     * @param q     at least one character; 400 when blank
+     * @param limit capped at 50
+     */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
+    @GetMapping("/assignable-members")
+    public List<MemberSummary> assignableMembers(Authentication authentication,
+                                                 @RequestParam(required = false) String q,
+                                                 @RequestParam(defaultValue = "20") int limit) {
+        if (q == null || q.isBlank()) {
+            throw new InvalidRequestException("Type at least one letter of a name or email to search.");
+        }
+        return userDirectory.searchActiveMembers(viewer(authentication).tenantId(), q, limit);
+    }
+
     /** One vacancy. 404 when it does not exist, belongs to another company, or is not the caller's to see. */
     @RequireCompanyMember
     @GetMapping("/{id}")
@@ -137,6 +170,18 @@ public class JobVacancyController {
     @GetMapping("/{id}/stages")
     public List<JobStageResponse> stages(Authentication authentication, @PathVariable UUID id) {
         return pipelineSnapshots.stages(viewer(authentication), id);
+    }
+
+    /**
+     * The vacancy's interview rounds in pipeline order, each with its panel:
+     * how many interviewers it needs and who they are. Company members only,
+     * with the same visibility as {@link #get}; none of it is ever part of the
+     * public job board.
+     */
+    @RequireCompanyMember
+    @GetMapping("/{id}/interview-panels")
+    public List<InterviewPanelResponse> interviewPanels(Authentication authentication, @PathVariable UUID id) {
+        return interviewPanels.get(viewer(authentication), id);
     }
 
     // ----------------------------------------------------------------- writes
@@ -179,6 +224,21 @@ public class JobVacancyController {
                                                 @PathVariable UUID id,
                                                 @Valid @RequestBody HiringTeamRequest request) {
         return hiringTeamService.replace(viewer(authentication), id, request);
+    }
+
+    /**
+     * Replaces the vacancy's interview panels. 422 when the vacancy is
+     * archived, a panel names something that is not one of its interview
+     * rounds, chooses people without a number or more people than the number,
+     * adds someone who is not an active member, or would leave a live
+     * vacancy's round short.
+     */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
+    @PutMapping("/{id}/interview-panels")
+    public List<InterviewPanelResponse> replaceInterviewPanels(Authentication authentication,
+                                                               @PathVariable UUID id,
+                                                               @Valid @RequestBody InterviewPanelsRequest request) {
+        return interviewPanels.replace(viewer(authentication), id, request.panels());
     }
 
     /**

@@ -65,13 +65,50 @@ abstract class AbstractJobIntegrationTest extends AbstractWorkspaceIntegrationTe
      * {@code POST /jobs}, whatever it answers — for tests about a refusal. A
      * body without a {@code pipelineTemplateId} key gets the workspace's
      * standard template; to send none at all, put the key with {@code null}.
+     * A body without an {@code interviewPanels} key has every interview round
+     * of its template staffed by the caller, so it can be published (V25);
+     * to send none, put the key with {@code null}.
      */
     protected ResponseEntity<Map<String, Object>> attemptCreate(String token, Map<String, Object> body) {
         Map<String, Object> sent = new HashMap<>(body);
         if (!sent.containsKey("pipelineTemplateId")) {
             sent.put("pipelineTemplateId", standardTemplate(token).toString());
         }
+        if (!sent.containsKey("interviewPanels")) {
+            sent.put("interviewPanels", callerOnEveryInterviewRound(token, sent.get("pipelineTemplateId")));
+        }
         return call(HttpMethod.POST, "/api/v1/jobs", token, sent);
+    }
+
+    /**
+     * A panel of one — the caller — for each interview round of the template.
+     * {@code null} (no panels) when the template can't be read, so a test
+     * about a missing or foreign template still gets the refusal it expects.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> callerOnEveryInterviewRound(String token, Object templateId) {
+        if (templateId == null) {
+            return null;
+        }
+        ResponseEntity<Map<String, Object>> template =
+                call(HttpMethod.GET, "/api/v1/pipeline-templates/" + templateId, token, null);
+        ResponseEntity<Map<String, Object>> me = call(HttpMethod.GET, "/api/v1/auth/me", token, null);
+        if (!template.getStatusCode().is2xxSuccessful() || !me.getStatusCode().is2xxSuccessful()) {
+            return null;
+        }
+        Object caller = me.getBody().get("id");
+        return ((List<Map<String, Object>>) template.getBody().get("stages")).stream()
+                .filter(stage -> "INTERVIEW".equals(stage.get("stageType")))
+                .map(stage -> Map.<String, Object>of(
+                        "stagePosition", stage.get("position"),
+                        "interviewerCount", 1,
+                        "interviewerIds", List.of(caller)))
+                .toList();
+    }
+
+    /** {@code GET /jobs/{id}/interview-panels}: the vacancy's interview rounds with their panels. */
+    protected ResponseEntity<List<Map<String, Object>>> panelsOf(String token, Object vacancyId) {
+        return callForList("/api/v1/jobs/" + vacancyId + "/interview-panels", token);
     }
 
     /** {@code GET /jobs/{id}/stages}: the stages the vacancy runs on, first to last. */

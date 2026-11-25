@@ -7,6 +7,7 @@ import com.talentpipe.job.entity.ShiftType;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.entity.WeekDay;
 import com.talentpipe.job.entity.WorkplaceType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -200,7 +201,16 @@ public record JobVacancyRequest(
                 message = "The vacancy's version is required to save changes. Reload the page and try again.")
         @PositiveOrZero(groups = OnUpdate.class,
                 message = "The vacancy's version is not valid. Reload the page and try again.")
-        Integer version
+        Integer version,
+
+        // ---- interview panels (V25): who interviews in each interview round.
+        // Left out, a new vacancy starts without panels and an edit keeps the
+        // ones it has; sent, the list replaces them all, and a round left out
+        // of it loses its panel.
+        @Valid
+        @Size(max = 30, message = "A vacancy has at most 30 interview rounds to set panels for.")
+        List<@NotNull(message = "Send a panel for each interview round listed.") @Valid InterviewPanelRequest>
+                interviewPanels
 ) {
 
     /**

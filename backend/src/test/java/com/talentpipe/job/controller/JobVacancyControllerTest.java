@@ -17,12 +17,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.talentpipe.auth.dto.MemberSummary;
+import com.talentpipe.auth.service.UserDirectoryService;
 import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.ConcurrentUpdateException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
+import com.talentpipe.job.dto.InterviewPanelRequest;
+import com.talentpipe.job.dto.InterviewPanelResponse;
 import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
@@ -31,6 +35,7 @@ import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.entity.ScreeningThresholds;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
+import com.talentpipe.job.service.InterviewPanelService;
 import com.talentpipe.job.service.JobVacancyService;
 import com.talentpipe.job.service.PipelineSnapshotService;
 import com.talentpipe.job.service.VacancyHiringTeamService;
@@ -92,6 +97,12 @@ class JobVacancyControllerTest {
 
     @MockitoBean
     private PipelineSnapshotService pipelineSnapshots;
+
+    @MockitoBean
+    private InterviewPanelService interviewPanels;
+
+    @MockitoBean
+    private UserDirectoryService userDirectory;
 
     private final JobVacancyResponse draft =
             new JobVacancyMapper().toResponse(VacancyFixtures.draft(TENANT));
@@ -673,6 +684,91 @@ class JobVacancyControllerTest {
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(pipelineSnapshots);
+    }
+
+    // ------------------------------------------------------- interview panels
+
+    @Test
+    void assignableMembers_searchesTheTokensCompany_forPeopleWhoStaffVacancies() throws Exception {
+        UUID ada = UUID.randomUUID();
+        when(userDirectory.searchActiveMembers(TENANT, "a", 20)).thenReturn(List.of(
+                new MemberSummary(ada, "Ada", "Lovelace", "ada@acme.io", "Interviewer", "ACTIVE")));
+
+        mockMvc.perform(get("/api/v1/jobs/assignable-members").param("q", "a").with(as("HR_MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(ada.toString()))
+                .andExpect(jsonPath("$[0].roleName").value("Interviewer"));
+    }
+
+    @Test
+    void assignableMembers_withABlankQuery_isABadRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/jobs/assignable-members").param("q", " ").with(as("HR_MANAGER")))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(userDirectory);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"INTERVIEWER", "CANDIDATE"})
+    void assignableMembers_needsJobsManage(String role) throws Exception {
+        mockMvc.perform(get("/api/v1/jobs/assignable-members").param("q", "a").with(as(role)))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(userDirectory);
+    }
+
+    @Test
+    void interviewPanels_areReadableByAnyCompanyMemberWhoSeesTheVacancy() throws Exception {
+        when(interviewPanels.get(WORKS_ON_IT, VACANCY)).thenReturn(List.of(
+                new InterviewPanelResponse(UUID.randomUUID(), 2, "Technical interview", 70, 2, List.of())));
+
+        mockMvc.perform(get("/api/v1/jobs/{id}/interview-panels", VACANCY).with(as("INTERVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Technical interview"))
+                .andExpect(jsonPath("$[0].interviewerCount").value(2));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CANDIDATE", "SUPER_ADMIN"})
+    void interviewPanels_areNeverShownOutsideACompany(String role) throws Exception {
+        mockMvc.perform(get("/api/v1/jobs/{id}/interview-panels", VACANCY).with(as(role)))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(interviewPanels);
+    }
+
+    @Test
+    void replaceInterviewPanels_passesThePanelsThrough() throws Exception {
+        UUID ada = UUID.randomUUID();
+        List<InterviewPanelRequest> panels = List.of(new InterviewPanelRequest(2, 1, List.of(ada)));
+        when(interviewPanels.replace(SEES_ALL, VACANCY, panels)).thenReturn(List.of());
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}/interview-panels", VACANCY), Map.of("panels", panels))
+                        .with(as("HR_MANAGER")))
+                .andExpect(status().isOk());
+
+        verify(interviewPanels).replace(SEES_ALL, VACANCY, panels);
+    }
+
+    @Test
+    void replaceInterviewPanels_withACountOutOfRange_isRejectedFieldByField() throws Exception {
+        Map<String, Object> panel = Map.of("stagePosition", 2, "interviewerCount", 11, "interviewerIds", List.of());
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}/interview-panels", VACANCY), Map.of("panels", List.of(panel)))
+                        .with(as("HR_MANAGER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(interviewPanels);
+    }
+
+    @Test
+    void anInterviewer_cannotChangeInterviewPanels() throws Exception {
+        mockMvc.perform(json(put("/api/v1/jobs/{id}/interview-panels", VACANCY), Map.of("panels", List.of()))
+                        .with(as("INTERVIEWER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(interviewPanels);
     }
 
     // ----------------------------------------------------------------- helpers

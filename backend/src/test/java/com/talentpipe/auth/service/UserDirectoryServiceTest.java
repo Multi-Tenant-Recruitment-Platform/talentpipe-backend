@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.talentpipe.auth.dto.MemberSummary;
 import com.talentpipe.auth.entity.Role;
+import com.talentpipe.auth.entity.RoleName;
 import com.talentpipe.auth.entity.SystemRole;
 import com.talentpipe.auth.entity.TenantRole;
 import com.talentpipe.auth.entity.User;
@@ -25,6 +26,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -120,6 +122,59 @@ class UserDirectoryServiceTest {
         assertThat(userDirectory.describe(null, List.of(USER))).isEmpty();
 
         verify(userRepository, never()).findAllByTenantIdAndIdIn(any(), any());
+    }
+
+    // -------------------------------------------------------------- search
+
+    @Test
+    void searchActiveMembers_matchesTheStartOfWhatWasTyped_ignoringCaseAndSpacing() {
+        User ada = member(UserStatus.ACTIVE);
+        when(userRepository.searchActiveByPrefix(TENANT, "ad%", PageRequest.of(0, 20))).thenReturn(List.of(ada));
+
+        assertThat(userDirectory.searchActiveMembers(TENANT, "  AD ", 20))
+                .containsExactly(new MemberSummary(ada.getId(), "Ada", "Lovelace", "ada@acme.io", "Recruiter",
+                        "ACTIVE"));
+    }
+
+    @Test
+    void searchActiveMembers_takesLikeWildcardsLiterally_andCapsTheLimit() {
+        when(userRepository.searchActiveByPrefix(any(), any(), any())).thenReturn(List.of());
+
+        userDirectory.searchActiveMembers(TENANT, "50%_off", 500);
+
+        verify(userRepository).searchActiveByPrefix(TENANT, "50\\%\\_off%",
+                PageRequest.of(0, UserDirectoryService.MAX_SEARCH_RESULTS));
+    }
+
+    @Test
+    void searchActiveMembers_neverReturnsAnAccountHoldingTheCandidateRole() {
+        Role candidateRole = mock(Role.class);
+        when(candidateRole.getName()).thenReturn(RoleName.CANDIDATE);
+        User candidate = new User(TENANT, candidateRole, "c@mail.test", "hash", "Ada", "Candidate", UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(candidate, "id", UUID.randomUUID());
+        User staff = member(UserStatus.ACTIVE);
+        when(userRepository.searchActiveByPrefix(any(), any(), any())).thenReturn(List.of(candidate, staff));
+
+        assertThat(userDirectory.searchActiveMembers(TENANT, "ada", 20))
+                .extracting(MemberSummary::id).containsExactly(staff.getId());
+    }
+
+    @Test
+    void searchActiveMembers_withABlankQueryOrNoCompany_answersEmptyWithoutQuerying() {
+        assertThat(userDirectory.searchActiveMembers(TENANT, "  ", 20)).isEmpty();
+        assertThat(userDirectory.searchActiveMembers(null, "a", 20)).isEmpty();
+
+        verify(userRepository, never()).searchActiveByPrefix(any(), any(), any());
+    }
+
+    @Test
+    void activeStaffAmong_keepsActiveMembers_andDropsEveryoneElse() {
+        User active = member(UserStatus.ACTIVE);
+        User disabled = member(UserStatus.DISABLED);
+        List<UUID> asked = List.of(active.getId(), disabled.getId());
+        when(userRepository.findAllByTenantIdAndIdIn(TENANT, asked)).thenReturn(List.of(active, disabled));
+
+        assertThat(userDirectory.activeStaffAmong(TENANT, asked)).containsExactly(active.getId());
     }
 
     private static User member(UserStatus status) {

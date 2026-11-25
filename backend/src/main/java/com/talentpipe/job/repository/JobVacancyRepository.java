@@ -39,7 +39,8 @@ public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>,
 
     /**
      * JPQL for "the user {@code :userId} works on vacancy {@code v}": created
-     * it, recruits for it, is its hiring manager, or is on its hiring team.
+     * it, recruits for it, is its hiring manager, is on its hiring team, or
+     * sits on one of its interview panels (V25).
      * {@link VacancySpecifications#worksOn} is the same rule for the list.
      */
     String WORKS_ON = """
@@ -47,7 +48,9 @@ public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>,
              or v.assignedRecruiterId = :userId
              or v.hiringManagerId = :userId
              or exists (select 1 from VacancyTeamMember m
-                        where m.vacancyId = v.id and m.userId = :userId))
+                        where m.vacancyId = v.id and m.userId = :userId)
+             or exists (select 1 from JobStageInterviewer i
+                        where i.jobId = v.id and i.userId = :userId))
             """;
 
     // ------------------------------------------------------- recruiter side

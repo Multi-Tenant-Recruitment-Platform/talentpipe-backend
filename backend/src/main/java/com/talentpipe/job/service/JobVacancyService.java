@@ -1,5 +1,6 @@
 package com.talentpipe.job.service;
 
+import com.talentpipe.auth.dto.MemberSummary;
 import com.talentpipe.auth.service.UserDirectoryService;
 import com.talentpipe.common.exception.BusinessRuleException;
 import com.talentpipe.common.exception.ConcurrentUpdateException;
@@ -23,6 +24,7 @@ import com.talentpipe.tenant.service.TenantService;
 import java.time.LocalDate;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -91,6 +93,7 @@ public class JobVacancyService {
     private final UserDirectoryService userDirectory;
     private final TenantService tenantService;
     private final PipelineSnapshotService pipelineSnapshots;
+    private final InterviewPanelService interviewPanels;
     private final JobVacancyMapper mapper;
 
     public JobVacancyService(JobVacancyRepository vacancyRepository,
@@ -105,6 +108,7 @@ public class JobVacancyService {
                              UserDirectoryService userDirectory,
                              TenantService tenantService,
                              PipelineSnapshotService pipelineSnapshots,
+                             InterviewPanelService interviewPanels,
                              JobVacancyMapper mapper) {
         this.vacancyRepository = vacancyRepository;
         this.access = access;
@@ -118,6 +122,7 @@ public class JobVacancyService {
         this.userDirectory = userDirectory;
         this.tenantService = tenantService;
         this.pipelineSnapshots = pipelineSnapshots;
+        this.interviewPanels = interviewPanels;
         this.mapper = mapper;
     }
 
@@ -156,7 +161,16 @@ public class JobVacancyService {
         if (filter.department() != null && !filter.department().isBlank()) {
             query = query.and(VacancySpecifications.inDepartment(filter.department()));
         }
-        return vacancyRepository.findAll(query, pageable).map(mapper::toResponse);
+        Page<JobVacancy> found = vacancyRepository.findAll(query, pageable);
+        // One lookup for the page's creators rather than one per row.
+        Set<UUID> creators = new HashSet<>();
+        found.forEach(vacancy -> {
+            if (vacancy.getCreatedBy() != null) {
+                creators.add(vacancy.getCreatedBy());
+            }
+        });
+        Map<UUID, MemberSummary> people = userDirectory.describe(viewer.tenantId(), creators);
+        return found.map(vacancy -> mapper.toResponse(vacancy, nameOf(people.get(vacancy.getCreatedBy()))));
     }
 
     /**
@@ -181,7 +195,7 @@ public class JobVacancyService {
     /** @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see */
     @Transactional(readOnly = true)
     public JobVacancyResponse get(VacancyViewer viewer, UUID vacancyId) {
-        return mapper.toResponse(access.require(viewer, vacancyId));
+        return respond(access.require(viewer, vacancyId));
     }
 
     // ----------------------------------------------------------------- writes
@@ -198,15 +212,17 @@ public class JobVacancyService {
      * <p>The template's stages are copied to the vacancy in this same
      * transaction ({@link PipelineSnapshotService}), so a vacancy is never
      * stored without its stages, and its thresholds and blind mode are the
-     * template's unless the request overrides them.</p>
+     * template's unless the request overrides them. The interview panels the
+     * request carries are stored with them; published at once, every
+     * interview round must be fully staffed ({@link InterviewPanelService}).</p>
      *
      * @throws InvalidRequestException   (400) if the requested status is
      *         anything but DRAFT or PUBLISHED, or no template is named
      * @throws ResourceNotFoundException (404) the template does not exist or
      *         is another company's
      * @throws BusinessRuleException     (422) if the template is archived, a
-     *         content rule fails, or the vacancy is to be published and is
-     *         not complete
+     *         content rule fails, a panel is refused, or the vacancy is to be
+     *         published and is not complete
      */
     @Transactional
     public JobVacancyResponse create(VacancyViewer viewer, JobVacancyRequest request) {
@@ -218,6 +234,8 @@ public class JobVacancyService {
         LocalDate today = calendar.today(tenantId);
         if (request.status() == VacancyStatus.PUBLISHED) {
             publishValidator.validateForPublish(request, today);
+            InterviewPanelService.requireComplete(pipeline.stages(), request.interviewPanels(),
+                    InterviewPanelService.NOT_READY_TO_PUBLISH);
         }
 
         VacancyContent content = normalizer.normalize(request);
@@ -231,7 +249,10 @@ public class JobVacancyService {
         }
         JobVacancy saved = save(vacancy, viewer, "created as " + request.status());
         pipelineSnapshots.copyStages(saved, pipeline);
-        return mapper.toResponse(saved);
+        if (request.interviewPanels() != null) {
+            interviewPanels.apply(saved, request.interviewPanels(), viewer.userId());
+        }
+        return respond(saved);
     }
 
     /**
@@ -251,6 +272,9 @@ public class JobVacancyService {
      * template id may be left out or sent back unchanged, nothing more. Its
      * screening settings — both thresholds and blind mode — may change while
      * the vacancy is editable; one left out keeps its value.</p>
+     *
+     * <p>Interview panels sent with the edit replace the stored ones, and a
+     * live vacancy's must stay complete; left out, they are not touched.</p>
      *
      * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see
      * @throws BusinessRuleException     (422) closed or archived; the request
@@ -291,7 +315,14 @@ public class JobVacancyService {
         vacancy.applyContent(content, today);
         vacancy.fileUnder(industry);
         vacancy.switchFeatures(request.aiScreeningEnabled(), request.candidateMatchingEnabled());
-        return stored(vacancy, viewer, "edited");
+        JobVacancy saved = save(vacancy, viewer, "edited");
+        if (request.interviewPanels() != null) {
+            interviewPanels.apply(saved, request.interviewPanels(), viewer.userId());
+            if (saved.getStatus() == VacancyStatus.PUBLISHED) {
+                interviewPanels.requireComplete(saved, InterviewPanelService.MUST_STAY_COMPLETE);
+            }
+        }
+        return respond(saved);
     }
 
     /**
@@ -300,13 +331,15 @@ public class JobVacancyService {
      * there is nothing further to synchronize.
      *
      * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see
-     * @throws BusinessRuleException     (422) not a draft, or not complete
+     * @throws BusinessRuleException     (422) not a draft, not complete, or an
+     *         interview round is not fully staffed
      */
     @Transactional
     public JobVacancyResponse publish(VacancyViewer viewer, UUID vacancyId) {
         JobVacancy vacancy = access.require(viewer, vacancyId);
         LocalDate today = calendar.today(viewer.tenantId());
         publishValidator.validateForPublish(vacancy, today);
+        interviewPanels.requireComplete(vacancy, InterviewPanelService.NOT_READY_TO_PUBLISH);
         vacancy.publish(calendar.now(), today);
         return stored(vacancy, viewer, "published");
     }
@@ -366,7 +399,7 @@ public class JobVacancyService {
         draft.switchFeatures(source.isAiScreeningEnabled(), source.isCandidateMatchingEnabled());
         JobVacancy copy = save(draft, viewer, "duplicated from " + vacancyId);
         hiringTeam.copyTeam(tenantId, source.getId(), copy.getId(), viewer.userId());
-        return mapper.toResponse(copy);
+        return respond(copy);
     }
 
     /**
@@ -420,7 +453,27 @@ public class JobVacancyService {
 
     /** {@link #save}, answered as the stored vacancy. */
     private JobVacancyResponse stored(JobVacancy vacancy, VacancyViewer viewer, String action) {
-        return mapper.toResponse(save(vacancy, viewer, action));
+        return respond(save(vacancy, viewer, action));
+    }
+
+    /** The vacancy as the dashboard sees it, its creator named. */
+    private JobVacancyResponse respond(JobVacancy vacancy) {
+        UUID creator = vacancy.getCreatedBy();
+        if (creator == null) {
+            return mapper.toResponse(vacancy, null);
+        }
+        return mapper.toResponse(vacancy,
+                nameOf(userDirectory.describe(vacancy.getTenantId(), List.of(creator)).get(creator)));
+    }
+
+    /** "First Last", or {@code null} for someone the directory no longer has. */
+    private static String nameOf(MemberSummary person) {
+        if (person == null) {
+            return null;
+        }
+        String name = (Objects.toString(person.firstName(), "") + " "
+                + Objects.toString(person.lastName(), "")).trim();
+        return name.isEmpty() ? null : name;
     }
 
     /**
