@@ -1,15 +1,20 @@
 # ---------------------------------------------------------------------------
-# TalentPipe local infrastructure — PostgreSQL (+ optional full backend).
+# TalentPipe local stack.
 #
 # Image: pgvector/pgvector:pg15 = official PostgreSQL 15 with the pgvector
 # extension pre-installed (required because V1__extensions.sql runs
 # `CREATE EXTENSION vector`; the vanilla postgres:15 image does not ship it).
 #
 # Usage:  cp .env.example .env   (adjust if needed)
-#         docker compose up -d postgres      # database only (usual dev setup)
-#         docker compose up -d               # database + containerized backend
+#         docker compose up -d postgres              # database only (usual dev setup)
+#         docker compose up -d --build               # database + containerized backend
+#         docker compose --profile full up -d --build
+#             # the whole platform, built from source, the way production
+#             # serves it: http://localhost:5173 (SPA, /api proxied to the backend)
 #
-# The frontend lives in its own repository: talentpipe-frontend.
+# The frontend lives in its own repository, talentpipe-frontend. The `full`
+# profile builds it from FRONTEND_DIR, by default a clone next to this one.
+# See docs/DEPLOYMENT.md for the details and for production on AWS.
 # ---------------------------------------------------------------------------
 services:
   postgres:
@@ -30,10 +35,13 @@ services:
       retries: 10
 
   backend:
+    # Builds from source (multi-stage Dockerfile): no local JDK or jar needed.
+    # The image's own HEALTHCHECK probes /actuator/health/liveness.
     build:
       context: ../backend
       dockerfile: Dockerfile
     container_name: talentpipe-backend
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/talentpipe
       DB_USERNAME: ${POSTGRES_USER:-talentpipe}
@@ -60,6 +68,28 @@ services:
       - talentpipe_uploads:/app/uploads
     depends_on:
       postgres:
+        condition: service_healthy
+
+  frontend:
+    # The SPA in its production image (nginx, non-root), proxying /api to the
+    # backend container, so the browser sees one origin as it does on AWS.
+    profiles: ["full"]
+    build:
+      context: ${FRONTEND_DIR:-../../talentpipe-frontend}
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+    container_name: talentpipe-frontend
+    restart: unless-stopped
+    environment:
+      # No trailing slash; nginx appends the request URI.
+      BACKEND_ORIGIN: http://backend:8080
+    ports:
+      # 5173 matches the backend's FRONTEND_BASE_URL default, so links in
+      # emails (console mode: in the backend log) open this container.
+      - "${FRONTEND_PORT:-5173}:8080"
+    depends_on:
+      backend:
         condition: service_healthy
 
   sonarqube:
