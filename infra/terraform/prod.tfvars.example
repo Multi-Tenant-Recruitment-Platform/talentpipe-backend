@@ -1,0 +1,33 @@
+# Copy to prod.tfvars (git-ignored), adjust, then:
+#   terraform plan -var-file=prod.tfvars -out=prod.tfplan
+#   terraform apply prod.tfplan
+#
+# Every variable has a working default; these are the ones most often set.
+# No secret belongs in this file: they are generated during apply, or put in
+# Secrets Manager by hand.
+
+region      = "ap-south-1"
+environment = "prod"
+
+# Your own domain (optional). The certificate must be in us-east-1 and cover
+# every name listed. Leave both out to use the *.cloudfront.net address.
+# domain_aliases      = ["app.example.com"]
+# acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
+
+# Who gets the alarm emails.
+# alarm_email = "ops@example.com"
+
+# Real email through Resend: put the key in Secrets Manager first
+# (docs/DEPLOYMENT.md), then:
+# email_enabled = true
+# mail_from     = "TalentPipe <no-reply@example.com>"
+
+# Sizing. Defaults: 2-4 tasks of 0.5 vCPU / 1 GiB on Graviton, db.t4g.micro.
+# backend_min_count = 2
+# backend_max_count = 4
+# db_instance_class = "db.t4g.small"
+# db_multi_az       = true
+
+# The GitHub OIDC provider exists once per account. If another project in
+# this account already created it:
+# create_github_oidc_provider = false
