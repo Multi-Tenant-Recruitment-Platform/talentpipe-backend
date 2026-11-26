@@ -1,6 +1,7 @@
 package com.talentpipe.candidate.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.talentpipe.auth.entity.UserStatus;
 import java.time.Instant;
@@ -71,6 +72,108 @@ class CandidateEntityTest {
         cv.archive(now);
         assertThat(cv.isActive()).isFalse();
         assertThat(cv.getArchivedAt()).isEqualTo(now);
+    }
+
+    // ------------------------------------------------------------ extraction
+
+    private static final Instant EXTRACTED_AT = Instant.parse("2026-11-26T08:00:00Z");
+
+    private static CandidateCv cvWithHash(String sha256) {
+        return new CandidateCv(UUID.randomUUID(), "resume.pdf", "key", "application/pdf", 2048L, sha256, 1);
+    }
+
+    @Test
+    void aNewCv_hasNotBeenExtracted() {
+        CandidateCv cv = cvWithHash("hash");
+
+        assertThat(cv.getExtractionStatus()).isEqualTo(CvExtractionStatus.PENDING);
+        assertThat(cv.getExtractedText()).isNull();
+        assertThat(cv.getTextExtractedAt()).isNull();
+    }
+
+    @Test
+    void extractedText_isStoredWithWhenItWasRead() {
+        CandidateCv cv = cvWithHash("hash");
+
+        cv.recordExtraction("Backend engineer", false, EXTRACTED_AT);
+
+        assertThat(cv.getExtractionStatus()).isEqualTo(CvExtractionStatus.EXTRACTED);
+        assertThat(cv.getExtractedText()).isEqualTo("Backend engineer");
+        assertThat(cv.getTextExtractedAt()).isEqualTo(EXTRACTED_AT);
+    }
+
+    @Test
+    void aScan_keepsWhateverLittleWasFound_butIsNotExtracted() {
+        CandidateCv cv = cvWithHash("hash");
+
+        cv.recordExtraction("p. 1", true, EXTRACTED_AT);
+
+        assertThat(cv.getExtractionStatus()).isEqualTo(CvExtractionStatus.EMPTY_OR_SCANNED);
+        assertThat(cv.getExtractedText()).isEqualTo("p. 1");
+        assertThat(cv.getTextExtractedAt()).isEqualTo(EXTRACTED_AT);
+    }
+
+    @Test
+    void noText_isNeverCalledExtracted_whateverTheExtractorSays() {
+        CandidateCv blank = cvWithHash("hash");
+        CandidateCv missing = cvWithHash("hash");
+
+        blank.recordExtraction(" \n\t ", false, EXTRACTED_AT);
+        missing.recordExtraction(null, false, EXTRACTED_AT);
+
+        assertThat(blank.getExtractionStatus()).isEqualTo(CvExtractionStatus.EMPTY_OR_SCANNED);
+        assertThat(missing.getExtractionStatus()).isEqualTo(CvExtractionStatus.EMPTY_OR_SCANNED);
+        assertThat(missing.getExtractedText()).isEmpty();
+    }
+
+    @Test
+    void charactersPostgresCannotStore_areRemoved() {
+        CandidateCv cv = cvWithHash("hash");
+
+        cv.recordExtraction("Java\0Spring\0", false, EXTRACTED_AT);
+
+        assertThat(cv.getExtractedText()).isEqualTo("JavaSpring");
+    }
+
+    @Test
+    void endlessText_isCut_butNeverThroughACharacter() {
+        CandidateCv plain = cvWithHash("hash");
+        CandidateCv emojiAtTheCut = cvWithHash("hash");
+        String almostFull = "a".repeat(CandidateCv.MAX_EXTRACTED_CHARS - 1);
+
+        plain.recordExtraction(almostFull + "bcd", false, EXTRACTED_AT);
+        emojiAtTheCut.recordExtraction(almostFull + "\uD83D\uDE00 and more", false, EXTRACTED_AT);
+
+        assertThat(plain.getExtractedText()).isEqualTo(almostFull + "b");
+        assertThat(emojiAtTheCut.getExtractedText()).isEqualTo(almostFull);
+    }
+
+    @Test
+    void anUnreadableFile_isMarkedFailed_withNoText() {
+        CandidateCv cv = cvWithHash("hash");
+
+        cv.recordExtractionFailure();
+
+        assertThat(cv.getExtractionStatus()).isEqualTo(CvExtractionStatus.FAILED);
+        assertThat(cv.getExtractedText()).isNull();
+        assertThat(cv.getTextExtractedAt()).isNull();
+    }
+
+    @Test
+    void theResultOfAnIdenticalFile_canBeTakenOver_butNoOther() {
+        CandidateCv read = cvWithHash("same");
+        read.recordExtraction("Backend engineer", false, EXTRACTED_AT);
+        CandidateCv identical = cvWithHash("same");
+        CandidateCv different = cvWithHash("other");
+
+        identical.copyExtractionFrom(read);
+
+        assertThat(identical.getExtractionStatus()).isEqualTo(CvExtractionStatus.EXTRACTED);
+        assertThat(identical.getExtractedText()).isEqualTo("Backend engineer");
+        assertThat(identical.getTextExtractedAt()).isEqualTo(EXTRACTED_AT);
+        assertThatThrownBy(() -> different.copyExtractionFrom(read))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(different.getExtractedText()).isNull();
     }
 
     @Test
