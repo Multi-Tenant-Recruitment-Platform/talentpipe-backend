@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.talentpipe.auth.entity.UserStatus;
 import com.talentpipe.candidate.entity.Candidate;
 import com.talentpipe.candidate.entity.CandidateCv;
+import com.talentpipe.candidate.event.CvUploadedEvent;
 import com.talentpipe.candidate.repository.CandidateCvRepository;
 import com.talentpipe.candidate.validator.CandidateCvValidator;
 import com.talentpipe.common.exception.ResourceNotFoundException;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,6 +44,9 @@ class CandidateCvServiceTest {
 
     @Mock
     private TalentPoolAuditService auditService;
+
+    @Mock
+    private ApplicationEventPublisher events;
 
     @InjectMocks
     private CandidateCvService cvService;
@@ -119,6 +124,30 @@ class CandidateCvServiceTest {
         assertThat(result).isSameAs(activeCv);
         verify(storageService, never()).store(any(), any(), any(), any(), any(), any());
         verify(auditService, never()).recordEvent(any(), any(), any(Boolean.class), any());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void uploadCvAsksForTheNewCvToBeExtracted() {
+        UUID newCvId = UUID.randomUUID();
+        CandidateCv saved = mock(CandidateCv.class);
+        when(saved.getId()).thenReturn(newCvId);
+        when(cvRepository.save(any(CandidateCv.class))).thenReturn(saved);
+        byte[] bytes = {0x25, 0x50, 0x44, 0x46, 4, 5, 6};
+
+        cvService.uploadCv(candidate, new MockMultipartFile("cv", "resume.pdf", "application/pdf", bytes));
+
+        verify(events).publishEvent(new CvUploadedEvent(newCvId));
+    }
+
+    @Test
+    void findActiveCvIdAnswersTheIdOnly() {
+        UUID candidateId = UUID.randomUUID();
+        UUID cvId = UUID.randomUUID();
+        when(cvRepository.findActiveCvId(candidateId)).thenReturn(Optional.of(cvId));
+
+        assertThat(cvService.findActiveCvId(candidateId)).contains(cvId);
+        verify(cvRepository, never()).findFirstByCandidateIdAndIsActiveTrue(any());
     }
 
     @Test
@@ -255,6 +284,7 @@ class CandidateCvServiceTest {
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
 
         verify(storageService).delete(storedKey);
+        verify(events, never()).publishEvent(any());
     }
 
     @Test

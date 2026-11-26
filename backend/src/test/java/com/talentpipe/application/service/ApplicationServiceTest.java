@@ -13,6 +13,7 @@ import com.talentpipe.application.entity.ApplicationStatus;
 import com.talentpipe.application.repository.ApplicationRepository;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.candidate.repository.CandidateRepository;
+import com.talentpipe.candidate.service.CandidateCvService;
 import com.talentpipe.common.exception.DuplicateResourceException;
 import com.talentpipe.job.dto.VacancyApplicationTarget;
 import com.talentpipe.job.repository.JobVacancyRepository;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -32,6 +34,7 @@ class ApplicationServiceTest {
 
     @Mock private ApplicationRepository applicationRepository;
     @Mock private CandidateRepository candidateRepository;
+    @Mock private CandidateCvService candidateCvService;
     @Mock private VacancyApplicationGate vacancyApplicationGate;
     @Mock private JobVacancyRepository vacancyRepository;
     @Mock private UserRepository userRepository;
@@ -43,7 +46,7 @@ class ApplicationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ApplicationService(applicationRepository, candidateRepository,
+        service = new ApplicationService(applicationRepository, candidateRepository, candidateCvService,
                 vacancyApplicationGate, vacancyRepository, userRepository, events);
         candidateId = UUID.randomUUID();
         jobId = UUID.randomUUID();
@@ -74,6 +77,35 @@ class ApplicationServiceTest {
         service.submit(candidateId, jobId.toString());
 
         verify(applicationRepository).save(any(Application.class));
+    }
+
+    @Test
+    void submit_keepsTheCvThatIsActiveNow() {
+        UUID activeCv = UUID.randomUUID();
+        when(candidateCvService.findActiveCvId(candidateId)).thenReturn(Optional.of(activeCv));
+
+        assertThat(submitted().getCvId()).isEqualTo(activeCv);
+    }
+
+    @Test
+    void submit_withoutACv_isStillAccepted() {
+        when(candidateCvService.findActiveCvId(candidateId)).thenReturn(Optional.empty());
+
+        assertThat(submitted().getCvId()).isNull();
+    }
+
+    /** Submits a valid application and returns it as it was saved. */
+    private Application submitted() {
+        when(candidateRepository.existsById(candidateId)).thenReturn(true);
+        when(vacancyApplicationGate.requireOpen(jobId))
+                .thenReturn(new VacancyApplicationTarget(jobId, UUID.randomUUID(), "Backend Engineer"));
+        when(applicationRepository.save(any(Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.submit(candidateId, jobId.toString());
+
+        ArgumentCaptor<Application> saved = ArgumentCaptor.forClass(Application.class);
+        verify(applicationRepository).save(saved.capture());
+        return saved.getValue();
     }
 
     @Test
@@ -169,6 +201,6 @@ class ApplicationServiceTest {
     }
 
     private Application application() {
-        return new Application(jobId, candidateId, candidateId);
+        return new Application(jobId, candidateId, candidateId, null);
     }
 }
