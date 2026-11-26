@@ -6,13 +6,17 @@ import com.talentpipe.common.dto.PageResponse;
 import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
+import com.talentpipe.job.dto.IdealMatchingRequest;
+import com.talentpipe.job.dto.IdealMatchingResponse;
 import com.talentpipe.job.dto.InterviewPanelResponse;
 import com.talentpipe.job.dto.InterviewPanelsRequest;
 import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.dto.ScreeningProfileResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.VacancyStatus;
+import com.talentpipe.job.service.IdealMatchingService;
 import com.talentpipe.job.service.InterviewPanelService;
 import com.talentpipe.job.service.JobVacancyService;
 import com.talentpipe.job.service.PipelineSnapshotService;
@@ -74,15 +78,17 @@ public class JobVacancyController {
     private final PipelineSnapshotService pipelineSnapshots;
     private final InterviewPanelService interviewPanels;
     private final UserDirectoryService userDirectory;
+    private final IdealMatchingService idealMatching;
 
     public JobVacancyController(JobVacancyService vacancyService, VacancyHiringTeamService hiringTeamService,
                                 PipelineSnapshotService pipelineSnapshots, InterviewPanelService interviewPanels,
-                                UserDirectoryService userDirectory) {
+                                UserDirectoryService userDirectory, IdealMatchingService idealMatching) {
         this.vacancyService = vacancyService;
         this.hiringTeamService = hiringTeamService;
         this.pipelineSnapshots = pipelineSnapshots;
         this.interviewPanels = interviewPanels;
         this.userDirectory = userDirectory;
+        this.idealMatching = idealMatching;
     }
 
     // ------------------------------------------------------------------ reads
@@ -184,6 +190,30 @@ public class JobVacancyController {
         return interviewPanels.get(viewer(authentication), id);
     }
 
+    /**
+     * The vacancy's ideal candidate: whether matching is offered and on, the
+     * weighted skills, tools and experience, and the unweighted degree types
+     * and certifications. Company members only, with the same visibility as
+     * {@link #get}; none of it is ever part of the public job board.
+     */
+    @RequireCompanyMember
+    @GetMapping("/{id}/ideal-matching")
+    public IdealMatchingResponse idealMatching(Authentication authentication, @PathVariable UUID id) {
+        return idealMatching.get(viewer(authentication), id);
+    }
+
+    /**
+     * What AI screening is to be sent for this vacancy: the weights as
+     * fractions of 1 (the AI service's {@code criteria_weights}), the
+     * must-haves, and the unweighted context. Read only; nothing here calls
+     * the AI service.
+     */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
+    @GetMapping("/{id}/screening-profile")
+    public ScreeningProfileResponse screeningProfile(Authentication authentication, @PathVariable UUID id) {
+        return idealMatching.screeningProfile(viewer(authentication), id);
+    }
+
     // ----------------------------------------------------------------- writes
 
     /** Files a new vacancy, as a DRAFT or straight to PUBLISHED. The caller is recorded as its creator. */
@@ -224,6 +254,20 @@ public class JobVacancyController {
                                                 @PathVariable UUID id,
                                                 @Valid @RequestBody HiringTeamRequest request) {
         return hiringTeamService.replace(viewer(authentication), id, request);
+    }
+
+    /**
+     * Replaces the vacancy's ideal candidate. 422 when the vacancy is closed
+     * or archived, matching is switched on where its template does not offer
+     * it, a criterion breaks a rule, or a live vacancy's weights would not
+     * total 100%.
+     */
+    @RequirePermission(Permission.Keys.JOBS_MANAGE)
+    @PutMapping("/{id}/ideal-matching")
+    public IdealMatchingResponse replaceIdealMatching(Authentication authentication,
+                                                      @PathVariable UUID id,
+                                                      @Valid @RequestBody IdealMatchingRequest request) {
+        return idealMatching.replace(viewer(authentication), id, request);
     }
 
     /**

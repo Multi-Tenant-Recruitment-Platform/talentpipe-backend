@@ -94,6 +94,7 @@ public class JobVacancyService {
     private final TenantService tenantService;
     private final PipelineSnapshotService pipelineSnapshots;
     private final InterviewPanelService interviewPanels;
+    private final IdealMatchingService idealMatching;
     private final JobVacancyMapper mapper;
 
     public JobVacancyService(JobVacancyRepository vacancyRepository,
@@ -109,6 +110,7 @@ public class JobVacancyService {
                              TenantService tenantService,
                              PipelineSnapshotService pipelineSnapshots,
                              InterviewPanelService interviewPanels,
+                             IdealMatchingService idealMatching,
                              JobVacancyMapper mapper) {
         this.vacancyRepository = vacancyRepository;
         this.access = access;
@@ -123,6 +125,7 @@ public class JobVacancyService {
         this.tenantService = tenantService;
         this.pipelineSnapshots = pipelineSnapshots;
         this.interviewPanels = interviewPanels;
+        this.idealMatching = idealMatching;
         this.mapper = mapper;
     }
 
@@ -236,6 +239,7 @@ public class JobVacancyService {
             publishValidator.validateForPublish(request, today);
             InterviewPanelService.requireComplete(pipeline.stages(), request.interviewPanels(),
                     InterviewPanelService.NOT_READY_TO_PUBLISH);
+            IdealMatchingService.requireComplete(request.idealMatching(), IdealMatchingService.NOT_READY_TO_PUBLISH);
         }
 
         VacancyContent content = normalizer.normalize(request);
@@ -244,6 +248,10 @@ public class JobVacancyService {
         startFeatures(vacancy, tenantId, request.aiScreeningEnabled(), request.candidateMatchingEnabled());
         // Set before the insert: changing the vacancy after it would bump its version past the one returned.
         vacancy.runOn(pipeline.toVacancyPipeline());
+        vacancy.offerIdealMatching(pipeline.idealMatchingAvailable());
+        List<IdealMatchingService.Wanted> criteria = request.idealMatching() == null
+                ? List.of()
+                : idealMatching.prepare(vacancy, request.idealMatching());
         if (request.status() == VacancyStatus.PUBLISHED) {
             vacancy.publish(calendar.now(), today);
         }
@@ -251,6 +259,9 @@ public class JobVacancyService {
         pipelineSnapshots.copyStages(saved, pipeline);
         if (request.interviewPanels() != null) {
             interviewPanels.apply(saved, request.interviewPanels(), viewer.userId());
+        }
+        if (request.idealMatching() != null) {
+            idealMatching.store(saved, criteria);
         }
         return respond(saved);
     }
@@ -315,11 +326,21 @@ public class JobVacancyService {
         vacancy.applyContent(content, today);
         vacancy.fileUnder(industry);
         vacancy.switchFeatures(request.aiScreeningEnabled(), request.candidateMatchingEnabled());
+        // After the content, so degree types are judged against the education as edited.
+        List<IdealMatchingService.Wanted> criteria = request.idealMatching() == null
+                ? List.of()
+                : idealMatching.prepare(vacancy, request.idealMatching());
         JobVacancy saved = save(vacancy, viewer, "edited");
         if (request.interviewPanels() != null) {
             interviewPanels.apply(saved, request.interviewPanels(), viewer.userId());
             if (saved.getStatus() == VacancyStatus.PUBLISHED) {
                 interviewPanels.requireComplete(saved, InterviewPanelService.MUST_STAY_COMPLETE);
+            }
+        }
+        if (request.idealMatching() != null) {
+            idealMatching.store(saved, criteria);
+            if (saved.getStatus() == VacancyStatus.PUBLISHED) {
+                idealMatching.requireComplete(saved, IdealMatchingService.MUST_STAY_COMPLETE);
             }
         }
         return respond(saved);
@@ -331,8 +352,9 @@ public class JobVacancyService {
      * there is nothing further to synchronize.
      *
      * @throws ResourceNotFoundException (404) missing, another company's, or not the viewer's to see
-     * @throws BusinessRuleException     (422) not a draft, not complete, or an
-     *         interview round is not fully staffed
+     * @throws BusinessRuleException     (422) not a draft, not complete, an
+     *         interview round is not fully staffed, or ideal candidate
+     *         matching is on and its weights do not total 100%
      */
     @Transactional
     public JobVacancyResponse publish(VacancyViewer viewer, UUID vacancyId) {
@@ -340,6 +362,7 @@ public class JobVacancyService {
         LocalDate today = calendar.today(viewer.tenantId());
         publishValidator.validateForPublish(vacancy, today);
         interviewPanels.requireComplete(vacancy, InterviewPanelService.NOT_READY_TO_PUBLISH);
+        idealMatching.requireComplete(vacancy, IdealMatchingService.NOT_READY_TO_PUBLISH);
         vacancy.publish(calendar.now(), today);
         return stored(vacancy, viewer, "published");
     }
@@ -403,10 +426,12 @@ public class JobVacancyService {
         draft.switchFeatures(source.isAiScreeningEnabled(), source.isCandidateMatchingEnabled());
         // Set before the insert: changing the vacancy after it would bump its version past the one returned.
         draft.runOnCopyOf(source);
+        List<IdealMatchingService.Wanted> criteria = idealMatching.prepareCopy(source, draft);
         JobVacancy copy = save(draft, viewer, "duplicated from " + vacancyId);
         pipelineSnapshots.copyStagesOf(source, copy);
         hiringTeam.copyTeam(tenantId, source.getId(), copy.getId(), viewer.userId());
         interviewPanels.copyPanels(source, copy, viewer.userId());
+        idealMatching.store(copy, criteria);
         return respond(copy);
     }
 

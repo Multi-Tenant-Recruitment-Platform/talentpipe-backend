@@ -88,6 +88,8 @@ public class JobVacancyMapper {
                 vacancy.getAutoThreshold(),
                 vacancy.getManualThreshold(),
                 vacancy.isBlindModeEnabled(),
+                vacancy.isIdealMatchingAvailable(),
+                vacancy.isIdealMatchingEnabled(),
 
                 vacancy.getCreatedBy(),
                 createdByName,

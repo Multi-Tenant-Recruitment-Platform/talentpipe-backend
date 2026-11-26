@@ -38,6 +38,10 @@ import java.util.UUID;
  * @param autoThreshold  as resolved from the template when the vacancy was
  *                       created; {@code null} with no template, as is
  *                       {@code manualThreshold}
+ * @param idealMatchingAvailable whether the vacancy's pipeline template
+ *                       offers ideal candidate matching; {@code idealMatchingEnabled}
+ *                       whether the vacancy uses it. The profile itself is at
+ *                       {@code GET /jobs/{id}/ideal-matching}
  * @param createdBy      who filed it; {@code null} for vacancies filed before
  *                       this was recorded
  * @param createdByName  their name, so a screen can say who filed it without
@@ -104,6 +108,8 @@ public record JobVacancyResponse(
         Integer autoThreshold,
         Integer manualThreshold,
         boolean blindModeEnabled,
+        boolean idealMatchingAvailable,
+        boolean idealMatchingEnabled,
 
         UUID createdBy,
         String createdByName,

@@ -1,5 +1,6 @@
 package com.talentpipe.job;
 
+import com.talentpipe.job.dto.IdealMatchingRequest;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.entity.EmploymentType;
 import com.talentpipe.job.entity.JobVacancy;
@@ -132,6 +133,8 @@ public final class VacancyFixtures {
         private List<String> requiredSkills = List.of("Java", "Spring Boot");
         private List<String> preferredSkills = List.of("Kubernetes");
         private List<String> toolsAndTechnologies = List.of("Docker", "Git");
+        private String education = "Bachelor’s degree";
+        private IdealMatchingRequest idealMatching;
         private BigDecimal salaryMin;
         private BigDecimal salaryMax;
         private String currency;
@@ -260,8 +263,19 @@ public final class VacancyFixtures {
             return this;
         }
 
+        public ContentBuilder education(String value) {
+            this.education = value;
+            return this;
+        }
+
         public ContentBuilder toolsAndTechnologies(List<String> value) {
             this.toolsAndTechnologies = value;
+            return this;
+        }
+
+        /** Request only: the ideal candidate the request carries. */
+        public ContentBuilder idealMatching(IdealMatchingRequest value) {
+            this.idealMatching = value;
             return this;
         }
 
@@ -276,7 +290,7 @@ public final class VacancyFixtures {
             return new VacancyContent(
                     title, department, openings, employmentType, workplaceType, location, applicationDeadline,
                     jobSummary, jobDescription, keyResponsibilities,
-                    requiredSkills, preferredSkills, toolsAndTechnologies, 4, "Bachelor’s degree",
+                    requiredSkills, preferredSkills, toolsAndTechnologies, 4, education,
                     List.of(), List.of("English"), null,
                     salaryMin, salaryMax, currency, payPeriod, benefits,
                     workingDays, "9:00 AM – 6:00 PM", ShiftType.DAY, new BigDecimal("40"),
@@ -289,7 +303,7 @@ public final class VacancyFixtures {
             return new JobVacancyRequest(
                     title, department, null, openings, employmentType, workplaceType, location, applicationDeadline,
                     jobSummary, jobDescription, keyResponsibilities,
-                    requiredSkills, preferredSkills, 4, "Bachelor’s degree",
+                    requiredSkills, preferredSkills, 4, education,
                     List.of(), List.of("English"), null,
                     salaryMin, salaryMax, currency, payPeriod, benefits,
                     workingDays, "9:00 AM – 6:00 PM", ShiftType.DAY, new BigDecimal("40"),
@@ -297,7 +311,7 @@ public final class VacancyFixtures {
                     List.of("Do you have the right to work in Sri Lanka?"),
                     null, null,
                     pipelineTemplateId, autoThreshold, manualThreshold, blindModeEnabled,
-                    status, version, null, toolsAndTechnologies);
+                    status, version, null, toolsAndTechnologies, idealMatching);
         }
     }
 }

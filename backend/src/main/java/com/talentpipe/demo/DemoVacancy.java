@@ -222,6 +222,6 @@ final class DemoVacancy {
                 recruiter, hiringManager, pipeline, screeningQuestions,
                 aiScreening, candidateMatching,
                 pipelineTemplateId, null, null, null,
-                VacancyStatus.DRAFT, null, null, tools);
+                VacancyStatus.DRAFT, null, null, tools, null);
     }
 }

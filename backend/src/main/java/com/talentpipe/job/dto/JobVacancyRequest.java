@@ -216,7 +216,13 @@ public record JobVacancyRequest(
         // and platforms the person will use — Docker, Git, AWS.
         @ValidTaxonomyList(maxSize = 50, maxEntryLength = 100,
                 message = "List up to 50 tools and technologies, each 100 characters or fewer.")
-        List<String> toolsAndTechnologies
+        List<String> toolsAndTechnologies,
+
+        // ---- ideal candidate matching (V27): the weighted profile screening
+        // scores applicants against. Left out, a new vacancy starts with
+        // matching off and an edit keeps what it has; sent, it replaces it.
+        @Valid
+        IdealMatchingRequest idealMatching
 ) {
 
     /**

@@ -25,16 +25,23 @@ import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.VacancyFixtures;
 import com.talentpipe.job.dto.HiringTeamRequest;
 import com.talentpipe.job.dto.HiringTeamResponse;
+import com.talentpipe.job.dto.IdealMatchingRequest;
+import com.talentpipe.job.dto.IdealMatchingResponse;
 import com.talentpipe.job.dto.InterviewPanelRequest;
 import com.talentpipe.job.dto.InterviewPanelResponse;
 import com.talentpipe.job.dto.JobStageResponse;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.dto.MatchingCriterionRequest;
+import com.talentpipe.job.dto.ScreeningProfileResponse;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.MatchingCategory;
+import com.talentpipe.job.entity.MatchingRequirement;
 import com.talentpipe.job.entity.ScreeningThresholds;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
+import com.talentpipe.job.service.IdealMatchingService;
 import com.talentpipe.job.service.InterviewPanelService;
 import com.talentpipe.job.service.JobVacancyService;
 import com.talentpipe.job.service.PipelineSnapshotService;
@@ -100,6 +107,9 @@ class JobVacancyControllerTest {
 
     @MockitoBean
     private InterviewPanelService interviewPanels;
+
+    @MockitoBean
+    private IdealMatchingService idealMatching;
 
     @MockitoBean
     private UserDirectoryService userDirectory;
@@ -769,6 +779,86 @@ class JobVacancyControllerTest {
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(interviewPanels);
+    }
+
+    // ------------------------------------------------- ideal candidate matching
+
+    @Test
+    void idealMatching_isReadableByAnyCompanyMemberWhoSeesTheVacancy() throws Exception {
+        when(idealMatching.get(WORKS_ON_IT, VACANCY)).thenReturn(new IdealMatchingResponse(true, true,
+                List.of(new IdealMatchingResponse.Criterion(UUID.randomUUID(), MatchingCategory.TOOL, "Docker", 100,
+                        MatchingRequirement.MUST_HAVE, 0)),
+                100, List.of("Computer Science"), List.of()));
+
+        mockMvc.perform(get("/api/v1/jobs/{id}/ideal-matching", VACANCY).with(as("INTERVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.criteria[0].name").value("Docker"))
+                .andExpect(jsonPath("$.criteria[0].requirement").value("MUST_HAVE"))
+                .andExpect(jsonPath("$.totalWeightPercent").value(100));
+    }
+
+    @Test
+    void replaceIdealMatching_passesTheProfileThrough() throws Exception {
+        IdealMatchingRequest request = new IdealMatchingRequest(true, List.of(new MatchingCriterionRequest(
+                MatchingCategory.TECHNICAL_SKILL, "Java", 100, MatchingRequirement.MUST_HAVE)), List.of(), List.of());
+        when(idealMatching.replace(SEES_ALL, VACANCY, request)).thenReturn(
+                new IdealMatchingResponse(true, true, List.of(), 100, List.of(), List.of()));
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}/ideal-matching", VACANCY), request).with(as("HR_MANAGER")))
+                .andExpect(status().isOk());
+
+        verify(idealMatching).replace(SEES_ALL, VACANCY, request);
+    }
+
+    @Test
+    void replaceIdealMatching_withAWeightOverAHundred_isRejectedFieldByField() throws Exception {
+        Map<String, Object> criterion = Map.of("category", "TOOL", "name", "Docker", "weightPercent", 140,
+                "requirement", "MUST_HAVE");
+
+        mockMvc.perform(json(put("/api/v1/jobs/{id}/ideal-matching", VACANCY),
+                        Map.of("enabled", true, "criteria", List.of(criterion))).with(as("HR_MANAGER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(idealMatching);
+    }
+
+    @Test
+    void anInterviewer_cannotChangeTheIdealCandidate_norReadTheScreeningProfile() throws Exception {
+        mockMvc.perform(json(put("/api/v1/jobs/{id}/ideal-matching", VACANCY), Map.of("enabled", false))
+                        .with(as("INTERVIEWER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/jobs/{id}/screening-profile", VACANCY).with(as("INTERVIEWER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(idealMatching);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CANDIDATE", "SUPER_ADMIN"})
+    void theIdealCandidate_isNeverShownOutsideACompany(String role) throws Exception {
+        mockMvc.perform(get("/api/v1/jobs/{id}/ideal-matching", VACANCY).with(as(role)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/jobs/{id}/screening-profile", VACANCY).with(as(role)))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(idealMatching);
+    }
+
+    @Test
+    void screeningProfile_answersTheWeightsAsFractions_forTheAiService() throws Exception {
+        when(idealMatching.screeningProfile(SEES_ALL, VACANCY)).thenReturn(new ScreeningProfileResponse(
+                VACANCY, true, false, "Backend Engineer", "Summary", "Description",
+                List.of(new ScreeningProfileResponse.CriterionWeight("Java", 0.6),
+                        new ScreeningProfileResponse.CriterionWeight("Docker", 0.4)),
+                List.of("Java"), List.of("Docker"), 3, "Bachelor’s degree", List.of("Computer Science"),
+                List.of("AWS Solutions Architect")));
+
+        mockMvc.perform(get("/api/v1/jobs/{id}/screening-profile", VACANCY).with(as("HR_MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.criteriaWeights[0].name").value("Java"))
+                .andExpect(jsonPath("$.criteriaWeights[0].weight").value(0.6))
+                .andExpect(jsonPath("$.mustHave[0]").value("Java"));
     }
 
     // ----------------------------------------------------------------- helpers
