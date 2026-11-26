@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -364,6 +365,7 @@ class CvExtractionFlowIntegrationTest extends AbstractJobIntegrationTest {
     static class ExtractorConfig {
 
         @Bean
+        @Primary
         FakeExtractor fakeExtractor() {
             return new FakeExtractor();
         }
