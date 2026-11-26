@@ -137,6 +137,11 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "preferred_skills", nullable = false, columnDefinition = "TEXT[]")
     private List<String> preferredSkills = new ArrayList<>();
 
+    /** Tools, technologies and platforms the role uses (V27). */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "tools_and_technologies", nullable = false, columnDefinition = "TEXT[]")
+    private List<String> toolsAndTechnologies = new ArrayList<>();
+
     @Column(name = "minimum_experience_years")
     private Integer minimumExperienceYears;
 
@@ -468,7 +473,7 @@ public class JobVacancy extends BaseEntity {
         return new VacancyContent(
                 title, department, openings, employmentType, workplaceType, location, applicationDeadline,
                 jobSummary, jobDescription, keyResponsibilities,
-                requiredSkills, preferredSkills, minimumExperienceYears, education,
+                requiredSkills, preferredSkills, toolsAndTechnologies, minimumExperienceYears, education,
                 certifications, languageRequirements, otherRequirements,
                 salaryMin, salaryMax, currency, payPeriod, benefits,
                 workingDays.stream().map(WeekDay::valueOf).toList(),
@@ -639,6 +644,7 @@ public class JobVacancy extends BaseEntity {
         this.keyResponsibilities = content.keyResponsibilities();
         this.requiredSkills = content.requiredSkills();
         this.preferredSkills = content.preferredSkills();
+        this.toolsAndTechnologies = content.toolsAndTechnologies();
         this.minimumExperienceYears = content.minimumExperienceYears();
         this.education = content.education();
         this.certifications = content.certifications();

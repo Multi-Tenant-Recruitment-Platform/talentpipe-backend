@@ -55,6 +55,7 @@ public class JobVacancyMapper {
 
                 content.requiredSkills(),
                 content.preferredSkills(),
+                content.toolsAndTechnologies(),
                 content.minimumExperienceYears(),
                 content.education(),
                 content.certifications(),
@@ -151,6 +152,7 @@ public class JobVacancyMapper {
                 content.jobDescription(),
                 content.keyResponsibilities(),
                 content.preferredSkills(),
+                content.toolsAndTechnologies(),
                 content.education(),
                 content.certifications(),
                 content.languageRequirements(),

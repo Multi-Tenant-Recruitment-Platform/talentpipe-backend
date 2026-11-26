@@ -308,6 +308,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                         "Take part in a fair on-call rotation for the services you own")
                 .skills(List.of("Java", "Spring Boot", "PostgreSQL", "REST APIs", "Microservices"),
                         List.of("Kafka", "Kubernetes", "AWS"))
+                .tools("Docker", "Git", "Jenkins")
                 .experience(5, DEGREE_IT)
                 .pays(LKR, 450_000, 650_000L, PayPeriod.MONTHLY).benefits(perks).pipeline(PIPELINE_TECHNICAL)
                 .screening(RIGHT_TO_WORK, NOTICE, "Which Java version do you use in production today?")
@@ -352,6 +353,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                         "Lead blameless post-incident reviews")
                 .skills(List.of("AWS", "Kubernetes", "Terraform", "CI/CD", "Linux"),
                         List.of("Prometheus", "Grafana", "Argo CD"))
+                .tools("Docker", "Git", "Azure", "Jenkins")
                 .experience(4, DEGREE_IT).certifications("AWS Certified SysOps Administrator (preferred)")
                 .pays(LKR, 400_000, 550_000L, PayPeriod.MONTHLY).benefits(perks).pipeline(PIPELINE_TECHNICAL)
                 .screening(RIGHT_TO_WORK, NOTICE)

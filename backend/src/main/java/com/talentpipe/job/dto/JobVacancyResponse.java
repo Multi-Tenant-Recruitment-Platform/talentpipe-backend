@@ -71,6 +71,7 @@ public record JobVacancyResponse(
 
         List<String> requiredSkills,
         List<String> preferredSkills,
+        List<String> toolsAndTechnologies,
         Integer minimumExperienceYears,
         String education,
         List<String> certifications,

@@ -1172,7 +1172,7 @@ class JobVacancyServiceTest {
                 r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
                 r.aiScreeningEnabled(), r.candidateMatchingEnabled(),
                 r.pipelineTemplateId(), r.autoThreshold(), r.manualThreshold(), r.blindModeEnabled(),
-                r.status(), r.version(), panels);
+                r.status(), r.version(), panels, r.toolsAndTechnologies());
     }
 
     /** The request with its two feature switches set; everything else as given. */
@@ -1187,7 +1187,7 @@ class JobVacancyServiceTest {
                 r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
                 aiScreening, matching,
                 r.pipelineTemplateId(), r.autoThreshold(), r.manualThreshold(), r.blindModeEnabled(),
-                r.status(), r.version(), r.interviewPanels());
+                r.status(), r.version(), r.interviewPanels(), r.toolsAndTechnologies());
     }
 
     private static VacancyStatusCount count(VacancyStatus status, long total) {

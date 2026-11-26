@@ -237,7 +237,9 @@ class PublicJobControllerTest {
                 .andExpect(jsonPath("$.interviewPanels").doesNotExist())
                 .andExpect(jsonPath("$.interviewers").doesNotExist())
                 .andExpect(jsonPath("$.createdBy").doesNotExist())
-                .andExpect(jsonPath("$.createdByName").doesNotExist());
+                .andExpect(jsonPath("$.createdByName").doesNotExist())
+                // Tools are a candidate requirement, advertised like the skills.
+                .andExpect(jsonPath("$.toolsAndTechnologies[0]").value("Docker"));
     }
 
     @Test

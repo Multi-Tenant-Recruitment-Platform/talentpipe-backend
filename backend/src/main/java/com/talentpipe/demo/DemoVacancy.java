@@ -41,6 +41,7 @@ final class DemoVacancy {
     private List<String> responsibilities = List.of();
     private List<String> requiredSkills = List.of();
     private List<String> preferredSkills = List.of();
+    private List<String> tools = List.of();
     private Integer minimumYears;
     private String education;
     private List<String> certifications = List.of();
@@ -132,6 +133,11 @@ final class DemoVacancy {
         return this;
     }
 
+    DemoVacancy tools(String... tools) {
+        this.tools = List.of(tools);
+        return this;
+    }
+
     DemoVacancy experience(int years, String education) {
         this.minimumYears = years;
         this.education = education;
@@ -216,6 +222,6 @@ final class DemoVacancy {
                 recruiter, hiringManager, pipeline, screeningQuestions,
                 aiScreening, candidateMatching,
                 pipelineTemplateId, null, null, null,
-                VacancyStatus.DRAFT, null, null);
+                VacancyStatus.DRAFT, null, null, tools);
     }
 }

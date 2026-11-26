@@ -131,6 +131,7 @@ public final class VacancyFixtures {
         private List<String> keyResponsibilities = List.of("Own the matching service");
         private List<String> requiredSkills = List.of("Java", "Spring Boot");
         private List<String> preferredSkills = List.of("Kubernetes");
+        private List<String> toolsAndTechnologies = List.of("Docker", "Git");
         private BigDecimal salaryMin;
         private BigDecimal salaryMax;
         private String currency;
@@ -259,6 +260,11 @@ public final class VacancyFixtures {
             return this;
         }
 
+        public ContentBuilder toolsAndTechnologies(List<String> value) {
+            this.toolsAndTechnologies = value;
+            return this;
+        }
+
         /** Request only: the recruiter's own blind-mode choice in place of the template's. */
         public ContentBuilder blindModeEnabled(Boolean value) {
             this.blindModeEnabled = value;
@@ -270,7 +276,7 @@ public final class VacancyFixtures {
             return new VacancyContent(
                     title, department, openings, employmentType, workplaceType, location, applicationDeadline,
                     jobSummary, jobDescription, keyResponsibilities,
-                    requiredSkills, preferredSkills, 4, "Bachelor’s degree",
+                    requiredSkills, preferredSkills, toolsAndTechnologies, 4, "Bachelor’s degree",
                     List.of(), List.of("English"), null,
                     salaryMin, salaryMax, currency, payPeriod, benefits,
                     workingDays, "9:00 AM – 6:00 PM", ShiftType.DAY, new BigDecimal("40"),
@@ -291,7 +297,7 @@ public final class VacancyFixtures {
                     List.of("Do you have the right to work in Sri Lanka?"),
                     null, null,
                     pipelineTemplateId, autoThreshold, manualThreshold, blindModeEnabled,
-                    status, version, null);
+                    status, version, null, toolsAndTechnologies);
         }
     }
 }
