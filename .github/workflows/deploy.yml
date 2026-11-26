@@ -1,0 +1,218 @@
+# Deploys the backend to ECS Fargate.
+#
+# Runs on every push to master, or by hand with a commit, tag or branch (pick
+# an older commit to roll back). It tests the commit, builds the image once
+# (tagged with the commit SHA), registers a new task definition revision and
+# rolls it out. ECS rolls back by itself if the new tasks don't get healthy.
+#
+# It doesn't hang off backend-ci (workflow_run) on purpose: CI also runs for
+# pull requests from forks, and this should only ever run code from this repo.
+#
+# AWS access is through OIDC, no keys in GitHub. The role only trusts this
+# repo's `production` environment. Setup is in docs/DEPLOYMENT.md.
+#
+# Repository variables (all from `terraform output`): AWS_REGION,
+# AWS_DEPLOY_ROLE_ARN, ECR_REPOSITORY_URL, ECS_CLUSTER, ECS_SERVICE,
+# ECS_TASK_FAMILY and SITE_URL (for the smoke test).
+name: backend-deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag or branch to deploy. An older commit is a rollback.
+        required: true
+        default: master
+
+permissions:
+  contents: read
+
+# One deploy at a time. A newer one waits instead of cancelling a rollout
+# halfway through.
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test the commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+
+    steps:
+      - name: Check out the commit to deploy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      # Pin a branch name to a commit so the deploy job ships what was tested.
+      - name: Resolve the commit
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Build and run all tests
+        working-directory: backend
+        run: chmod +x mvnw && ./mvnw -B verify
+        env:
+          JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
+
+  deploy:
+    name: Deploy to production
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # to ask GitHub for the OIDC token AWS exchanges for the role
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY_URL: ${{ vars.ECR_REPOSITORY_URL }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
+      SITE_URL: ${{ vars.SITE_URL }}
+
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.test.outputs.sha }}
+          persist-credentials: false
+
+      - name: Get AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Start from the latest revision. It has Terraform's current settings and
+      # tells us which CPU architecture to build for.
+      - name: Read the current task definition
+        id: taskdef
+        run: |
+          aws ecs describe-task-definition --task-definition "$ECS_TASK_FAMILY" \
+            --query taskDefinition > taskdef.json
+          case "$(jq -r '.runtimePlatform.cpuArchitecture // "X86_64"' taskdef.json)" in
+            ARM64) echo "platform=linux/arm64" >> "$GITHUB_OUTPUT" ;;
+            *)     echo "platform=linux/amd64" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # Tags are immutable, so a commit that was already built (redeploy or
+      # rollback) reuses its image.
+      - name: Look for an existing image of this commit
+        id: image
+        env:
+          SHA: ${{ needs.test.outputs.sha }}
+        run: |
+          echo "ref=$ECR_REPOSITORY_URL:$SHA" >> "$GITHUB_OUTPUT"
+          if aws ecr describe-images --repository-name "${ECR_REPOSITORY_URL#*/}" \
+               --image-ids "imageTag=$SHA" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image for $SHA already in ECR; deploying it as built."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to ECR
+        if: steps.image.outputs.exists == 'false'
+        run: aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_REPOSITORY_URL%%/*}"
+
+      # QEMU only runs the final stage, which just copies files. The Maven
+      # build runs natively (see --platform in the Dockerfile).
+      - name: Set up QEMU
+        if: steps.image.outputs.exists == 'false'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Buildx
+        if: steps.image.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and push the image
+        if: steps.image.outputs.exists == 'false'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: backend
+          platforms: ${{ steps.taskdef.outputs.platform }}
+          tags: ${{ steps.image.outputs.ref }}
+          push: true
+          # Single-platform image, so ECR lifecycle rules see one image per
+          # release.
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=backend-${{ steps.taskdef.outputs.platform }}
+          cache-to: type=gha,mode=max,scope=backend-${{ steps.taskdef.outputs.platform }}
+
+      - name: Register the new task definition revision
+        id: register
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          jq --arg image "$IMAGE" '
+            .containerDefinitions |= map(if .name == "backend" then .image = $image else . end)
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
+                  .registeredAt, .registeredBy, .deregisteredAt)
+          ' taskdef.json > taskdef-next.json
+          arn=$(aws ecs register-task-definition --cli-input-json file://taskdef-next.json \
+                  --query taskDefinition.taskDefinitionArn --output text)
+          echo "arn=$arn" >> "$GITHUB_OUTPUT"
+          echo "Registered $arn"
+
+      # Wait for the rollout: COMPLETED when the new tasks are healthy and the
+      # old ones are gone, FAILED if the circuit breaker rolled back.
+      - name: Roll out
+        env:
+          ARN: ${{ steps.register.outputs.arn }}
+        run: |
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+            --task-definition "$ARN" > /dev/null
+          for _ in $(seq 1 120); do
+            state=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+              --query "services[0].deployments[?taskDefinition=='$ARN'] | [0].rolloutState" --output text)
+            case "$state" in
+              COMPLETED) echo "Rollout completed."; exit 0 ;;
+              FAILED)
+                echo "::error::The new tasks never became healthy; ECS rolled back. See the service's events and the log group."
+                exit 1 ;;
+            esac
+            echo "Rollout: $state"
+            sleep 15
+          done
+          echo "::error::Rollout still in progress after 30 minutes."
+          exit 1
+
+      - name: Smoke test through CloudFront
+        if: env.SITE_URL != ''
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors --retry-delay 5 \
+            "$SITE_URL/api/v1/public/jobs")
+          echo "GET /api/v1/public/jobs -> $status"
+          test "$status" = "200"
+
+      - name: Summary
+        env:
+          SHA: ${{ needs.test.outputs.sha }}
+          ARN: ${{ steps.register.outputs.arn }}
+        run: |
+          {
+            echo "### Backend deployed"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$SHA\` |"
+            echo "| Task definition | \`${ARN##*/}\` |"
+            echo "| Site | ${SITE_URL:-not set} |"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,9 @@
+# Copy to backend.hcl (git-ignored) and fill in, then:
+#   terraform init -backend-config=backend.hcl
+#
+# The bucket is created once by ./bootstrap (see docs/DEPLOYMENT.md).
+bucket       = "talentpipe-tfstate-<account-id>-ap-south-1"
+key          = "prod/terraform.tfstate"
+region       = "ap-south-1"
+encrypt      = true
+use_lockfile = true

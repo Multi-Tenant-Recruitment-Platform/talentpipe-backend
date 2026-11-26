@@ -30,6 +30,38 @@ jobs:
         env:
           JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
 
+  # Infrastructure as code: the same checks as on a developer's machine
+  # (docs/DEPLOYMENT.md), with pinned tool versions. Nothing here talks to AWS:
+  # the Terraform tests run against a mocked provider.
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Terraform format, validate and test
+        working-directory: infra/terraform
+        run: |
+          set -euo pipefail
+          tf() { docker run --rm -v "$PWD:/w" -w "/w/$1" hashicorp/terraform:1.17.2 "${@:2}"; }
+          tf . fmt -check -recursive -diff
+          tf . init -backend=false -input=false
+          tf . validate
+          tf . test
+          tf bootstrap init -backend=false -input=false
+          tf bootstrap validate
+
+      - name: CloudFront functions
+        run: node --test infra/terraform/functions/functions.test.js
+
+      - name: Security scan of the Terraform and the Dockerfile
+        run: |
+          for target in infra/terraform backend; do
+            docker run --rm -v "$PWD:/src:ro" aquasec/trivy:0.76.2 config --quiet --exit-code 1               --severity MEDIUM,HIGH,CRITICAL --skip-dirs '**/.terraform' "/src/$target"
+          done
+
+      - name: Lint the Dockerfile
+        run: docker run --rm -i hadolint/hadolint:v2.15.1 < backend/Dockerfile
+
   sonar:
     needs: build-test
     runs-on: ubuntu-latest

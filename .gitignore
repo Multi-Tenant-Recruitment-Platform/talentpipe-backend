@@ -20,6 +20,18 @@ backend/target/
 hs_err_pid*
 replay_pid*
 
+### Terraform ###
+# State and plans can hold infrastructure details; variable files and the
+# backend settings are per-account. Their *.example templates are committed,
+# and so is .terraform.lock.hcl (pins the provider versions and checksums).
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+backend.hcl
+.terraform.tfstate.lock.info
+
 ### IDE / editor ###
 .idea/
 *.iml

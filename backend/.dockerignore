@@ -1,5 +1,10 @@
-target/*
-!target/*.jar
+# The image compiles from source (see Dockerfile), so nothing built or
+# written locally belongs in the build context. Secrets never do.
+target/
+uploads/
 .git
 .idea
+*.iml
 *.log
+.env
+.env.*

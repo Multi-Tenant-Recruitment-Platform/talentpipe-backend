@@ -39,8 +39,25 @@ spring:
       max-file-size: 5MB
       max-request-size: 5MB
 
+  lifecycle:
+    # Bounded by the container's stop timeout (ECS: 30 s between SIGTERM and
+    # SIGKILL), so in-flight requests finish before the process is killed.
+    timeout-per-shutdown-phase: 20s
+
 server:
   port: ${SERVER_PORT:8080}
+  # On SIGTERM, stop accepting requests and let the ones in flight finish.
+  shutdown: graceful
+  # Off by default: a header the caller can set must never decide the client
+  # address the login rate limit counts by. Behind a proxy that sets the
+  # address itself (production: CloudFront, see docs/DEPLOYMENT.md), set
+  # FORWARD_HEADERS_STRATEGY=native and CLIENT_IP_HEADER to that header. It is
+  # then honoured only on requests arriving from a private-network address
+  # (the load balancer), never from the internet.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
+  tomcat:
+    remoteip:
+      remote-ip-header: ${CLIENT_IP_HEADER:X-Forwarded-For}
   error:
     # The GlobalExceptionHandler owns error responses; suppress the default
     # whitelabel/attribute leakage.
@@ -88,6 +105,25 @@ talentpipe:
     max-cover-bytes: ${MAX_COVER_BYTES:4194304}
     max-photo-bytes: ${MAX_PHOTO_BYTES:2097152}
     max-cv-bytes: ${MAX_CV_BYTES:5242880}
+
+# Health probes only. Liveness answers "restart me?" and checks nothing
+# external, so a database outage never causes a restart loop. Readiness also
+# checks the database and is what the load balancer routes by.
+#   /actuator/health/liveness   container health check
+#   /actuator/health/readiness  load balancer target health
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db
 
 logging:
   level:

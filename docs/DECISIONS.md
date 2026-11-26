@@ -539,65 +539,67 @@ company A got 401 signing in to company B).
 
 ---
 
-## ADR-15 — A CV's text is extracted once, in the background
+## ADR-16 — Production runs on AWS behind one CloudFront distribution
 
 **Date:** 2026-11-26 · **Status:** Accepted
 
 ### Context
 
-AI screening (Sprint 7) needs the text of each CV. Getting text out of things
-like two-column Canva or LaTeX PDFs is the AI service's job (MRP-359). That's
-a separate service called over HTTP, so it can be slow, down, or not deployed
-at all.
-
-The obvious place to call it was the upload itself, but the upload runs in a
-transaction. Every upload would hold a database connection while waiting on
-the AI service, so a few slow calls could use up the whole pool, and if the AI
-service was down, candidates couldn't save their profile.
+So far the platform has only run on our own machines. Production needs HTTPS
+for the SPA, the API and uploaded images, a managed PostgreSQL with pgvector,
+somewhere safe for secrets, and deploys that don't need anyone on a server and
+don't take the site down.
 
 ### Decision
 
-Same approach as ADR-6. `uploadCv` publishes `CvUploadedEvent`. Once the upload
-has committed, `CvExtractionDispatcher` picks it up on its own small thread
-pool, loads the file, calls the `CvTextExtractor` port (`com.talentpipe.ai`)
-and saves the result. No transaction is open during the call; the database is
-only touched in short transactions in `CvExtractionRecorder`.
+Everything runs on AWS. It's written in Terraform (`infra/terraform`) and
+deployed from GitHub Actions. Details are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-`candidate_cvs.extraction_status` (V26) works as the queue:
-
-| Status | Meaning |
-|---|---|
-| `PENDING` | not extracted yet, or the service couldn't be reached. Try again later |
-| `EXTRACTED` | the text is in `extracted_text` |
-| `EMPTY_OR_SCANNED` | read fine but there's no usable text, someone needs to look at it |
-| `FAILED` | the file can't be read (`UnreadableCvException`) |
-
-Only `UnreadableCvException` marks a CV as `FAILED`. Any other error leaves it
-`PENDING`, so the worst case is a retry, not a lost CV.
-
-An application now keeps the CV it was submitted with (`applications.cv_id`),
-so replacing a CV later doesn't change applications that were already sent.
+- One CloudFront distribution sits in front of everything. `/api/*` goes to
+  the backend, `/media/*` to the media bucket and the rest to the SPA bucket.
+  The browser sees one origin, same as with nginx locally, so the frontend
+  keeps calling `/api/v1`.
+- The backend has no public address. The load balancer is internal and
+  CloudFront reaches it through a VPC origin. The tasks and the database are
+  in private subnets, and the database subnets can't reach the internet.
+- The backend runs on ECS Fargate with the same image `docker compose` builds.
+  Deploys are rolling: a new task only gets traffic once its readiness check
+  passes (database included), and ECS rolls back if the new tasks never get
+  healthy.
+- RDS PostgreSQL 15, the version we use everywhere else. Encrypted, TLS only,
+  automated backups and deletion protection.
+- Secrets stay out of the code, CI and the Terraform state. Terraform
+  generates the database password and the JWT key with ephemeral values and
+  write-only arguments, and ECS passes them to the tasks from Secrets Manager.
+  The Resend key is added by hand.
+- GitHub deploys through OIDC, so there are no AWS keys in GitHub. Each repo
+  can only assume its own role, and only from its `production` environment.
+- The client IP comes from CloudFront. Behind the load balancer the socket
+  address isn't the visitor's, and anyone can send an `X-Forwarded-For`. A
+  CloudFront function sets `X-Viewer-Ip` instead, and the backend only trusts
+  that header on requests from inside the VPC (`FORWARD_HEADERS_STRATEGY=native`,
+  `CLIENT_IP_HEADER`).
 
 ### Consequences
 
-- Nothing breaks without the AI service. There's no `CvTextExtractor` bean, so
-  CVs just stay `PENDING`.
-- If someone uploads a CV and applies straight away, screening can start
-  before extraction is done. Screening should treat `PENDING` as "extract it
-  now", not as an error (MRP-361).
-- The event only carries the CV's id. If the queue is full the task is dropped
-  instead of running on the caller's thread, which is still holding the
-  upload's connection. The row stays `PENDING`, so nothing is lost.
-- Each file is only extracted once. A CV with the same SHA-256 as one we've
-  already read reuses that text.
-- The extraction and a candidate archiving their CV can now update the same
-  row at the same time, so `CandidateCv` is `@DynamicUpdate`.
-- CV text is personal data, and it's exactly what blind screening hides. No
-  response includes it and nothing logs it, including
-  `ExtractedCvResult.toString` and exception messages that could quote it.
-- JSON lists of strings have their own type (`JsonStrings`). Hibernate keeps
-  one mapping per Java type, so mapping every `List<String>` as JSON breaks
-  the vacancy's `TEXT[]` columns and the app won't start.
+- About US$110–140 a month at low traffic, mostly the NAT gateway, the load
+  balancer and the two tasks that are always running.
+- Media URLs look like `<site>/media/<key>` (`AWS_CDN_BASE_URL`). Only logos,
+  covers and photos can be fetched that way. CVs only go through the API.
+- SPA routes are rewritten to `index.html` by a CloudFront function. CloudFront
+  error pages would do the same, but they'd also replace the API's real 403
+  and 404 responses.
+- The deploy workflow decides which image the service runs, not Terraform. A
+  Terraform change to the backend's settings reaches the tasks on the next
+  deploy.
+- Flyway still migrates on startup while the old tasks are serving, so a
+  migration has to keep working with the previous release.
+- New endpoints: `/actuator/health/liveness` and `/readiness`. They don't need
+  a token, and they're only reachable inside the VPC since CloudFront only
+  forwards `/api/*`.
+- The Terraform has offline tests against a mocked provider. They check the
+  security rules we care about: no public database, no public CVs, no caching
+  of the API, no secrets in plain environment variables.
 
 ---
 
