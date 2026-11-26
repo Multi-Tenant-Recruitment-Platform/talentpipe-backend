@@ -88,6 +88,10 @@ talentpipe:
     max-cover-bytes: ${MAX_COVER_BYTES:4194304}
     max-photo-bytes: ${MAX_PHOTO_BYTES:2097152}
     max-cv-bytes: ${MAX_CV_BYTES:5242880}
+  ai:
+    # Internal URL of the Python FastAPI AI sidecar on the Docker bridge network.
+    base-url: ${AI_SERVICE_URL:http://ai-service:8000}
+    timeout-seconds: ${AI_SERVICE_TIMEOUT:30}
 
 logging:
   level:
