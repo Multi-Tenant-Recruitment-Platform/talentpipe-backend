@@ -132,11 +132,11 @@ async def test_screen_raises_parse_error_on_out_of_range_score():
 
 
 @pytest.mark.asyncio
-async def test_screen_redacts_pii_only_when_blind_mode_is_true():
+async def test_screen_always_masks_privacy_pii_and_preserves_degree_context():
     valid_json = json.dumps(
         {
-            "summary": "Experienced Java developer with solid database background.",
-            "strengths": ["Java"],
+            "summary": "Experienced Java developer with solid CS degree and database skills.",
+            "strengths": ["Java", "BSc Computer Science"],
             "gaps": [],
             "criterion_scores": [
                 {"name": "Technical Skills", "score": 82, "rationale": "6 years Java"},
@@ -147,34 +147,34 @@ async def test_screen_redacts_pii_only_when_blind_mode_is_true():
     service = AiScreeningService(provider)
     cv_with_pii = (
         "Kasun Silva, University of Moratuwa\n"
+        "BSc Computer Science | NIC: 199812345678\n"
         "Email: kasun@uom.lk | Tel: +94 77 123 4567\n"
+        "GitHub: https://github.com/kasun-dev\n"
         "Built Spring Boot microservices 2020 - 2024."
     )
 
-    await service.screen(
-        ScreeningRequest(
-            cv_text=cv_with_pii,
-            job_description="Senior Java Backend Engineer",
-            blind_mode=True,
+    for blind_flag in (True, False):
+        await service.screen(
+            ScreeningRequest(
+                cv_text=cv_with_pii,
+                job_description="Senior Java Backend Engineer with BSc in Computer Science",
+                blind_mode=blind_flag,
+            )
         )
-    )
-    blind_prompt = provider.calls[-1][1]
-    assert "Kasun Silva" not in blind_prompt
-    assert "kasun@uom.lk" not in blind_prompt
-    assert "University of Moratuwa" not in blind_prompt
-    assert "[NAME_REDACTED]" in blind_prompt
-    assert "2020 - 2024" in blind_prompt
-
-    await service.screen(
-        ScreeningRequest(
-            cv_text=cv_with_pii,
-            job_description="Senior Java Backend Engineer",
-            blind_mode=False,
-        )
-    )
-    non_blind_prompt = provider.calls[-1][1]
-    assert "Kasun Silva" in non_blind_prompt
-    assert "kasun@uom.lk" in non_blind_prompt
+        sent_prompt = provider.calls[-1][1]
+        assert "Kasun Silva" not in sent_prompt
+        assert "kasun@uom.lk" not in sent_prompt
+        assert "199812345678" not in sent_prompt
+        assert "+94 77 123 4567" not in sent_prompt
+        assert "https://github.com/kasun-dev" not in sent_prompt
+        assert "[NAME_REDACTED]" in sent_prompt
+        assert "[EMAIL_REDACTED]" in sent_prompt
+        assert "[NIC_REDACTED]" in sent_prompt
+        assert "[PHONE_REDACTED]" in sent_prompt
+        assert "[URL_REDACTED]" in sent_prompt
+        assert "University of Moratuwa" in sent_prompt
+        assert "BSc Computer Science" in sent_prompt
+        assert "2020 - 2024" in sent_prompt
 
 
 @pytest.mark.asyncio
@@ -204,7 +204,8 @@ async def test_screen_sanitizes_injection_even_when_blind_mode_is_false():
     )
 
     sent_user_prompt = provider.calls[-1][1]
-    assert "Nimali Fernando" in sent_user_prompt
+    assert "Nimali Fernando" not in sent_user_prompt
+    assert "[NAME_REDACTED]" in sent_user_prompt
     assert "<system>" not in sent_user_prompt
     assert "[FILTERED]" in sent_user_prompt
 

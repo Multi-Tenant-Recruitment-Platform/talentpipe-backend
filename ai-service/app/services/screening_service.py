@@ -58,8 +58,8 @@ class AiScreeningService:
         await self._llm.aclose()
 
     def _prepare_cv_text(self, cv_text: str, blind_mode: bool) -> str:
-        candidate_text = self._pii_redactor.redact(cv_text) if blind_mode else cv_text
-        return self._injection_guard.sanitize_cv(candidate_text)
+        redacted = self._pii_redactor.redact(cv_text, blind_mode=blind_mode)
+        return self._injection_guard.sanitize_cv(redacted)
 
     async def _evaluate_uncached(
         self,

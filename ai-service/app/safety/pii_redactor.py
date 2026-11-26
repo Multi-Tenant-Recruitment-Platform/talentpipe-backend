@@ -55,16 +55,45 @@ _HEADING_AND_ROLE_WORDS = frozenset(
         "boot",
         "react",
         "node",
+        "bsc",
+        "msc",
+        "beng",
+        "meng",
+        "phd",
+        "mba",
+        "ba",
+        "ma",
+        "bachelor",
+        "master",
+        "degree",
+        "diploma",
+        "honours",
+        "honors",
+        "computer",
+        "science",
+        "information",
+        "technology",
+        "engineering",
+        "university",
+        "college",
+        "institute",
+        "academy",
+        "school",
+        "polytechnic",
+        "of",
+        "in",
+        "and",
+        "sliit",
+        "nsbm",
+        "nibm",
+        "ucsc",
+        "uom",
+        "uoc",
+        "mit",
     }
 )
 _NAME_TOKEN_PATTERN = re.compile(r"^[A-Z][A-Za-z'.-]*$")
 _SEGMENT_SPLIT_PATTERN = re.compile(r"[,|/\u2022]|(?:\s+-\s+)")
-_PROPER_NOUN_CHAIN = r"[A-Z][A-Za-z&'.-]+(?:[ \t]+[A-Z][A-Za-z&'.-]+){0,3}"
-_OF_TAIL = r"[A-Z][A-Za-z&'.-]+(?:[ \t]+(?:of|and|[A-Z][A-Za-z&'.-]+)){0,3}"
-_TRAILING_INSTITUTION = (
-    rf"{_PROPER_NOUN_CHAIN}[ \t]+"
-    rf"(?:University|College|Institute(?:[ \t]+of[ \t]+{_OF_TAIL})?|Polytechnic|Academy)"
-)
 
 
 class RedactionRule(Protocol):
@@ -119,8 +148,7 @@ class NameHeaderRule:
         match = _SEGMENT_SPLIT_PATTERN.search(remainder)
         candidate = remainder[: match.start()] if match else remainder
         suffix = remainder[match.start() :] if match else ""
-        stripped = candidate.strip()
-        if not self._looks_like_person_name(stripped):
+        if not self._looks_like_person_name(candidate.strip()):
             return None
 
         leading_ws = candidate[: len(candidate) - len(candidate.lstrip())]
@@ -133,20 +161,20 @@ class NameHeaderRule:
         for token in tokens:
             if not _NAME_TOKEN_PATTERN.match(token):
                 return False
-            if token.rstrip(".").casefold() in _HEADING_AND_ROLE_WORDS:
+            if token.rstrip(".,").casefold() in _HEADING_AND_ROLE_WORDS:
                 return False
         return True
 
 
-def _default_rules() -> tuple[RedactionRule, ...]:
-    # Order matters: emails and URLs precede names/institutions so domain tokens never linger.
+def _privacy_rules() -> tuple[RedactionRule, ...]:
+    # Order matters: emails and URLs precede names so domain/profile tokens never linger.
     return (
         RegexRule.from_pattern(
             r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
             "[EMAIL_REDACTED]",
         ),
         RegexRule.from_pattern(
-            r"(?:https?://[^\s<>\"']+|www\.[^\s<>\"']+)",
+            r"(?:https?://[^\s<>\"']+|www\.[^\s<>\"']+|(?:linkedin\.com|github\.com)/[^\s<>\"']+)",
             "[URL_REDACTED]",
         ),
         RegexRule.from_pattern(
@@ -161,14 +189,6 @@ def _default_rules() -> tuple[RedactionRule, ...]:
             "[NIC_REDACTED]",
         ),
         RegexRule.from_pattern(
-            rf"\b(?:"
-            rf"(?:University|Institute|College|School|Academy|Polytechnic)[ \t]+of[ \t]+{_OF_TAIL}"
-            rf"|{_TRAILING_INSTITUTION}"
-            rf"|SLIIT|IIT|NSBM|NIBM|UOM|UCSC|UOC"
-            rf")\b",
-            "[INSTITUTION_REDACTED]",
-        ),
-        RegexRule.from_pattern(
             r"(?:\b(?:male|female|he/him|she/her|they/them|non-binary)\b|\b(?:mr|mrs|ms)\.)",
             "[GENDER_REDACTED]",
             flags=re.IGNORECASE,
@@ -178,13 +198,19 @@ def _default_rules() -> tuple[RedactionRule, ...]:
 
 
 class CvPiiRedactor:
-    """Applies a composable Chain of Responsibility pipeline to remove blind-screening PII."""
+    """Applies a composable privacy pipeline before sending CV text to external LLMs.
+
+    Direct personal identifiers, contact details, URLs, and gender markers are always masked
+    regardless of `blind_mode`, while university and degree text stays intact so the LLM can
+    evaluate education requirements. Human-reviewer anonymization is handled by `blind_mode`.
+    """
 
     def __init__(self, extra_rules: Sequence[RedactionRule] = ()):
-        self._rules: tuple[RedactionRule, ...] = (*_default_rules(), *extra_rules)
+        self._rules: tuple[RedactionRule, ...] = (*_privacy_rules(), *extra_rules)
 
-    def redact(self, cv_text: str) -> str:
-        """Mask direct and indirect candidate identifiers while keeping skills and timelines."""
+    def redact(self, cv_text: str, *, blind_mode: bool = True) -> str:
+        """Mask direct personal and contact identifiers while keeping education and timelines."""
+        _ = blind_mode
         sanitized = cv_text
         for rule in self._rules:
             sanitized = rule.apply(sanitized)
