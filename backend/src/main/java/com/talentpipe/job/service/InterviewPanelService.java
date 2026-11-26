@@ -213,6 +213,38 @@ public class InterviewPanelService {
                 vacancy.getId(), added, removed, tenantId, actorId);
     }
 
+    /**
+     * Gives a duplicate the source's interview panels, round by round, leaving
+     * out anyone no longer an active member — as its hiring team is copied
+     * ({@code VacancyHiringTeamService#copyTeam}). Call after the copy's
+     * stages are stored. A round whose people all left keeps its count and
+     * waits to be staffed again before the copy can be published.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void copyPanels(JobVacancy source, JobVacancy copy, UUID actorId) {
+        Map<UUID, Integer> counts = panelRepository.findAllByJobId(source.getId()).stream()
+                .collect(Collectors.toMap(JobStagePanel::getJobStageId, JobStagePanel::getInterviewerCount));
+        if (counts.isEmpty()) {
+            return;
+        }
+        Map<UUID, List<UUID>> seated = seatedBy(source.getId());
+        Set<UUID> everyone = new LinkedHashSet<>();
+        seated.values().forEach(everyone::addAll);
+        Set<UUID> stillActive = userDirectory.activeStaffAmong(copy.getTenantId(), everyone);
+
+        List<InterviewPanelRequest> panels = new ArrayList<>();
+        for (JobStage round : interviewRounds(source.getId()).values()) {
+            Integer count = counts.get(round.getId());
+            if (count != null) {
+                List<UUID> people = seated.getOrDefault(round.getId(), List.of()).stream()
+                        .filter(stillActive::contains)
+                        .toList();
+                panels.add(new InterviewPanelRequest(round.getPosition(), count, people));
+            }
+        }
+        apply(copy, panels, actorId);
+    }
+
     // ------------------------------------------------------------ completeness
 
     /**

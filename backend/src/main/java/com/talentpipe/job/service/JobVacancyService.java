@@ -406,6 +406,7 @@ public class JobVacancyService {
         JobVacancy copy = save(draft, viewer, "duplicated from " + vacancyId);
         pipelineSnapshots.copyStagesOf(source, copy);
         hiringTeam.copyTeam(tenantId, source.getId(), copy.getId(), viewer.userId());
+        interviewPanels.copyPanels(source, copy, viewer.userId());
         return respond(copy);
     }
 
