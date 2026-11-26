@@ -6,24 +6,28 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.talentpipe.ai.dto.ExtractedCvResult;
+import com.talentpipe.ai.dto.CvExtractionResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.client.RestClientTest;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 
 @RestClientTest(RestCvTextExtractor.class)
 @EnableConfigurationProperties(AiServiceProperties.class)
@@ -39,7 +43,7 @@ class RestCvTextExtractorTest {
     private MockRestServiceServer mockServer;
 
     @Test
-    void extract_uploadsMultipartFileAndParsesResponse() {
+    void extract_uploadsMultipartFileAndMapsDomainResult() {
         mockServer.expect(requestTo(EXTRACT_PATH))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("""
@@ -59,9 +63,9 @@ class RestCvTextExtractorTest {
                 MediaType.APPLICATION_PDF_VALUE);
 
         mockServer.verify();
-        assertThat(result.extractedText()).isEqualTo("Clean Canva PDF CV text content");
+        assertThat(result.text()).isEqualTo("Clean Canva PDF CV text content");
         assertThat(result.charCount()).isEqualTo(31);
-        assertThat(result.format()).isEqualTo("PDF");
+        assertThat(result.pageCount()).isEqualTo(1);
         assertThat(result.emptyOrScanned()).isFalse();
     }
 
@@ -89,7 +93,7 @@ class RestCvTextExtractorTest {
                 mimeType);
 
         mockServer.verify();
-        assertThat(result.format()).isEqualTo("DOCX");
+        assertThat(result.text()).isEqualTo("Fallback metadata text");
     }
 
     static Stream<Arguments> missingFileMetadata() {
@@ -99,24 +103,69 @@ class RestCvTextExtractorTest {
     }
 
     @Test
-    void extract_rejectsNullOrEmptyBytesWithoutHttpCall() {
-        byte[] empty = new byte[0];
+    void extract_returnsNullWhenBodyIsEmpty() {
+        mockServer.expect(requestTo(EXTRACT_PATH))
+                .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> extractor.extract(empty, "empty.pdf", "application/pdf"))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> extractor.extract(null, "null.pdf", "application/pdf"))
-                .isInstanceOf(IllegalArgumentException.class);
+        ExtractedCvResult result = extractor.extract(
+                "%PDF-1.4".getBytes(StandardCharsets.US_ASCII),
+                "empty-body.pdf",
+                MediaType.APPLICATION_PDF_VALUE);
+
+        mockServer.verify();
+        assertThat(result).isNull();
     }
 
     @Test
-    void extract_propagatesClientError() {
+    void extract_rejectsNullOrEmptyBytesAsUnreadableWithoutHttpCall() {
+        byte[] empty = new byte[0];
+
+        assertThatThrownBy(() -> extractor.extract(empty, "empty.pdf", MediaType.APPLICATION_PDF_VALUE))
+                .isInstanceOf(UnreadableCvException.class);
+        assertThatThrownBy(() -> extractor.extract(null, "null.pdf", MediaType.APPLICATION_PDF_VALUE))
+                .isInstanceOf(UnreadableCvException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 413, 415, 422})
+    void extract_mapsPermanentClientRejectionsToUnreadableCvException(int statusCode) {
         mockServer.expect(requestTo(EXTRACT_PATH))
-                .andRespond(withBadRequest());
+                .andRespond(withStatus(HttpStatus.valueOf(statusCode)));
 
-        byte[] payload = "invalid".getBytes(StandardCharsets.UTF_8);
+        byte[] payload = "corrupt".getBytes(StandardCharsets.UTF_8);
 
-        assertThatThrownBy(() -> extractor.extract(payload, "bad.txt", "text/plain"))
+        assertThatThrownBy(() -> extractor.extract(payload, "bad.cv", MediaType.APPLICATION_OCTET_STREAM_VALUE))
+                .isInstanceOf(UnreadableCvException.class)
+                .hasMessageContaining(String.valueOf(statusCode));
+        mockServer.verify();
+    }
+
+    @Test
+    void extract_propagatesTransientClientAndServerErrorsForRetry() {
+        mockServer.expect(requestTo(EXTRACT_PATH))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+        byte[] payload = "%PDF-1.4".getBytes(StandardCharsets.US_ASCII);
+
+        assertThatThrownBy(() -> extractor.extract(payload, "rate.pdf", MediaType.APPLICATION_PDF_VALUE))
                 .isInstanceOf(HttpClientErrorException.class);
         mockServer.verify();
+
+        mockServer.reset();
+        mockServer.expect(requestTo(EXTRACT_PATH))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> extractor.extract(payload, "err.pdf", MediaType.APPLICATION_PDF_VALUE))
+                .isInstanceOf(HttpServerErrorException.class);
+        mockServer.verify();
+    }
+
+    @Test
+    void wireResponse_omitsExtractedTextFromToString() {
+        CvExtractionResponse response = new CvExtractionResponse(
+                "Sensitive Candidate Name", 24, 1, "PDF", "pymupdf4llm", false);
+
+        assertThat(response.toString())
+                .doesNotContain("Sensitive")
+                .contains("charCount=24", "format=PDF", "extractor=pymupdf4llm");
     }
 }

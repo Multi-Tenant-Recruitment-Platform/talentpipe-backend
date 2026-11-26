@@ -2,6 +2,7 @@ package com.talentpipe.candidate.service;
 
 import com.talentpipe.candidate.entity.Candidate;
 import com.talentpipe.candidate.entity.CandidateCv;
+import com.talentpipe.candidate.event.CvUploadedEvent;
 import com.talentpipe.candidate.repository.CandidateCvRepository;
 import com.talentpipe.candidate.validator.CandidateCvValidator;
 import com.talentpipe.common.exception.ResourceNotFoundException;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +36,7 @@ public class CandidateCvService {
     private final CandidateCvValidator cvValidator;
     private final FileStorageService storageService;
     private final TalentPoolAuditService auditService;
+    private final ApplicationEventPublisher events;
 
     public record CvDownloadPayload(String fileName, String mimeType, byte[] data) {
         @Override
@@ -62,17 +65,28 @@ public class CandidateCvService {
     public CandidateCvService(CandidateCvRepository cvRepository,
                               CandidateCvValidator cvValidator,
                               FileStorageService storageService,
-                              TalentPoolAuditService auditService) {
+                              TalentPoolAuditService auditService,
+                              ApplicationEventPublisher events) {
         this.cvRepository = cvRepository;
         this.cvValidator = cvValidator;
         this.storageService = storageService;
         this.auditService = auditService;
+        this.events = events;
     }
 
     /** Returns the active CV for the candidate, if one exists. */
     @Transactional(readOnly = true)
     public Optional<CandidateCv> getActiveCv(UUID candidateId) {
         return findActiveCv(candidateId);
+    }
+
+    /**
+     * The id of the candidate's active CV, if there is one — for modules that keep
+     * a reference to a CV, such as an application to the one it was made with.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> findActiveCvId(UUID candidateId) {
+        return cvRepository.findActiveCvId(candidateId);
     }
 
     private Optional<CandidateCv> findActiveCv(UUID candidateId) {
@@ -82,6 +96,9 @@ public class CandidateCvService {
     /**
      * Validates, digests, stores, and versions a new CV for the candidate.
      * If the uploaded file is identical in content to the active CV, the upload is skipped idempotently.
+     *
+     * <p>Once the upload has committed, the CV's text is extracted in the background
+     * ({@code CvExtractionDispatcher}); until then it is PENDING.</p>
      */
     @Transactional
     public CandidateCv uploadCv(Candidate candidate, MultipartFile file) {
@@ -133,6 +150,7 @@ public class CandidateCvService {
 
             CandidateCv saved = cvRepository.save(newCv);
             auditService.recordEvent(candidate.getId(), "UPDATED_CV", true, saved.getId());
+            events.publishEvent(new CvUploadedEvent(saved.getId()));
             log.info("Uploaded version {} CV for candidate {}", nextVersion, candidate.getId());
             return saved;
         } catch (RuntimeException e) {

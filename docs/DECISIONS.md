@@ -539,6 +539,68 @@ company A got 401 signing in to company B).
 
 ---
 
+## ADR-15 — A CV's text is extracted once, in the background
+
+**Date:** 2026-11-26 · **Status:** Accepted
+
+### Context
+
+AI screening (Sprint 7) needs the text of each CV. Getting text out of things
+like two-column Canva or LaTeX PDFs is the AI service's job (MRP-359). That's
+a separate service called over HTTP, so it can be slow, down, or not deployed
+at all.
+
+The obvious place to call it was the upload itself, but the upload runs in a
+transaction. Every upload would hold a database connection while waiting on
+the AI service, so a few slow calls could use up the whole pool, and if the AI
+service was down, candidates couldn't save their profile.
+
+### Decision
+
+Same approach as ADR-6. `uploadCv` publishes `CvUploadedEvent`. Once the upload
+has committed, `CvExtractionDispatcher` picks it up on its own small thread
+pool, loads the file, calls the `CvTextExtractor` port (`com.talentpipe.ai`)
+and saves the result. No transaction is open during the call; the database is
+only touched in short transactions in `CvExtractionRecorder`.
+
+`candidate_cvs.extraction_status` (V26) works as the queue:
+
+| Status | Meaning |
+|---|---|
+| `PENDING` | not extracted yet, or the service couldn't be reached. Try again later |
+| `EXTRACTED` | the text is in `extracted_text` |
+| `EMPTY_OR_SCANNED` | read fine but there's no usable text, someone needs to look at it |
+| `FAILED` | the file can't be read (`UnreadableCvException`) |
+
+Only `UnreadableCvException` marks a CV as `FAILED`. Any other error leaves it
+`PENDING`, so the worst case is a retry, not a lost CV.
+
+An application now keeps the CV it was submitted with (`applications.cv_id`),
+so replacing a CV later doesn't change applications that were already sent.
+
+### Consequences
+
+- Nothing breaks without the AI service. There's no `CvTextExtractor` bean, so
+  CVs just stay `PENDING`.
+- If someone uploads a CV and applies straight away, screening can start
+  before extraction is done. Screening should treat `PENDING` as "extract it
+  now", not as an error (MRP-361).
+- The event only carries the CV's id. If the queue is full the task is dropped
+  instead of running on the caller's thread, which is still holding the
+  upload's connection. The row stays `PENDING`, so nothing is lost.
+- Each file is only extracted once. A CV with the same SHA-256 as one we've
+  already read reuses that text.
+- The extraction and a candidate archiving their CV can now update the same
+  row at the same time, so `CandidateCv` is `@DynamicUpdate`.
+- CV text is personal data, and it's exactly what blind screening hides. No
+  response includes it and nothing logs it, including
+  `ExtractedCvResult.toString` and exception messages that could quote it.
+- JSON lists of strings have their own type (`JsonStrings`). Hibernate keeps
+  one mapping per Java type, so mapping every `List<String>` as JSON breaks
+  the vacancy's `TEXT[]` columns and the app won't start.
+
+---
+
 ## Standing conventions (not individually numbered)
 
 - **Deferred-work marker:** `// TODO(sprint2): ...` — grep for it at sprint

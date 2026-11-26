@@ -9,6 +9,7 @@ import com.talentpipe.auth.entity.RoleName;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.candidate.repository.CandidateRepository;
+import com.talentpipe.candidate.service.CandidateCvService;
 import com.talentpipe.common.exception.DuplicateResourceException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.dto.VacancyApplicationTarget;
@@ -31,6 +32,7 @@ public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
     private final CandidateRepository candidateRepository;
+    private final CandidateCvService candidateCvService;
     private final VacancyApplicationGate vacancyApplicationGate;
     private final JobVacancyRepository vacancyRepository;
     private final UserRepository userRepository;
@@ -38,12 +40,14 @@ public class ApplicationService {
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               CandidateRepository candidateRepository,
+                              CandidateCvService candidateCvService,
                               VacancyApplicationGate vacancyApplicationGate,
                               JobVacancyRepository vacancyRepository,
                               UserRepository userRepository,
                               ApplicationEventPublisher events) {
         this.applicationRepository = applicationRepository;
         this.candidateRepository = candidateRepository;
+        this.candidateCvService = candidateCvService;
         this.vacancyApplicationGate = vacancyApplicationGate;
         this.vacancyRepository = vacancyRepository;
         this.userRepository = userRepository;
@@ -62,7 +66,8 @@ public class ApplicationService {
             throw new DuplicateResourceException("You have already applied to this job");
         }
         Application application = applicationRepository.save(new Application(
-                vacancy.vacancyId(), candidateId, vacancy.tenantId()));
+                vacancy.vacancyId(), candidateId, vacancy.tenantId(),
+                candidateCvService.findActiveCvId(candidateId).orElse(null)));
         return toResponse(application, vacancy.title());
     }
 
