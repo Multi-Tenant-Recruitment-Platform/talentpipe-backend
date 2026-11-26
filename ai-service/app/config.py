@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=25.0, gt=0.0)
     max_cv_upload_bytes: int = Field(default=5 * 1024 * 1024, gt=0)
     max_docx_uncompressed_bytes: int = Field(default=25 * 1024 * 1024, gt=0)
+    cache_max_size: int = Field(default=1000, gt=0)
     log_level: str = "INFO"
 
 
