@@ -70,7 +70,7 @@ public class PipelineSnapshotServiceImpl implements PipelineSnapshotService {
         // Same rule as the template's own thresholds; an override of one can break it against the other.
         ScreeningThresholds.requireValid(autoThreshold, manualThreshold);
         return new PipelineSnapshot(template.id(), template.name(), autoThreshold, manualThreshold, blindMode,
-                template.stages());
+                template.stages(), template.idealMatchingEnabled());
     }
 
     @Override

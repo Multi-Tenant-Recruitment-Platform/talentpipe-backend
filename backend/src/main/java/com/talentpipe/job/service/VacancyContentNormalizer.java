@@ -75,6 +75,7 @@ public class VacancyContentNormalizer {
 
                 list(request.requiredSkills()),
                 list(request.preferredSkills()),
+                list(request.toolsAndTechnologies()),
                 request.minimumExperienceYears(),
                 blankToNull(line(request.education())),
                 list(request.certifications()),

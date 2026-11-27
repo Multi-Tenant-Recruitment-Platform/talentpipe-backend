@@ -22,20 +22,26 @@ import com.talentpipe.common.exception.InvalidRequestException;
 import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.common.util.HtmlSanitizer;
 import com.talentpipe.job.VacancyFixtures;
+import com.talentpipe.job.dto.IdealMatchingRequest;
 import com.talentpipe.job.dto.InterviewPanelRequest;
 import com.talentpipe.job.dto.JobVacancyRequest;
 import com.talentpipe.job.dto.JobVacancyResponse;
+import com.talentpipe.job.dto.MatchingCriterionRequest;
 import com.talentpipe.job.dto.VacancyFeaturesRequest;
+import com.talentpipe.job.entity.JobScreeningCriteria;
 import com.talentpipe.job.entity.JobStage;
 import com.talentpipe.job.entity.JobStageInterviewer;
 import com.talentpipe.job.entity.JobStagePanel;
 import com.talentpipe.job.entity.JobVacancy;
+import com.talentpipe.job.entity.MatchingCategory;
+import com.talentpipe.job.entity.MatchingRequirement;
 import com.talentpipe.job.entity.ScreeningThresholds;
 import com.talentpipe.job.entity.VacancyStatus;
 import com.talentpipe.job.mapper.JobVacancyMapper;
 import com.talentpipe.job.validator.JobVacancyMemberValidator;
 import com.talentpipe.job.validator.JobVacancyPublishValidator;
 import com.talentpipe.job.validator.JobVacancyShapeValidator;
+import com.talentpipe.job.repository.JobScreeningCriteriaRepository;
 import com.talentpipe.job.repository.JobStageInterviewerRepository;
 import com.talentpipe.job.repository.JobStagePanelRepository;
 import com.talentpipe.job.repository.JobStageRepository;
@@ -124,6 +130,9 @@ class JobVacancyServiceTest {
     @Mock
     private JobStageInterviewerRepository interviewerRepository;
 
+    @Mock
+    private JobScreeningCriteriaRepository criteriaRepository;
+
     @Captor
     private ArgumentCaptor<JobVacancy> savedVacancy;
 
@@ -160,6 +169,7 @@ class JobVacancyServiceTest {
                 new PipelineSnapshotServiceImpl(templates, stageRepository, access, mapper),
                 new InterviewPanelService(access, stageRepository, panelRepository, interviewerRepository,
                         userDirectory),
+                new IdealMatchingService(access, criteriaRepository),
                 mapper);
 
         // Every request is created from this template (80/70, blind mode off) unless a test says otherwise.
@@ -1149,6 +1159,62 @@ class JobVacancyServiceTest {
         return new TenantSettingsResponse(false, aiScreening, candidateMatching, null);
     }
 
+    // ------------------------------------------------- ideal candidate matching
+
+    @Test
+    void create_recordsThatTheTemplateOffersIdealMatching() {
+        JobVacancyResponse response = service.create(VIEWER,
+                VacancyFixtures.complete().toRequest(VacancyStatus.DRAFT, null));
+
+        assertThat(response.idealMatchingAvailable()).isTrue();
+        assertThat(response.idealMatchingEnabled()).isFalse();
+        assertThat(response.toolsAndTechnologies()).containsExactly("Docker", "Git");
+    }
+
+    @Test
+    void create_storesTheIdealCandidateItCarries() {
+        JobVacancyRequest request = VacancyFixtures.complete()
+                .idealMatching(matching(new MatchingCriterionRequest(MatchingCategory.TECHNICAL_SKILL, "Java", 40,
+                        MatchingRequirement.MUST_HAVE)))
+                .toRequest(VacancyStatus.DRAFT, null);
+
+        JobVacancyResponse response = service.create(VIEWER, request);
+
+        assertThat(response.idealMatchingEnabled()).isTrue();
+        verify(criteriaRepository).saveAllAndFlush(any());
+    }
+
+    @Test
+    void create_asPublished_withIdealCandidateWeightsShortOfAHundred_isRefusedAndNothingIsStored() {
+        JobVacancyRequest request = staffed(VacancyFixtures.complete()
+                .idealMatching(matching(new MatchingCriterionRequest(MatchingCategory.TECHNICAL_SKILL, "Java", 40,
+                        MatchingRequirement.MUST_HAVE)))
+                .toRequest(VacancyStatus.PUBLISHED, null));
+
+        assertThatThrownBy(() -> service.create(VIEWER, request))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("This vacancy can't be published yet: the ideal candidate weights add up to 40%; "
+                        + "they need to total 100%.");
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void publish_withIdealMatchingOnAndWeightsShort_isRefused() {
+        JobVacancy vacancy = stored(VacancyFixtures.draftOnPipeline(TENANT));
+        vacancy.offerIdealMatching(true);
+        vacancy.describeIdealCandidate(true, List.of(), List.of());
+        when(criteriaRepository.findAllByJobIdOrderByPositionAscNameAsc(vacancy.getId())).thenReturn(List.of(
+                new JobScreeningCriteria(TENANT, vacancy.getId(), "Java", new java.math.BigDecimal("0.700"))));
+
+        assertThatThrownBy(() -> service.publish(VIEWER, vacancy.getId()))
+                .hasMessageContaining("add up to 70%");
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    private static IdealMatchingRequest matching(MatchingCriterionRequest... criteria) {
+        return new IdealMatchingRequest(true, List.of(criteria), List.of(), List.of());
+    }
+
     /** The vacancy as filed by {@code creator}. */
     private static JobVacancy createdBy(JobVacancy vacancy, UUID creator) {
         ReflectionTestUtils.setField(vacancy, "createdBy", creator);
@@ -1172,7 +1238,7 @@ class JobVacancyServiceTest {
                 r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
                 r.aiScreeningEnabled(), r.candidateMatchingEnabled(),
                 r.pipelineTemplateId(), r.autoThreshold(), r.manualThreshold(), r.blindModeEnabled(),
-                r.status(), r.version(), panels);
+                r.status(), r.version(), panels, r.toolsAndTechnologies(), r.idealMatching());
     }
 
     /** The request with its two feature switches set; everything else as given. */
@@ -1187,7 +1253,7 @@ class JobVacancyServiceTest {
                 r.assignedRecruiterId(), r.hiringManagerId(), r.recruitmentPipelineId(), r.screeningQuestions(),
                 aiScreening, matching,
                 r.pipelineTemplateId(), r.autoThreshold(), r.manualThreshold(), r.blindModeEnabled(),
-                r.status(), r.version(), r.interviewPanels());
+                r.status(), r.version(), r.interviewPanels(), r.toolsAndTechnologies(), r.idealMatching());
     }
 
     private static VacancyStatusCount count(VacancyStatus status, long total) {

@@ -14,4 +14,7 @@ public interface JobScreeningCriteriaRepository extends JpaRepository<JobScreeni
 
     /** A vacancy's criteria, by name. */
     List<JobScreeningCriteria> findAllByJobIdOrderByNameAsc(UUID jobId);
+
+    /** A vacancy's criteria in the order the recruiter put them (V27). */
+    List<JobScreeningCriteria> findAllByJobIdOrderByPositionAscNameAsc(UUID jobId);
 }

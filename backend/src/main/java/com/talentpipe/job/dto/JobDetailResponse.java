@@ -24,6 +24,7 @@ public record JobDetailResponse(
         String jobDescription,
         List<String> keyResponsibilities,
         List<String> preferredSkills,
+        List<String> toolsAndTechnologies,
         String education,
         List<String> certifications,
         List<String> languageRequirements,

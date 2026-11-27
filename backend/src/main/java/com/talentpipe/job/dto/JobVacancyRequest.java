@@ -210,7 +210,19 @@ public record JobVacancyRequest(
         @Valid
         @Size(max = 30, message = "A vacancy has at most 30 interview rounds to set panels for.")
         List<@NotNull(message = "Send a panel for each interview round listed.") @Valid InterviewPanelRequest>
-                interviewPanels
+                interviewPanels,
+
+        // ---- candidate requirements, continued (V27): tools, technologies
+        // and platforms the person will use — Docker, Git, AWS.
+        @ValidTaxonomyList(maxSize = 50, maxEntryLength = 100,
+                message = "List up to 50 tools and technologies, each 100 characters or fewer.")
+        List<String> toolsAndTechnologies,
+
+        // ---- ideal candidate matching (V27): the weighted profile screening
+        // scores applicants against. Left out, a new vacancy starts with
+        // matching off and an edit keeps what it has; sent, it replaces it.
+        @Valid
+        IdealMatchingRequest idealMatching
 ) {
 
     /**

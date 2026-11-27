@@ -8,15 +8,22 @@ import java.util.UUID;
 
 /**
  * What a new vacancy takes from its template: the template's name, the
- * screening settings with any overrides applied, and the stages to copy. A
- * value read from the template at one moment; later changes to the template
- * do not reach it.
+ * screening settings with any overrides applied, the stages to copy, and
+ * whether it offers ideal candidate matching (V27). A value read from the
+ * template at one moment; later changes to the template do not reach it.
  */
 public record PipelineSnapshot(UUID templateId, String templateName, int autoThreshold, int manualThreshold,
-                               boolean blindModeEnabled, List<PipelineStageResponse> stages) {
+                               boolean blindModeEnabled, List<PipelineStageResponse> stages,
+                               boolean idealMatchingAvailable) {
 
     public PipelineSnapshot {
         stages = List.copyOf(stages);
+    }
+
+    /** A snapshot of a template that does not offer ideal candidate matching. */
+    public PipelineSnapshot(UUID templateId, String templateName, int autoThreshold, int manualThreshold,
+                            boolean blindModeEnabled, List<PipelineStageResponse> stages) {
+        this(templateId, templateName, autoThreshold, manualThreshold, blindModeEnabled, stages, false);
     }
 
     /** How many stages the vacancy will run on. */
