@@ -1174,7 +1174,7 @@ class JobVacancyServiceTest {
     @Test
     void create_storesTheIdealCandidateItCarries() {
         JobVacancyRequest request = VacancyFixtures.complete()
-                .idealMatching(matching(new MatchingCriterionRequest(MatchingCategory.TOOL, "Docker", 40,
+                .idealMatching(matching(new MatchingCriterionRequest(MatchingCategory.TECHNICAL_SKILL, "Java", 40,
                         MatchingRequirement.MUST_HAVE)))
                 .toRequest(VacancyStatus.DRAFT, null);
 
@@ -1187,7 +1187,7 @@ class JobVacancyServiceTest {
     @Test
     void create_asPublished_withIdealCandidateWeightsShortOfAHundred_isRefusedAndNothingIsStored() {
         JobVacancyRequest request = staffed(VacancyFixtures.complete()
-                .idealMatching(matching(new MatchingCriterionRequest(MatchingCategory.TOOL, "Docker", 40,
+                .idealMatching(matching(new MatchingCriterionRequest(MatchingCategory.TECHNICAL_SKILL, "Java", 40,
                         MatchingRequirement.MUST_HAVE)))
                 .toRequest(VacancyStatus.PUBLISHED, null));
 

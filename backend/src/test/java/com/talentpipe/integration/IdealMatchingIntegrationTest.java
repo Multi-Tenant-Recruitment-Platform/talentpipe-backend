@@ -31,7 +31,7 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
         body.put("toolsAndTechnologies", List.of("Docker", "Git"));
         body.put("idealMatching", profile(
                 criterion("TECHNICAL_SKILL", "Java", 50, "MUST_HAVE"),
-                criterion("TOOL", "Docker", 35, "PREFERRED")));
+                criterion("TECHNICAL_SKILL", "Kafka", 35, "PREFERRED")));
         Map<String, Object> vacancy = create(acme.adminToken(), body);
         Object id = vacancy.get("id");
         assertThat(vacancy).containsEntry("idealMatchingAvailable", true).containsEntry("idealMatchingEnabled", true);
@@ -41,16 +41,15 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
         assertThat(stored).containsEntry("totalWeightPercent", 85);
         assertThat((List<Map<String, Object>>) stored.get("criteria"))
                 .extracting(criterion -> criterion.get("name"))
-                .containsExactly("Java", "Docker");
+                .containsExactly("Java", "Kafka");
 
         ResponseEntity<Map<String, Object>> refused = move(acme.adminToken(), id, "publish");
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat((String) refused.getBody().get("message")).contains("add up to 85%");
 
         ResponseEntity<String> fixed = putProfile(acme.adminToken(), id, profile(
-                criterion("TECHNICAL_SKILL", "Java", 50, "MUST_HAVE"),
-                criterion("TOOL", "Docker", 30, "PREFERRED"),
-                criterion("EXPERIENCE", null, 20, null)));
+                criterion("TECHNICAL_SKILL", "Java", 65, "MUST_HAVE"),
+                criterion("TECHNICAL_SKILL", "Kafka", 35, "PREFERRED")));
         assertThat(fixed.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(move(acme.adminToken(), id, "publish").getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -65,7 +64,7 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
     }
 
     @Test
-    void theScreeningProfile_handsOverTheWeightsAsFractions_withTheMustHaves() {
+    void theScreeningProfile_weighsSkillsOnly_andHandsOverToolsAsContext() {
         Workspace acme = newWorkspace("Acme");
         Map<String, Object> body = completeVacancy("Backend Engineer");
         body.put("pipelineTemplateId", matchingTemplate(acme));
@@ -73,7 +72,7 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
         body.put("toolsAndTechnologies", List.of("Docker", "Git"));
         body.put("idealMatching", profileWith(List.of(
                 criterion("TECHNICAL_SKILL", "Java", 60, "MUST_HAVE"),
-                criterion("TOOL", "Docker", 40, "PREFERRED")),
+                criterion("TECHNICAL_SKILL", "Kafka", 40, "PREFERRED")),
                 List.of("Computer Science"), List.of("AWS Solutions Architect")));
         Object id = create(acme.adminToken(), body).get("id");
 
@@ -84,8 +83,9 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
         assertThat((List<Map<String, Object>>) profile.get("criteriaWeights"))
                 .extracting(weight -> weight.get("name"), weight -> weight.get("weight"))
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("Java", 0.6),
-                        org.assertj.core.groups.Tuple.tuple("Docker", 0.4));
+                        org.assertj.core.groups.Tuple.tuple("Kafka", 0.4));
         assertThat(profile).containsEntry("mustHave", List.of("Java"))
+                .containsEntry("preferred", List.of("Kafka"))
                 .containsEntry("toolsAndTechnologies", List.of("Docker", "Git"))
                 .containsEntry("acceptedDegreeTypes", List.of("Computer Science"))
                 .containsEntry("niceToHaveCertifications", List.of("AWS Solutions Architect"));
@@ -98,7 +98,7 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
         body.put("pipelineTemplateId", matchingTemplate(acme));
         body.put("idealMatching", profile(
                 criterion("TECHNICAL_SKILL", "Git", 50, "MUST_HAVE"),
-                criterion("TOOL", "git", 50, "PREFERRED")));
+                criterion("TECHNICAL_SKILL", "git", 50, "PREFERRED")));
 
         ResponseEntity<Map<String, Object>> refused = attemptCreate(acme.adminToken(), body);
 

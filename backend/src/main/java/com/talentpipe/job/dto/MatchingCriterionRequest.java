@@ -10,15 +10,15 @@ import jakarta.validation.constraints.Size;
 /**
  * One weighted criterion of a vacancy's ideal candidate, as the job form sends it.
  *
- * @param category      a technical skill, a tool or relevant experience
- * @param name          what it is, e.g. "Docker"; experience may leave it out
+ * @param category      always a skill since V28; tools and experience are not weighted
+ * @param name          the skill, e.g. "Java"
  * @param weightPercent its share of the 100%, as a whole percent; {@code null}
  *                      while a draft has not decided it yet
- * @param requirement   must-have or preferred, for skills and tools; left out for experience
+ * @param requirement   must-have or preferred
  */
 public record MatchingCriterionRequest(
 
-        @NotNull(message = "Say whether each criterion is a skill, a tool or experience.")
+        @NotNull(message = "Say what kind of criterion each one is.")
         MatchingCategory category,
 
         @Size(max = 120, message = "Keep each criterion's name to 120 characters or fewer.")

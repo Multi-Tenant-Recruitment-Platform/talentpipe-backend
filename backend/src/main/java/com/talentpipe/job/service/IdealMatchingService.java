@@ -32,11 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
  * A vacancy's ideal candidate (V27): what the person creating it says the best
  * applicant looks like, and how much each part counts.
  *
- * <p>The weighted criteria — each technical skill, each tool and relevant
- * experience — share one 100%. Skills and tools also say whether they are a
- * must-have or preferred, which screening uses to call out a missing must-have;
- * the weight alone decides the score. Degree types and nice-to-have
- * certifications are never weighted: they travel to screening as context.</p>
+ * <p>The weighted criteria are the vacancy's skills, and they share one 100%
+ * (V28). Each says whether it is a must-have or preferred, which screening uses
+ * to call out a missing must-have; the weight alone decides the score. Tools and
+ * technologies, the minimum experience, education, degree types and
+ * nice-to-have certifications are never weighted: they travel to screening as
+ * context.</p>
  *
  * <p>A draft may be saved with the profile half done — any total, weights not
  * yet decided. Publishing needs exactly 100%, and a live vacancy must stay at
@@ -57,11 +58,7 @@ public class IdealMatchingService {
     /** Said in front of what is missing when a live vacancy's profile changes. */
     public static final String MUST_STAY_COMPLETE = "A published vacancy's ideal candidate weights must total 100%";
 
-    /** What relevant experience is called when the request gives it no name. */
-    static final String EXPERIENCE_NAME = "Relevant experience";
-
-    static final String NEEDS_A_NAME = "Give every skill and tool in the ideal candidate a name.";
-    static final String EXPERIENCE_ONCE = "Relevant experience can be weighed only once.";
+    static final String NEEDS_A_NAME = "Give every skill in the ideal candidate a name.";
 
     /**
      * The education levels that are a degree, from the job form's list; only
@@ -150,11 +147,10 @@ public class IdealMatchingService {
      * already includes them. The criteria are stored afterwards ({@link #store}),
      * once the vacancy has an id.
      *
-     * <p>Rules in every state: names are given (experience may leave its out)
-     * and unique ignoring case across skills, tools and experience — the AI
-     * service refuses two that differ only in case; skills and tools say
-     * whether they are a must-have; relevant experience appears once. Degree
-     * types are kept only when the education asked for is a degree.</p>
+     * <p>Rules in every state: every skill has a name, unique ignoring case —
+     * the AI service refuses two that differ only in case — and says whether
+     * it is a must-have. Degree types are kept only when the education asked
+     * for is a degree.</p>
      *
      * @return the criteria to store, in order, repeats and blanks cleaned
      * @throws BusinessRuleException (422) as {@link #replace}, completeness aside
@@ -233,7 +229,7 @@ public class IdealMatchingService {
     private static void refuseIfIncomplete(List<Wanted> criteria, String lead) {
         List<String> problems = new ArrayList<>();
         if (criteria.isEmpty()) {
-            problems.add("weigh at least one skill, tool or relevant experience for the ideal candidate");
+            problems.add("weigh at least one skill for the ideal candidate");
         }
         List<String> unweighted = criteria.stream()
                 .filter(criterion -> criterion.weightPercent() == null)
@@ -258,23 +254,14 @@ public class IdealMatchingService {
     private static List<Wanted> criteriaOf(IdealMatchingRequest request) {
         List<Wanted> criteria = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        boolean experience = false;
         for (MatchingCriterionRequest criterion : request.criteriaOrEmpty()) {
             MatchingCategory category = Objects.requireNonNull(criterion.category(), "category");
             String name = clean(criterion.name());
-            if (category == MatchingCategory.EXPERIENCE) {
-                if (experience) {
-                    throw new BusinessRuleException(EXPERIENCE_ONCE);
-                }
-                experience = true;
-                name = name.isEmpty() ? EXPERIENCE_NAME : name;
-            } else {
-                if (name.isEmpty()) {
-                    throw new BusinessRuleException(NEEDS_A_NAME);
-                }
-                if (criterion.requirement() == null) {
-                    throw new BusinessRuleException("Say whether " + name + " is a must-have or preferred.");
-                }
+            if (name.isEmpty()) {
+                throw new BusinessRuleException(NEEDS_A_NAME);
+            }
+            if (criterion.requirement() == null) {
+                throw new BusinessRuleException("Say whether " + name + " is a must-have or preferred.");
             }
             // Bean validation says the same on every HTTP path; this covers callers that skip it.
             Integer weight = criterion.weightPercent();
@@ -282,10 +269,9 @@ public class IdealMatchingService {
                 throw new BusinessRuleException("Give " + name + " a weight between 1% and 100%.");
             }
             if (!seen.add(name.toLowerCase(Locale.ROOT))) {
-                throw new BusinessRuleException(name + " is listed twice. Weigh each skill, tool or experience once.");
+                throw new BusinessRuleException(name + " is listed twice. Weigh each skill once.");
             }
-            criteria.add(new Wanted(category, name, criterion.weightPercent(),
-                    category.hasRequirement() ? criterion.requirement() : null));
+            criteria.add(new Wanted(category, name, criterion.weightPercent(), criterion.requirement()));
         }
         return criteria;
     }

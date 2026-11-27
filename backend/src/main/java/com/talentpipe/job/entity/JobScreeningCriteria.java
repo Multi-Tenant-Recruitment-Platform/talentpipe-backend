@@ -45,9 +45,9 @@ public class JobScreeningCriteria extends BaseEntity {
     @Column(name = "category", nullable = false, length = 20)
     private MatchingCategory category;
 
-    /** Must-have or preferred, for skills and tools; {@code null} for experience (V27). */
+    /** Must-have or preferred (V27); every criterion says which since skills alone are weighted (V28). */
     @Enumerated(EnumType.STRING)
-    @Column(name = "requirement", length = 20)
+    @Column(name = "requirement", nullable = false, length = 20)
     private MatchingRequirement requirement;
 
     /** The order the recruiter put the criteria in (V27). */
@@ -67,7 +67,7 @@ public class JobScreeningCriteria extends BaseEntity {
     /**
      * @param weight      the share of the 100%, as a fraction above 0 and at most 1;
      *                    {@code null} while a draft has not decided it
-     * @param requirement required for skills and tools, {@code null} for experience
+     * @param requirement must-have or preferred
      */
     public JobScreeningCriteria(UUID tenantId, UUID jobId, MatchingCategory category, String name,
                                 BigDecimal weight, MatchingRequirement requirement, int position) {
@@ -76,7 +76,7 @@ public class JobScreeningCriteria extends BaseEntity {
         this.category = Objects.requireNonNull(category, "category");
         this.name = Objects.requireNonNull(name, "name");
         this.weight = weight;
-        this.requirement = category.hasRequirement() ? Objects.requireNonNull(requirement, "requirement") : null;
+        this.requirement = Objects.requireNonNull(requirement, "requirement");
         this.position = position;
     }
 

@@ -10,9 +10,10 @@ import java.util.UUID;
  *
  * <p>{@code criteriaWeights} is exactly the AI service's {@code criteria_weights}
  * — a name and a fraction above 0 and at most 1, the fractions adding up to 1.
- * The rest is context the prompt can use: which criteria are must-haves, the
- * tools and technologies, the education and degree types asked for, and
- * nice-to-have certifications, none of them weighted. With matching off, {@code criteriaWeights} is empty and
+ * Only skills are weighted (V28). The rest is context the prompt can use: which
+ * skills are must-haves, the tools and technologies, the minimum experience,
+ * the education and degree types asked for, and nice-to-have certifications,
+ * none of them weighted. With matching off, {@code criteriaWeights} is empty and
  * screening falls back to its default dimensions.</p>
  *
  * @param enabled whether the vacancy screens against its own weighted profile

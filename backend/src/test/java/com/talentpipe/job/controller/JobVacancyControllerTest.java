@@ -786,13 +786,13 @@ class JobVacancyControllerTest {
     @Test
     void idealMatching_isReadableByAnyCompanyMemberWhoSeesTheVacancy() throws Exception {
         when(idealMatching.get(WORKS_ON_IT, VACANCY)).thenReturn(new IdealMatchingResponse(true, true,
-                List.of(new IdealMatchingResponse.Criterion(UUID.randomUUID(), MatchingCategory.TOOL, "Docker", 100,
+                List.of(new IdealMatchingResponse.Criterion(UUID.randomUUID(), MatchingCategory.TECHNICAL_SKILL, "Java", 100,
                         MatchingRequirement.MUST_HAVE, 0)),
                 100, List.of("Computer Science"), List.of()));
 
         mockMvc.perform(get("/api/v1/jobs/{id}/ideal-matching", VACANCY).with(as("INTERVIEWER")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.criteria[0].name").value("Docker"))
+                .andExpect(jsonPath("$.criteria[0].name").value("Java"))
                 .andExpect(jsonPath("$.criteria[0].requirement").value("MUST_HAVE"))
                 .andExpect(jsonPath("$.totalWeightPercent").value(100));
     }
@@ -812,7 +812,7 @@ class JobVacancyControllerTest {
 
     @Test
     void replaceIdealMatching_withAWeightOverAHundred_isRejectedFieldByField() throws Exception {
-        Map<String, Object> criterion = Map.of("category", "TOOL", "name", "Docker", "weightPercent", 140,
+        Map<String, Object> criterion = Map.of("category", "TECHNICAL_SKILL", "name", "Java", "weightPercent", 140,
                 "requirement", "MUST_HAVE");
 
         mockMvc.perform(json(put("/api/v1/jobs/{id}/ideal-matching", VACANCY),
@@ -850,9 +850,8 @@ class JobVacancyControllerTest {
         when(idealMatching.screeningProfile(SEES_ALL, VACANCY)).thenReturn(new ScreeningProfileResponse(
                 VACANCY, true, false, "Backend Engineer", "Summary", "Description",
                 List.of(new ScreeningProfileResponse.CriterionWeight("Java", 0.6),
-                        new ScreeningProfileResponse.CriterionWeight("Docker", 0.4)),
-                List.of("Java"), List.of("Docker"), List.of("Docker", "Git"), 3, "Bachelor’s degree",
-                List.of("Computer Science"),
+                        new ScreeningProfileResponse.CriterionWeight("Kafka", 0.4)),
+                List.of("Java"), List.of("Kafka"), List.of("Docker"), 3, "Bachelor’s degree", List.of("Computer Science"),
                 List.of("AWS Solutions Architect")));
 
         mockMvc.perform(get("/api/v1/jobs/{id}/screening-profile", VACANCY).with(as("HR_MANAGER")))
@@ -860,7 +859,7 @@ class JobVacancyControllerTest {
                 .andExpect(jsonPath("$.criteriaWeights[0].name").value("Java"))
                 .andExpect(jsonPath("$.criteriaWeights[0].weight").value(0.6))
                 .andExpect(jsonPath("$.mustHave[0]").value("Java"))
-                .andExpect(jsonPath("$.toolsAndTechnologies[1]").value("Git"));
+                .andExpect(jsonPath("$.toolsAndTechnologies[0]").value("Docker"));
     }
 
     // ----------------------------------------------------------------- helpers

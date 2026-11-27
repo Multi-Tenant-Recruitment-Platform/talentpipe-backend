@@ -62,16 +62,15 @@ class IdealMatchingServiceTest {
     @Test
     void prepare_putsTheSwitchAndListsOnTheVacancy_andReturnsTheCriteriaInOrder() {
         List<IdealMatchingService.Wanted> criteria = service.prepare(vacancy, profile(true,
-                skill("Java", 40, MatchingRequirement.MUST_HAVE),
-                tool("Docker", 30, MatchingRequirement.PREFERRED),
-                experience(30)));
+                skill("Java", 60, MatchingRequirement.MUST_HAVE),
+                skill("Kafka", 40, MatchingRequirement.PREFERRED)));
 
         assertThat(vacancy.isIdealMatchingEnabled()).isTrue();
         assertThat(vacancy.getMatchingDegreeTypes()).containsExactly("Computer Science");
         assertThat(vacancy.getMatchingNiceToHaveCertifications()).containsExactly("AWS Solutions Architect");
-        assertThat(criteria).extracting(IdealMatchingService.Wanted::name)
-                .containsExactly("Java", "Docker", IdealMatchingService.EXPERIENCE_NAME);
-        assertThat(criteria.get(2).requirement()).isNull();
+        assertThat(criteria).extracting(IdealMatchingService.Wanted::name).containsExactly("Java", "Kafka");
+        assertThat(criteria).extracting(IdealMatchingService.Wanted::requirement)
+                .containsExactly(MatchingRequirement.MUST_HAVE, MatchingRequirement.PREFERRED);
     }
 
     @Test
@@ -84,12 +83,12 @@ class IdealMatchingServiceTest {
     }
 
     @Test
-    void prepare_refusesTheSameNameTwice_ignoringCase_acrossSkillsAndTools() {
+    void prepare_refusesTheSameSkillTwice_ignoringCase() {
         assertThatThrownBy(() -> service.prepare(vacancy, profile(true,
                 skill("Git", 50, MatchingRequirement.MUST_HAVE),
-                tool("git", 50, MatchingRequirement.PREFERRED))))
+                skill("git", 50, MatchingRequirement.PREFERRED))))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessage("git is listed twice. Weigh each skill, tool or experience once.");
+                .hasMessage("git is listed twice. Weigh each skill once.");
     }
 
     @Test
@@ -98,12 +97,6 @@ class IdealMatchingServiceTest {
                 .hasMessage(IdealMatchingService.NEEDS_A_NAME);
         assertThatThrownBy(() -> service.prepare(vacancy, profile(true, skill("Java", 50, null))))
                 .hasMessage("Say whether Java is a must-have or preferred.");
-    }
-
-    @Test
-    void prepare_takesExperienceOnce() {
-        assertThatThrownBy(() -> service.prepare(vacancy, profile(true, experience(50), experience(50))))
-                .hasMessage(IdealMatchingService.EXPERIENCE_ONCE);
     }
 
     @Test
@@ -126,7 +119,7 @@ class IdealMatchingServiceTest {
     @Test
     void aDraft_mayBeSavedWithAnyTotal_andWeightsNotDecidedYet() {
         List<IdealMatchingService.Wanted> criteria = service.prepare(vacancy, profile(true,
-                skill("Java", 40, MatchingRequirement.MUST_HAVE), tool("Docker", null, MatchingRequirement.PREFERRED)));
+                skill("Java", 40, MatchingRequirement.MUST_HAVE), skill("Kafka", null, MatchingRequirement.PREFERRED)));
 
         service.store(vacancy, criteria);
 
@@ -153,7 +146,7 @@ class IdealMatchingServiceTest {
     @Test
     void publishing_needsTheWeightsToTotalExactlyAHundred() {
         assertThatThrownBy(() -> IdealMatchingService.requireComplete(profile(true,
-                skill("Java", 50, MatchingRequirement.MUST_HAVE), tool("Docker", 35, MatchingRequirement.PREFERRED)),
+                skill("Java", 50, MatchingRequirement.MUST_HAVE), skill("Kafka", 35, MatchingRequirement.PREFERRED)),
                 IdealMatchingService.NOT_READY_TO_PUBLISH))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("This vacancy can't be published yet: the ideal candidate weights add up to 85%; "
@@ -163,12 +156,12 @@ class IdealMatchingServiceTest {
     @Test
     void publishing_needsEveryCriterionWeighed_andAtLeastOne() {
         assertThatThrownBy(() -> IdealMatchingService.requireComplete(profile(true,
-                skill("Java", 100, MatchingRequirement.MUST_HAVE), tool("Docker", null, MatchingRequirement.PREFERRED)),
+                skill("Java", 100, MatchingRequirement.MUST_HAVE), skill("Kafka", null, MatchingRequirement.PREFERRED)),
                 IdealMatchingService.NOT_READY_TO_PUBLISH))
-                .hasMessageContaining("give Docker a weight or remove it");
+                .hasMessageContaining("give Kafka a weight or remove it");
         assertThatThrownBy(() -> IdealMatchingService.requireComplete(profile(true),
                 IdealMatchingService.NOT_READY_TO_PUBLISH))
-                .hasMessageContaining("weigh at least one skill, tool or relevant experience");
+                .hasMessageContaining("weigh at least one skill for the ideal candidate");
     }
 
     @Test
@@ -178,7 +171,8 @@ class IdealMatchingServiceTest {
         assertThatCode(() -> IdealMatchingService.requireComplete((IdealMatchingRequest) null, IdealMatchingService.NOT_READY_TO_PUBLISH))
                 .doesNotThrowAnyException();
         assertThatCode(() -> IdealMatchingService.requireComplete(profile(true,
-                skill("Java", 60, MatchingRequirement.MUST_HAVE), experience(40)), IdealMatchingService.NOT_READY_TO_PUBLISH))
+                skill("Java", 60, MatchingRequirement.MUST_HAVE), skill("Kafka", 40, MatchingRequirement.PREFERRED)),
+                IdealMatchingService.NOT_READY_TO_PUBLISH))
                 .doesNotThrowAnyException();
     }
 
@@ -222,7 +216,7 @@ class IdealMatchingServiceTest {
         service.prepare(vacancy, profile(true));
         storedCriteria(
                 row(MatchingCategory.TECHNICAL_SKILL, "Java", "0.600", MatchingRequirement.MUST_HAVE, 0),
-                row(MatchingCategory.EXPERIENCE, "Relevant experience", "0.250", null, 1));
+                row(MatchingCategory.TECHNICAL_SKILL, "Kafka", "0.250", MatchingRequirement.PREFERRED, 1));
 
         IdealMatchingResponse response = service.get(VIEWER, vacancy.getId());
 
@@ -232,25 +226,24 @@ class IdealMatchingServiceTest {
     }
 
     @Test
-    void screeningProfile_handsOverWeightsAsFractions_mustHaves_andUnweightedContext() {
+    void screeningProfile_weighsSkillsOnly_andHandsOverToolsExperienceAndEducationAsContext() {
         when(access.require(VIEWER, vacancy.getId())).thenReturn(vacancy);
         service.prepare(vacancy, profile(true));
         storedCriteria(
-                row(MatchingCategory.TECHNICAL_SKILL, "Java", "0.500", MatchingRequirement.MUST_HAVE, 0),
-                row(MatchingCategory.TOOL, "Docker", "0.250", MatchingRequirement.PREFERRED, 1),
-                row(MatchingCategory.EXPERIENCE, "Relevant experience", "0.250", null, 2));
+                row(MatchingCategory.TECHNICAL_SKILL, "Java", "0.750", MatchingRequirement.MUST_HAVE, 0),
+                row(MatchingCategory.TECHNICAL_SKILL, "Kafka", "0.250", MatchingRequirement.PREFERRED, 1));
 
         ScreeningProfileResponse profile = service.screeningProfile(VIEWER, vacancy.getId());
 
         assertThat(profile.enabled()).isTrue();
         assertThat(profile.criteriaWeights()).containsExactly(
-                new ScreeningProfileResponse.CriterionWeight("Java", 0.5),
-                new ScreeningProfileResponse.CriterionWeight("Docker", 0.25),
-                new ScreeningProfileResponse.CriterionWeight("Relevant experience", 0.25));
+                new ScreeningProfileResponse.CriterionWeight("Java", 0.75),
+                new ScreeningProfileResponse.CriterionWeight("Kafka", 0.25));
         assertThat(profile.mustHave()).containsExactly("Java");
-        assertThat(profile.preferred()).containsExactly("Docker");
-        // Context, read from the vacancy's candidate requirements.
+        assertThat(profile.preferred()).containsExactly("Kafka");
+        // Unweighted context, read from the vacancy's candidate requirements.
         assertThat(profile.toolsAndTechnologies()).containsExactly("Docker", "Git");
+        assertThat(profile.minimumExperienceYears()).isEqualTo(4);
         assertThat(profile.acceptedDegreeTypes()).containsExactly("Computer Science");
         assertThat(profile.niceToHaveCertifications()).containsExactly("AWS Solutions Architect");
         assertThat(profile.educationLevel()).isEqualTo("Bachelor’s degree");
@@ -276,14 +269,6 @@ class IdealMatchingServiceTest {
 
     private static MatchingCriterionRequest skill(String name, Integer weight, MatchingRequirement requirement) {
         return new MatchingCriterionRequest(MatchingCategory.TECHNICAL_SKILL, name, weight, requirement);
-    }
-
-    private static MatchingCriterionRequest tool(String name, Integer weight, MatchingRequirement requirement) {
-        return new MatchingCriterionRequest(MatchingCategory.TOOL, name, weight, requirement);
-    }
-
-    private static MatchingCriterionRequest experience(Integer weight) {
-        return new MatchingCriterionRequest(MatchingCategory.EXPERIENCE, null, weight, null);
     }
 
     private JobScreeningCriteria row(MatchingCategory category, String name, String weight,
