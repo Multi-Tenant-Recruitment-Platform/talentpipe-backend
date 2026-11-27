@@ -29,7 +29,10 @@ import org.testcontainers.utility.DockerImageName;
                 // All test requests share one IP (127.0.0.1); raise the login
                 // rate limit so the suite is deterministic. Dedicated lockout /
                 // rate-limit tests can still assert the behavior explicitly.
-                "talentpipe.security.login-rate-limit.max-per-minute=10000"
+                "talentpipe.security.login-rate-limit.max-per-minute=10000",
+                // No AI service runs under test: applications wait unscreened unless a
+                // test switches a screener on for itself.
+                "talentpipe.ai.screening-mode=off"
         })
 @Testcontainers(disabledWithoutDocker = true)
 public abstract class AbstractIntegrationTest {
