@@ -2,6 +2,7 @@ package com.talentpipe.demo;
 
 import com.talentpipe.application.dto.UpdateApplicationStatusRequest;
 import com.talentpipe.application.entity.ApplicationStatus;
+import com.talentpipe.application.service.ApplicantViewer;
 import com.talentpipe.application.service.ApplicationService;
 import com.talentpipe.auth.dto.RoleRequest;
 import com.talentpipe.auth.entity.InvitationToken;
@@ -861,7 +862,9 @@ public class DemoDataSeeder implements ApplicationRunner {
     private void apply(UUID candidateId, Posted vacancy, ApplicationStatus status, int daysAfterPublishing) {
         UUID applicationId = applicationService.submit(candidateId, vacancy.id.toString()).id();
         if (status != ApplicationStatus.APPLIED) {
-            applicationService.updateStatus(vacancy.tenantId, applicationId, new UpdateApplicationStatusRequest(status));
+            // Seeded as the vacancy's creator, who sees every applicant in the company.
+            ApplicantViewer seeder = new ApplicantViewer(vacancy.tenantId, vacancy.viewer.userId(), true);
+            applicationService.updateStatus(seeder, applicationId, new UpdateApplicationStatusRequest(status));
         }
         applied.add(new Applied(applicationId, vacancy, daysAfterPublishing));
     }

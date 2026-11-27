@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,7 +22,9 @@ import com.talentpipe.pipeline.dto.PipelineTemplateRequest;
 import com.talentpipe.pipeline.dto.PipelineTemplateResponse;
 import com.talentpipe.pipeline.dto.PipelineTemplateSummaryResponse;
 import com.talentpipe.pipeline.service.PipelineTemplateService;
+import com.talentpipe.security.Authorities;
 import com.talentpipe.security.Permission;
+import com.talentpipe.security.UserPrincipal;
 import com.talentpipe.testsupport.WebMvcSecurityTestConfig;
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +37,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -249,8 +254,60 @@ class PipelineTemplateControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    // ------------------------------------- permission, not role name (ADR-9)
+
+    @Test
+    void writingTemplates_asACustomRoleThatManagesThem_isAllowed() throws Exception {
+        when(templateService.create(eq(TENANT_ID), eq(USER_ID), any(PipelineTemplateRequest.class)))
+                .thenReturn(PipelineTemplateFixtures.sampleResponse(TEMPLATE_ID));
+        RequestPostProcessor templateEditor = asMemberWith(USER_ID, TENANT_ID, Permission.PIPELINE_TEMPLATES_MANAGE);
+
+        mockMvc.perform(json(post("/api/v1/pipeline-templates"), PipelineTemplateFixtures.validRequest())
+                        .with(templateEditor))
+                .andExpect(status().isCreated());
+        mockMvc.perform(delete("/api/v1/pipeline-templates/{id}", TEMPLATE_ID).with(templateEditor))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void aCustomRoleThatManagesTemplates_alsoSeesArchivedOnes() throws Exception {
+        when(templateService.list(eq(TENANT_ID), any(), anyBoolean(), anyBoolean(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/api/v1/pipeline-templates")
+                        .with(asMemberWith(USER_ID, TENANT_ID, Permission.PIPELINE_TEMPLATES_MANAGE)))
+                .andExpect(status().isOk());
+
+        verify(templateService).list(eq(TENANT_ID), any(), anyBoolean(), eq(true), any(Pageable.class));
+    }
+
+    /**
+     * A Recruiter whose role an Owner edited to drop vacancy editing keeps the
+     * transitional ROLE_HR_MANAGER authority. It used to keep templates open.
+     */
+    @Test
+    void theOldRoleNameAlone_opensNoTemplate() throws Exception {
+        RequestPostProcessor editedRecruiter = legacyRoleOnly("HR_MANAGER");
+
+        mockMvc.perform(get("/api/v1/pipeline-templates").with(editedRecruiter))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/pipeline-templates/{id}", TEMPLATE_ID).with(editedRecruiter))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(json(post("/api/v1/pipeline-templates"), PipelineTemplateFixtures.validRequest())
+                        .with(legacyRoleOnly("COMPANY_ADMIN")))
+                .andExpect(status().isForbidden());
+    }
+
     private static RequestPostProcessor as(String role) {
         return asUser(USER_ID, TENANT_ID, role);
+    }
+
+    /** A company member holding no permission at all, only the transitional fixed-role authority. */
+    private static RequestPostProcessor legacyRoleOnly(String role) {
+        UserPrincipal principal = new UserPrincipal(USER_ID, TENANT_ID, role, "member@example.com");
+        return authentication(new UsernamePasswordAuthenticationToken(principal, null, List.of(
+                new SimpleGrantedAuthority(Authorities.COMPANY_MEMBER),
+                new SimpleGrantedAuthority(Authorities.ROLE_PREFIX + role))));
     }
 
     private MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder req, Object body) throws Exception {

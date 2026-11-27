@@ -338,7 +338,17 @@ org chart.
   the new `roleId`, `roleName` and `permissions`. Remove both in sprint 3
   (`TODO(sprint3)` in `Authorities`).
 - `EndpointAuthorizationDriftTest` fails the build if an endpoint outside
-  `/auth` and `/public` has no authorization annotation.
+  `/auth` and `/public` has no authorization annotation, or if a company
+  endpoint checks one of the old role names.
+- **Why the old names are banned on endpoints (2026-11-27).** Pipeline
+  templates and the applicant list/status change were still on
+  `hasAnyRole(...)` after the merge. The old authorities follow the default
+  role, not its permissions, so every Interviewer could list and reject every
+  applicant in the company, a Recruiter kept both after an Owner took the
+  permissions off the role, and a custom role given `applications.manage` or
+  `pipeline.templates.manage` got `403`. Both now check permissions, and the
+  drift test keeps it that way. The `ROLE_*` authorities themselves still go
+  in sprint 3.
 
 ### Moving a branch from roles to permissions
 

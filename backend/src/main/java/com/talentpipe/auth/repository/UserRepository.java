@@ -65,6 +65,21 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findAllByTenantIdAndRoleNameIn(UUID tenantId, Collection<RoleName> roles);
 
     /**
+     * Active members of one company whose role holds {@code permission}. The
+     * Owner role holds every permission without storing them, so it always
+     * matches. For deciding who hears about something, by what they may do
+     * rather than what their role is called.
+     */
+    @Query("""
+            select u from User u join u.tenantRole r
+            where u.tenantId = :tenantId
+              and u.status = com.talentpipe.auth.entity.UserStatus.ACTIVE
+              and (r.systemRole = com.talentpipe.auth.entity.SystemRole.OWNER
+                   or :permission member of r.permissionKeys)
+            """)
+    List<User> findActiveMembersHolding(@Param("tenantId") UUID tenantId, @Param("permission") String permission);
+
+    /**
      * Active members of one company whose first name, last name, full name or
      * email starts with {@code prefix}, by name. {@code prefix} is already
      * lower-cased, has LIKE's wildcards escaped with {@code \}, and ends in

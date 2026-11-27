@@ -31,12 +31,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *   <li>Every endpoint outside the public and authentication paths says who
  *       may call it. Without an annotation, "authenticated" would be the only
  *       check — a candidate's token could call a company endpoint.</li>
+ *   <li>No endpoint checks one of the old fixed company roles. Those
+ *       authorities outlive any edit an Owner makes to the Recruiter or
+ *       Interviewer role, so a check on them ignores the role editor
+ *       (ADR-9).</li>
  * </ol>
  */
 class EndpointAuthorizationDriftTest {
 
     /** Paths that are deliberately open, or only need a valid token (/auth/me, /auth/logout). */
     private static final List<String> UNGUARDED_PREFIXES = List.of("/api/v1/public", "/api/v1/auth");
+
+    /** The transitional company role names. Candidates and platform operators keep their role checks. */
+    private static final List<String> LEGACY_COMPANY_ROLES = List.of("COMPANY_ADMIN", "HR_MANAGER", "INTERVIEWER");
 
     @Test
     void everyRequirePermissionNamesACataloguedPermission() throws Exception {
@@ -67,6 +74,22 @@ class EndpointAuthorizationDriftTest {
         }
         assertThat(unguarded)
                 .as("endpoints with no @RequirePermission, @RequireCompanyMember or @PreAuthorize")
+                .isEmpty();
+    }
+
+    @Test
+    void noEndpointChecksAnOldCompanyRole() throws Exception {
+        List<String> found = new ArrayList<>();
+        for (Class<?> controller : controllers()) {
+            legacyRoleIn(controller, controller.getSimpleName(), found);
+            for (Method method : controller.getDeclaredMethods()) {
+                if (isHandler(method)) {
+                    legacyRoleIn(method, controller.getSimpleName() + "." + method.getName(), found);
+                }
+            }
+        }
+        assertThat(found)
+                .as("endpoints guarded by a fixed company role; use @RequirePermission or @RequireCompanyMember")
                 .isEmpty();
     }
 
@@ -103,20 +126,29 @@ class EndpointAuthorizationDriftTest {
     /**
      * Whoever can create a vacancy must be able to read the templates it is
      * created from, or the job form's template picker is empty for them. The
-     * writes stay with the company admin, so a role that creates vacancies
-     * never edits the pipelines other vacancies follow.
+     * writes need {@code pipeline.templates.manage}, so a role that creates
+     * vacancies never edits the pipelines other vacancies follow.
      */
     @Test
-    void pipelineTemplatesAreReadableByVacancyCreators_butOnlyAdminsChangeThem() {
+    void pipelineTemplatesAreReadableByVacancyCreators_butOnlyTemplateManagersChangeThem() {
         for (Method method : PipelineTemplateController.class.getDeclaredMethods()) {
-            PreAuthorize guard = AnnotatedElementUtils.findMergedAnnotation(method, PreAuthorize.class);
-            if (!isHandler(method) || guard == null) {
+            if (!isHandler(method)) {
                 continue;
             }
             boolean read = AnnotatedElementUtils.hasAnnotation(method, GetMapping.class);
-            assertThat(guard.value().contains(Permission.Keys.JOBS_MANAGE))
-                    .as("%s %s jobs.manage", method.getName(), read ? "allows" : "must not allow")
-                    .isEqualTo(read);
+            if (read) {
+                PreAuthorize guard = AnnotatedElementUtils.findMergedAnnotation(method, PreAuthorize.class);
+                assertThat(guard).as("%s is guarded", method.getName()).isNotNull();
+                assertThat(guard.value())
+                        .as("%s allows jobs.manage and pipeline.templates.manage", method.getName())
+                        .contains(Permission.Keys.JOBS_MANAGE, Permission.Keys.PIPELINE_TEMPLATES_MANAGE);
+            } else {
+                RequirePermission guard = method.getAnnotation(RequirePermission.class);
+                assertThat(guard).as("%s needs a permission", method.getName()).isNotNull();
+                assertThat(guard.value())
+                        .as("%s needs pipeline.templates.manage", method.getName())
+                        .isEqualTo(Permission.Keys.PIPELINE_TEMPLATES_MANAGE);
+            }
         }
     }
 
@@ -126,6 +158,14 @@ class EndpointAuthorizationDriftTest {
         RequirePermission annotation = element.getAnnotation(RequirePermission.class);
         if (annotation != null && Permission.fromKey(annotation.value()).isEmpty()) {
             problems.add(where + " -> '" + annotation.value() + "'");
+        }
+    }
+
+    /** Any @PreAuthorize on the element (direct or through a meta-annotation) naming a fixed company role. */
+    private static void legacyRoleIn(AnnotatedElement element, String where, List<String> found) {
+        PreAuthorize guard = AnnotatedElementUtils.findMergedAnnotation(element, PreAuthorize.class);
+        if (guard != null && LEGACY_COMPANY_ROLES.stream().anyMatch(guard.value()::contains)) {
+            found.add(where + " -> " + guard.value());
         }
     }
 

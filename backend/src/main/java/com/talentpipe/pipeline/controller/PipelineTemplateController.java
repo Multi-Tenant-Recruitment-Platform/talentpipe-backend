@@ -5,7 +5,9 @@ import com.talentpipe.pipeline.dto.PipelineTemplateRequest;
 import com.talentpipe.pipeline.dto.PipelineTemplateResponse;
 import com.talentpipe.pipeline.dto.PipelineTemplateSummaryResponse;
 import com.talentpipe.pipeline.service.PipelineTemplateService;
+import com.talentpipe.security.Authorities;
 import com.talentpipe.security.Permission;
+import com.talentpipe.security.RequirePermission;
 import com.talentpipe.security.UserPrincipal;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -15,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,14 +40,14 @@ public class PipelineTemplateController {
     private static final int MAX_PAGE_SIZE = 100;
 
     /**
-     * Who may read templates: the old admin and recruiter roles, and anyone
-     * whose role can create vacancies, because a vacancy cannot be created
-     * without choosing a template. Readers other than the company admin see
-     * active templates only (the service hides archived ones), and every
-     * write stays with the company admin.
+     * Who may read templates: whoever manages them, and anyone whose role can
+     * create vacancies, because a vacancy cannot be created without choosing a
+     * template. Readers who cannot manage templates see active ones only (the
+     * service hides archived ones). Every write needs
+     * {@code pipeline.templates.manage}.
      */
-    static final String CAN_READ_TEMPLATES =
-            "hasAnyRole('COMPANY_ADMIN', 'HR_MANAGER') or hasAuthority('" + Permission.Keys.JOBS_MANAGE + "')";
+    static final String CAN_READ_TEMPLATES = "hasAuthority('" + Permission.Keys.PIPELINE_TEMPLATES_MANAGE
+            + "') or hasAuthority('" + Permission.Keys.JOBS_MANAGE + "')";
 
     private final PipelineTemplateService templateService;
 
@@ -54,7 +57,7 @@ public class PipelineTemplateController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('COMPANY_ADMIN')")
+    @RequirePermission(Permission.Keys.PIPELINE_TEMPLATES_MANAGE)
     public PipelineTemplateResponse create(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody PipelineTemplateRequest request) {
@@ -64,28 +67,29 @@ public class PipelineTemplateController {
     @GetMapping
     @PreAuthorize(CAN_READ_TEMPLATES)
     public PageResponse<PipelineTemplateSummaryResponse> list(
+            Authentication authentication,
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "includeArchived", defaultValue = "false") boolean includeArchived,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
         Pageable pageable = createPageable(page, size);
-        boolean isAdmin = isCompanyAdmin(principal);
-        Page<PipelineTemplateSummaryResponse> result =
-                templateService.list(principal.tenantId(), search, includeArchived, isAdmin, pageable);
+        Page<PipelineTemplateSummaryResponse> result = templateService.list(
+                principal.tenantId(), search, includeArchived, managesTemplates(authentication), pageable);
         return PageResponse.from(result);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize(CAN_READ_TEMPLATES)
     public PipelineTemplateResponse get(
+            Authentication authentication,
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable("id") UUID id) {
-        return templateService.get(principal.tenantId(), id, isCompanyAdmin(principal));
+        return templateService.get(principal.tenantId(), id, managesTemplates(authentication));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('COMPANY_ADMIN')")
+    @RequirePermission(Permission.Keys.PIPELINE_TEMPLATES_MANAGE)
     public PipelineTemplateResponse update(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable("id") UUID id,
@@ -94,7 +98,7 @@ public class PipelineTemplateController {
     }
 
     @PostMapping("/{id}/archive")
-    @PreAuthorize("hasRole('COMPANY_ADMIN')")
+    @RequirePermission(Permission.Keys.PIPELINE_TEMPLATES_MANAGE)
     public PipelineTemplateResponse archive(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable("id") UUID id) {
@@ -103,7 +107,7 @@ public class PipelineTemplateController {
 
     @PostMapping("/{id}/duplicate")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('COMPANY_ADMIN')")
+    @RequirePermission(Permission.Keys.PIPELINE_TEMPLATES_MANAGE)
     public PipelineTemplateResponse duplicate(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable("id") UUID id) {
@@ -112,7 +116,7 @@ public class PipelineTemplateController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasRole('COMPANY_ADMIN')")
+    @RequirePermission(Permission.Keys.PIPELINE_TEMPLATES_MANAGE)
     public void delete(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable("id") UUID id) {
@@ -125,7 +129,11 @@ public class PipelineTemplateController {
         return PageRequest.of(validatedPage, validatedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
-    private boolean isCompanyAdmin(UserPrincipal principal) {
-        return "COMPANY_ADMIN".equalsIgnoreCase(principal.role());
+    /**
+     * Whether the caller manages templates right now, so also sees archived
+     * ones. From the current permissions, not the role name in the token.
+     */
+    private static boolean managesTemplates(Authentication authentication) {
+        return Authorities.has(authentication, Permission.PIPELINE_TEMPLATES_MANAGE);
     }
 }
