@@ -5,7 +5,6 @@ import com.talentpipe.application.dto.UpdateApplicationStatusRequest;
 import com.talentpipe.application.entity.Application;
 import com.talentpipe.application.entity.ApplicationStatus;
 import com.talentpipe.application.repository.ApplicationRepository;
-import com.talentpipe.auth.entity.RoleName;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.repository.UserRepository;
 import com.talentpipe.candidate.repository.CandidateRepository;
@@ -16,10 +15,13 @@ import com.talentpipe.job.dto.VacancyApplicationTarget;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.mapper.JobSlug;
 import com.talentpipe.job.repository.JobVacancyRepository;
+import com.talentpipe.job.service.VacancyAccess;
 import com.talentpipe.job.service.VacancyApplicationGate;
 import com.talentpipe.notification.entity.NotificationType;
 import com.talentpipe.notification.event.NotificationRequestedEvent;
+import com.talentpipe.security.Permission;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ public class ApplicationService {
     private final CandidateCvService candidateCvService;
     private final VacancyApplicationGate vacancyApplicationGate;
     private final JobVacancyRepository vacancyRepository;
+    private final VacancyAccess vacancyAccess;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher events;
 
@@ -43,6 +46,7 @@ public class ApplicationService {
                               CandidateCvService candidateCvService,
                               VacancyApplicationGate vacancyApplicationGate,
                               JobVacancyRepository vacancyRepository,
+                              VacancyAccess vacancyAccess,
                               UserRepository userRepository,
                               ApplicationEventPublisher events) {
         this.applicationRepository = applicationRepository;
@@ -50,6 +54,7 @@ public class ApplicationService {
         this.candidateCvService = candidateCvService;
         this.vacancyApplicationGate = vacancyApplicationGate;
         this.vacancyRepository = vacancyRepository;
+        this.vacancyAccess = vacancyAccess;
         this.userRepository = userRepository;
         this.events = events;
     }
@@ -100,17 +105,39 @@ public class ApplicationService {
         return toResponse(saved, vacancyTitle(saved.getJobId()));
     }
 
+    /**
+     * The company's applicants the viewer may see: all of them with
+     * {@code applications.view.all}, otherwise only those who applied to a
+     * vacancy the viewer works on (the vacancy rule of ADR-11).
+     */
     @Transactional(readOnly = true)
-    public List<ApplicationResponse> forTenant(UUID tenantId) {
-        return applicationRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId)
-            .stream().map(application -> toResponse(application,
-                vacancyTitle(application.getJobId()))).toList();
+    public List<ApplicationResponse> forTenant(ApplicantViewer viewer) {
+        List<Application> applications;
+        if (viewer.seesAllApplicants()) {
+            applications = applicationRepository.findAllByTenantIdOrderByCreatedAtDesc(viewer.tenantId());
+        } else {
+            Set<UUID> vacancies = vacancyAccess.vacancyIdsWorkedOnBy(viewer.tenantId(), viewer.userId());
+            applications = vacancies.isEmpty()
+                    ? List.of()
+                    : applicationRepository.findAllByTenantIdAndJobIdInOrderByCreatedAtDesc(viewer.tenantId(), vacancies);
+        }
+        return applications.stream()
+                .map(application -> toResponse(application, vacancyTitle(application.getJobId())))
+                .toList();
     }
 
+    /**
+     * Moves an applicant on. The controller has checked
+     * {@code applications.manage}; the applicant must also be one the viewer
+     * may see, or the answer is 404, as for another company's applicant.
+     */
     @Transactional
-    public ApplicationResponse updateStatus(UUID tenantId, UUID applicationId, UpdateApplicationStatusRequest request) {
+    public ApplicationResponse updateStatus(ApplicantViewer viewer, UUID applicationId,
+                                            UpdateApplicationStatusRequest request) {
         Application application = applicationRepository.findById(applicationId)
-                .filter(item -> item.getTenantId().equals(tenantId))
+                .filter(item -> item.getTenantId().equals(viewer.tenantId()))
+                .filter(item -> viewer.seesAllApplicants()
+                        || vacancyAccess.worksOn(viewer.tenantId(), viewer.userId(), item.getJobId()))
                 .orElseThrow(() -> new ResourceNotFoundException(APPLICATION_NOT_FOUND));
         if (request.status() == ApplicationStatus.WITHDRAWN) {
             throw new IllegalArgumentException("HR users cannot withdraw a candidate application");
@@ -123,9 +150,10 @@ public class ApplicationService {
         return toResponse(saved, vacancyTitle(saved.getJobId()));
     }
 
+    /** Tells the active members who see every applicant (by default the Owner and Recruiter roles). */
     private void notifyHiringTeam(Application application) {
-        List<User> recipients = userRepository.findAllByTenantIdAndRoleNameIn(
-                application.getTenantId(), List.of(RoleName.COMPANY_ADMIN, RoleName.HR_MANAGER));
+        List<User> recipients = userRepository.findActiveMembersHolding(
+                application.getTenantId(), Permission.APPLICATIONS_VIEW_ALL.key());
         for (User recipient : recipients) {
             events.publishEvent(NotificationRequestedEvent.forUser(
                     NotificationType.APPLICATION_WITHDRAWN,

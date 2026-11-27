@@ -61,27 +61,28 @@ needs a token of an active company user, whatever their role; a key such as
 | POST | `/jobs/{id}/close` | `jobs.publish` | `PUBLISHED → CLOSED`. Leaves the public board and stops new applications. `422` if not published. |
 | POST | `/jobs/{id}/archive` | `jobs.publish` | `CLOSED → ARCHIVED`. Leaves the active lists; the record is kept. `422` if not closed. |
 | POST | `/jobs/{id}/duplicate` | `jobs.manage` | Creates a new `DRAFT` pre-filled from this vacancy, from any status, with its hiring team and switches. `201` with the new vacancy; the source is unchanged. |
-| GET | `/pipeline-templates` | `COMPANY_ADMIN`, `HR_MANAGER`, or `jobs.manage` | The tenant's pipeline templates, newest first, paged (`page`, `size` ≤ 100). Filterable by `search` (name substring) and `includeArchived` (boolean, default false). Everyone but `COMPANY_ADMIN` sees active templates only, whatever `includeArchived` says — this is what the job form's template picker reads, so any role that can create vacancies can read it. Writes stay `COMPANY_ADMIN`. |
-| GET | `/pipeline-templates/{id}` | `COMPANY_ADMIN`, `HR_MANAGER`, or `jobs.manage` | One pipeline template with its stages in position order. `404` if not found, cross-tenant, or if archived and the caller is not `COMPANY_ADMIN`. |
-| POST | `/pipeline-templates` | `COMPANY_ADMIN` | Creates a new pipeline template with its ordered stages, benchmarks, and default thresholds (auto, manual, ideal matching switch), and `blindModeEnabled` (default `false`) — vacancies created from it start with that blind-mode setting. `201`. `400` if invalid structure, thresholds, or benchmarks; `409` if active template name exists in tenant. |
-| PUT | `/pipeline-templates/{id}` | `COMPANY_ADMIN` | Replaces a template's details, stages and thresholds in one transaction; the body carries the full stage list, which replaces the old one. `422` if template is archived. `409` only if the new name conflicts with another active template. Vacancies already created from it keep their own stages. |
-| POST | `/pipeline-templates/{id}/archive` | `COMPANY_ADMIN` | Archives an active template. Sets status to `ARCHIVED`. Archived templates cannot be selected for new jobs or edited. Idempotent. |
-| POST | `/pipeline-templates/{id}/duplicate` | `COMPANY_ADMIN` | Duplicates an existing template (its stages, thresholds, ideal matching and blind mode), appending `(Copy)` or `(Copy N)` to the name. `201`. Source template is unchanged. |
-| DELETE | `/pipeline-templates/{id}` | `COMPANY_ADMIN` | Permanently deletes a template and its stages. `204`. `404` if not found or cross-tenant. |
+| GET | `/pipeline-templates` | `pipeline.templates.manage` or `jobs.manage` | The tenant's pipeline templates, newest first, paged (`page`, `size` ≤ 100). Filterable by `search` (name substring) and `includeArchived` (boolean, default false). Without `pipeline.templates.manage` you see active templates only, whatever `includeArchived` says. This is what the job form's template picker reads, so any role that can create vacancies can read it. Writes need `pipeline.templates.manage`. |
+| GET | `/pipeline-templates/{id}` | `pipeline.templates.manage` or `jobs.manage` | One pipeline template with its stages in position order. `404` if not found, cross-tenant, or if archived and the caller lacks `pipeline.templates.manage`. |
+| POST | `/pipeline-templates` | `pipeline.templates.manage` | Creates a new pipeline template with its ordered stages, benchmarks, and default thresholds (auto, manual, ideal matching switch), and `blindModeEnabled` (default `false`) — vacancies created from it start with that blind-mode setting. `201`. `400` if invalid structure, thresholds, or benchmarks; `409` if active template name exists in tenant. |
+| PUT | `/pipeline-templates/{id}` | `pipeline.templates.manage` | Replaces a template's details, stages and thresholds in one transaction; the body carries the full stage list, which replaces the old one. `422` if template is archived. `409` only if the new name conflicts with another active template. Vacancies already created from it keep their own stages. |
+| POST | `/pipeline-templates/{id}/archive` | `pipeline.templates.manage` | Archives an active template. Sets status to `ARCHIVED`. Archived templates cannot be selected for new jobs or edited. Idempotent. |
+| POST | `/pipeline-templates/{id}/duplicate` | `pipeline.templates.manage` | Duplicates an existing template (its stages, thresholds, ideal matching and blind mode), appending `(Copy)` or `(Copy N)` to the name. `201`. Source template is unchanged. |
+| DELETE | `/pipeline-templates/{id}` | `pipeline.templates.manage` | Permanently deletes a template and its stages. `204`. `404` if not found or cross-tenant. |
 | GET | `/public/jobs` | public | Public job board: `PUBLISHED` vacancies across all companies, paged (`page`, `size` ≤ 50), filtered on the server — see [Public job search](#public-job-search). |
 | GET | `/public/jobs/filters` | public | Everything the board can be filtered by right now, each with its count: categories, locations, industries, employment and workplace types, and the span of stated pay per pay period and currency. |
 | GET | `/public/jobs/{slugOrId}` | public | One published advert in full, by the `slug` from a board card or by id. `404` unless it is currently published. |
 | POST | `/applications/jobs/{jobId}` | `CANDIDATE` | Submits one application to a published job. Duplicate submissions return `409`. |
 | GET | `/applications` | `CANDIDATE` | Lists the signed-in candidate's applications and current statuses. |
 | GET | `/applications/{applicationId}` | `CANDIDATE` | Gets one application owned by the signed-in candidate. |
-| DELETE | `/applications/{applicationId}` | `CANDIDATE` | Withdraws an application and notifies the tenant's company admins and HR managers. Idempotent when already withdrawn. |
-| GET | `/applications/tenant` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Lists applications belonging to the authenticated tenant. |
-| PATCH | `/applications/{applicationId}/status` | `COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER` | Updates status to `APPLIED`, `IN_REVIEW`, `SHORTLISTED`, or `REJECTED`. |
+| DELETE | `/applications/{applicationId}` | `CANDIDATE` | Withdraws an application and notifies the company's active members holding `applications.view.all` (by default Owners and Recruiters). Idempotent when already withdrawn. |
+| GET | `/applications/tenant` | company member | The company's applicants, newest first. With `applications.view.all`, all of them; otherwise only those to vacancies you work on (created, recruit for, manage, or are on the hiring team or an interview panel of). |
+| PATCH | `/applications/{applicationId}/status` | `applications.manage` | Updates status to `APPLIED`, `IN_REVIEW`, `SHORTLISTED`, or `REJECTED`. Without `applications.view.all`, only for applicants to vacancies you work on; any other applicant answers `404`, as if it did not exist. |
 
 Every endpoint must carry an authorization annotation; `EndpointAuthorizationDriftTest`
-fails the build otherwise. Rows that name roles (`COMPANY_ADMIN`, `HR_MANAGER`,
-`INTERVIEWER`) still use the old role checks: they work for members of the three
-default roles but not for custom roles, until they move to permissions (ADR-9).
+fails the build otherwise. It also fails the build if a company endpoint checks one
+of the old role names (`COMPANY_ADMIN`, `HR_MANAGER`, `INTERVIEWER`): those stay on
+members of the default roles even after an Owner edits the role, so they would
+ignore the role editor. Company endpoints check permissions only (ADR-9).
 
 ### Roles and permissions
 

@@ -1,6 +1,7 @@
 package com.talentpipe.application.repository;
 
 import com.talentpipe.application.entity.Application;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,4 +16,6 @@ public interface ApplicationRepository extends JpaRepository<Application, UUID> 
     List<Application> findAllByCandidateIdOrderByCreatedAtDesc(UUID candidateId);
 
     List<Application> findAllByTenantIdOrderByCreatedAtDesc(UUID tenantId);
+
+    List<Application> findAllByTenantIdAndJobIdInOrderByCreatedAtDesc(UUID tenantId, Collection<UUID> jobIds);
 }

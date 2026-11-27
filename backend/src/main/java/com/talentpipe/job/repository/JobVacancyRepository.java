@@ -63,6 +63,10 @@ public interface JobVacancyRepository extends JpaRepository<JobVacancy, UUID>,
     Optional<JobVacancy> findWorkedOnBy(@Param("id") UUID id, @Param("tenantId") UUID tenantId,
                                         @Param("userId") UUID userId);
 
+    /** Ids of the vacancies in the tenant the user works on ({@link #WORKS_ON}). */
+    @Query("select v.id from JobVacancy v where v.tenantId = :tenantId and " + WORKS_ON)
+    List<UUID> findIdsWorkedOnBy(@Param("tenantId") UUID tenantId, @Param("userId") UUID userId);
+
     /** Every vacancy in the tenant, archived included. */
     Page<JobVacancy> findByTenantId(UUID tenantId, Pageable pageable);
 

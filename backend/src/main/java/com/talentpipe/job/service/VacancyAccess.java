@@ -4,6 +4,7 @@ import com.talentpipe.common.exception.ResourceNotFoundException;
 import com.talentpipe.job.entity.JobVacancy;
 import com.talentpipe.job.repository.JobVacancyRepository;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -31,5 +32,19 @@ public class VacancyAccess {
                 ? vacancyRepository.findByIdAndTenantId(vacancyId, viewer.tenantId())
                 : vacancyRepository.findWorkedOnBy(vacancyId, viewer.tenantId(), viewer.userId());
         return vacancy.orElseThrow(() -> new ResourceNotFoundException("Vacancy not found"));
+    }
+
+    /**
+     * The vacancies a member works on (created, recruits for, manages, or is
+     * on the hiring team or an interview panel of), by id. For other modules
+     * that scope their own data to the same rule, such as applicants.
+     */
+    public Set<UUID> vacancyIdsWorkedOnBy(UUID tenantId, UUID userId) {
+        return Set.copyOf(vacancyRepository.findIdsWorkedOnBy(tenantId, userId));
+    }
+
+    /** Whether the member works on this vacancy of their company. */
+    public boolean worksOn(UUID tenantId, UUID userId, UUID vacancyId) {
+        return vacancyRepository.findWorkedOnBy(vacancyId, tenantId, userId).isPresent();
     }
 }
