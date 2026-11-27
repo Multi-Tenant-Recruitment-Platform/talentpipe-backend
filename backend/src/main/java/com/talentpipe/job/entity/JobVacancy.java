@@ -137,6 +137,11 @@ public class JobVacancy extends BaseEntity {
     @Column(name = "preferred_skills", nullable = false, columnDefinition = "TEXT[]")
     private List<String> preferredSkills = new ArrayList<>();
 
+    /** Tools, technologies and platforms the role uses (V27). */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "tools_and_technologies", nullable = false, columnDefinition = "TEXT[]")
+    private List<String> toolsAndTechnologies = new ArrayList<>();
+
     @Column(name = "minimum_experience_years")
     private Integer minimumExperienceYears;
 
@@ -235,6 +240,29 @@ public class JobVacancy extends BaseEntity {
     /** Reviewers screen applicants without seeing who they are. */
     @Column(name = "blind_mode_enabled", nullable = false)
     private boolean blindModeEnabled;
+
+    // ---------------------------------------------- ideal candidate matching (V27)
+
+    /**
+     * Whether the vacancy's pipeline template offers ideal candidate matching,
+     * copied when the vacancy is created so later template changes do not reach it.
+     */
+    @Column(name = "ideal_matching_available", nullable = false)
+    private boolean idealMatchingAvailable;
+
+    /** The vacancy's own switch: screen applicants against its weighted criteria. */
+    @Column(name = "ideal_matching_enabled", nullable = false)
+    private boolean idealMatchingEnabled;
+
+    /** Accepted degree types when the education asked for is a degree. Not weighted. */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "matching_degree_types", nullable = false, columnDefinition = "TEXT[]")
+    private List<String> matchingDegreeTypes = new ArrayList<>();
+
+    /** Certifications that count in a candidate's favour. Not weighted. */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "matching_nice_to_have_certifications", nullable = false, columnDefinition = "TEXT[]")
+    private List<String> matchingNiceToHaveCertifications = new ArrayList<>();
 
     /**
      * The template's name when the vacancy was created (V24) — kept, not read
@@ -409,6 +437,50 @@ public class JobVacancy extends BaseEntity {
         this.blindModeEnabled = source.blindModeEnabled;
         this.stageCount = source.stageCount;
         this.interviewRoundCount = source.interviewRoundCount;
+        this.idealMatchingAvailable = source.idealMatchingAvailable;
+    }
+
+    /**
+     * Records whether the pipeline this new vacancy runs on offers ideal
+     * candidate matching. Set once, with {@link #runOn}.
+     */
+    public void offerIdealMatching(boolean available) {
+        this.idealMatchingAvailable = available;
+    }
+
+    /**
+     * Sets the ideal candidate profile's switch and its two unweighted lists.
+     * The weighted criteria are stored separately ({@code JobScreeningCriteria}).
+     *
+     * @throws BusinessRuleException (422) the vacancy is closed or archived, or
+     *         matching is switched on where its pipeline does not offer it
+     */
+    public void describeIdealCandidate(boolean enabled, List<String> degreeTypes,
+                                       List<String> niceToHaveCertifications) {
+        requireEditable();
+        if (enabled && !idealMatchingAvailable) {
+            throw new BusinessRuleException(
+                    "This vacancy's pipeline template does not offer ideal candidate matching.");
+        }
+        this.idealMatchingEnabled = enabled;
+        this.matchingDegreeTypes = List.copyOf(degreeTypes);
+        this.matchingNiceToHaveCertifications = List.copyOf(niceToHaveCertifications);
+    }
+
+    public boolean isIdealMatchingAvailable() {
+        return idealMatchingAvailable;
+    }
+
+    public boolean isIdealMatchingEnabled() {
+        return idealMatchingEnabled;
+    }
+
+    public List<String> getMatchingDegreeTypes() {
+        return List.copyOf(matchingDegreeTypes);
+    }
+
+    public List<String> getMatchingNiceToHaveCertifications() {
+        return List.copyOf(matchingNiceToHaveCertifications);
     }
 
     /**
@@ -468,7 +540,7 @@ public class JobVacancy extends BaseEntity {
         return new VacancyContent(
                 title, department, openings, employmentType, workplaceType, location, applicationDeadline,
                 jobSummary, jobDescription, keyResponsibilities,
-                requiredSkills, preferredSkills, minimumExperienceYears, education,
+                requiredSkills, preferredSkills, toolsAndTechnologies, minimumExperienceYears, education,
                 certifications, languageRequirements, otherRequirements,
                 salaryMin, salaryMax, currency, payPeriod, benefits,
                 workingDays.stream().map(WeekDay::valueOf).toList(),
@@ -639,6 +711,7 @@ public class JobVacancy extends BaseEntity {
         this.keyResponsibilities = content.keyResponsibilities();
         this.requiredSkills = content.requiredSkills();
         this.preferredSkills = content.preferredSkills();
+        this.toolsAndTechnologies = content.toolsAndTechnologies();
         this.minimumExperienceYears = content.minimumExperienceYears();
         this.education = content.education();
         this.certifications = content.certifications();

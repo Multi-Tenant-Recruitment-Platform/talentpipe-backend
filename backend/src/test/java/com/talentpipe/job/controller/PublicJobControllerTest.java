@@ -237,7 +237,13 @@ class PublicJobControllerTest {
                 .andExpect(jsonPath("$.interviewPanels").doesNotExist())
                 .andExpect(jsonPath("$.interviewers").doesNotExist())
                 .andExpect(jsonPath("$.createdBy").doesNotExist())
-                .andExpect(jsonPath("$.createdByName").doesNotExist());
+                .andExpect(jsonPath("$.createdByName").doesNotExist())
+                // Tools are a candidate requirement, advertised like the skills;
+                // the ideal candidate profile is company-side only.
+                .andExpect(jsonPath("$.toolsAndTechnologies[0]").value("Docker"))
+                .andExpect(jsonPath("$.idealMatchingEnabled").doesNotExist())
+                .andExpect(jsonPath("$.idealMatchingAvailable").doesNotExist())
+                .andExpect(jsonPath("$.matchingDegreeTypes").doesNotExist());
     }
 
     @Test
@@ -249,7 +255,8 @@ class PublicJobControllerTest {
                     .as(advert.getSimpleName())
                     .noneMatch(name -> name.contains("stage") || name.contains("panel")
                             || name.contains("interview") || name.contains("createdby")
-                            || name.contains("pipeline"));
+                            || name.contains("pipeline") || name.contains("matching")
+                            || name.contains("criteri") || name.contains("weight"));
         }
     }
 

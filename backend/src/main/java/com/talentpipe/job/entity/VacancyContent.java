@@ -43,6 +43,8 @@ public record VacancyContent(
         // ---- candidate requirements
         List<String> requiredSkills,
         List<String> preferredSkills,
+        // Tools, technologies and platforms the person will use — Docker, Git, AWS (V27).
+        List<String> toolsAndTechnologies,
         Integer minimumExperienceYears,
         String education,
         List<String> certifications,
@@ -84,6 +86,7 @@ public record VacancyContent(
         keyResponsibilities = copyOf(keyResponsibilities);
         requiredSkills = copyOf(requiredSkills);
         preferredSkills = copyOf(preferredSkills);
+        toolsAndTechnologies = copyOf(toolsAndTechnologies);
         certifications = copyOf(certifications);
         languageRequirements = copyOf(languageRequirements);
         benefits = copyOf(benefits);
@@ -115,7 +118,7 @@ public record VacancyContent(
                 copyTitle(title), department, openings, employmentType, workplaceType, location,
                 null,
                 jobSummary, jobDescription, keyResponsibilities,
-                requiredSkills, preferredSkills, minimumExperienceYears, education,
+                requiredSkills, preferredSkills, toolsAndTechnologies, minimumExperienceYears, education,
                 certifications, languageRequirements, otherRequirements,
                 salaryMin, salaryMax, currency, payPeriod, benefits,
                 workingDays, workingHours, shiftType, expectedHoursPerWeek,
