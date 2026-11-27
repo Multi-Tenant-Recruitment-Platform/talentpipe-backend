@@ -4,6 +4,9 @@ import com.talentpipe.application.dto.ApplicationResponse;
 import com.talentpipe.application.dto.UpdateApplicationStatusRequest;
 import com.talentpipe.application.entity.Application;
 import com.talentpipe.application.entity.ApplicationStatus;
+import com.talentpipe.application.entity.ReviewStatus;
+import com.talentpipe.application.event.ApplicationStatusChangedEvent;
+import com.talentpipe.application.event.ApplicationSubmittedEvent;
 import com.talentpipe.application.repository.ApplicationRepository;
 import com.talentpipe.auth.entity.User;
 import com.talentpipe.auth.repository.UserRepository;
@@ -20,6 +23,7 @@ import com.talentpipe.job.service.VacancyApplicationGate;
 import com.talentpipe.notification.entity.NotificationType;
 import com.talentpipe.notification.event.NotificationRequestedEvent;
 import com.talentpipe.security.Permission;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -73,6 +77,9 @@ public class ApplicationService {
         Application application = applicationRepository.save(new Application(
                 vacancy.vacancyId(), candidateId, vacancy.tenantId(),
                 candidateCvService.findActiveCvId(candidateId).orElse(null)));
+        // Starts its history and, once committed, its screening.
+        events.publishEvent(new ApplicationSubmittedEvent(application.getId(), application.getTenantId(),
+                application.getJobId()));
         return toResponse(application, vacancy.title());
     }
 
@@ -99,7 +106,7 @@ public class ApplicationService {
         if (application.getStatus() == ApplicationStatus.REJECTED) {
             throw new IllegalStateException("Rejected applications cannot be withdrawn");
         }
-        application.changeStatus(ApplicationStatus.WITHDRAWN);
+        changeStatus(application, ApplicationStatus.WITHDRAWN, null);
         Application saved = applicationRepository.save(application);
         notifyHiringTeam(saved);
         return toResponse(saved, vacancyTitle(saved.getJobId()));
@@ -129,7 +136,8 @@ public class ApplicationService {
     /**
      * Moves an applicant on. The controller has checked
      * {@code applications.manage}; the applicant must also be one the viewer
-     * may see, or the answer is 404, as for another company's applicant.
+     * may see, or the answer is 404, as for another company's applicant. The
+     * viewer is recorded in the application's history as the one who made the change.
      */
     @Transactional
     public ApplicationResponse updateStatus(ApplicantViewer viewer, UUID applicationId,
@@ -145,9 +153,19 @@ public class ApplicationService {
         if (application.getStatus() == ApplicationStatus.WITHDRAWN) {
             throw new IllegalStateException("Withdrawn applications cannot change status");
         }
-        application.changeStatus(request.status());
+        changeStatus(application, request.status(), viewer.userId());
         Application saved = applicationRepository.save(application);
         return toResponse(saved, vacancyTitle(saved.getJobId()));
+    }
+
+    /** Changes the status and announces it, so the history records the change in this transaction. */
+    private void changeStatus(Application application, ApplicationStatus status, UUID actorUserId) {
+        UUID fromStageId = application.getCurrentStageId();
+        ReviewStatus fromReviewStatus = application.getReviewStatus();
+        Instant at = Instant.now();
+        application.changeStatus(status, actorUserId, at);
+        events.publishEvent(new ApplicationStatusChangedEvent(application.getId(), fromStageId, fromReviewStatus,
+                status, actorUserId, at));
     }
 
     /** Tells the active members who see every applicant (by default the Owner and Recruiter roles). */

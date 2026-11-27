@@ -79,6 +79,26 @@ public class ApplicationScore extends BaseEntity {
     @Column(name = "scored_at")
     private Instant scoredAt;
 
+    /** The band the score fell in (V29); null for a failed screening, or one scored before V29. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "outcome", length = 20)
+    private ScreeningOutcome outcome;
+
+    /** The thresholds {@link #outcome} was decided against, kept with it. */
+    @Column(name = "auto_threshold_used")
+    private Integer autoThresholdUsed;
+
+    @Column(name = "manual_threshold_used")
+    private Integer manualThresholdUsed;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "matched_skills", nullable = false, columnDefinition = "jsonb")
+    private JsonStrings matchedSkills = JsonStrings.none();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "missing_skills", nullable = false, columnDefinition = "jsonb")
+    private JsonStrings missingSkills = JsonStrings.none();
+
     protected ApplicationScore() {
         // for JPA
     }
@@ -116,6 +136,28 @@ public class ApplicationScore extends BaseEntity {
         this.cached = result.cached();
         this.failureReason = null;
         this.scoredAt = scoredAt;
+        this.matchedSkills = JsonStrings.of(result.matchedSkills());
+        this.missingSkills = JsonStrings.of(result.missingSkills());
+        // A new score needs a new verdict: until {@link #judge} gives one, none.
+        this.outcome = null;
+        this.autoThresholdUsed = null;
+        this.manualThresholdUsed = null;
+    }
+
+    /**
+     * Decides which band the recorded score falls in, and keeps the thresholds
+     * that decided it.
+     *
+     * @throws IllegalStateException when there is no score to judge
+     */
+    public ScreeningOutcome judge(ScreeningBands bands) {
+        if (status != ScreeningStatus.SCORED || overallScore == null) {
+            throw new IllegalStateException("Only a scored screening has an outcome");
+        }
+        this.outcome = bands.outcomeOf(overallScore);
+        this.autoThresholdUsed = bands.auto();
+        this.manualThresholdUsed = bands.manual();
+        return outcome;
     }
 
     /**
@@ -135,6 +177,11 @@ public class ApplicationScore extends BaseEntity {
         this.failureReason = reason == null ? null
                 : reason.substring(0, Math.min(reason.length(), MAX_FAILURE_REASON));
         this.scoredAt = null;
+        this.matchedSkills = JsonStrings.none();
+        this.missingSkills = JsonStrings.none();
+        this.outcome = null;
+        this.autoThresholdUsed = null;
+        this.manualThresholdUsed = null;
     }
 
     public UUID getApplicationId() {
@@ -187,5 +234,25 @@ public class ApplicationScore extends BaseEntity {
 
     public Instant getScoredAt() {
         return scoredAt;
+    }
+
+    public ScreeningOutcome getOutcome() {
+        return outcome;
+    }
+
+    public Integer getAutoThresholdUsed() {
+        return autoThresholdUsed;
+    }
+
+    public Integer getManualThresholdUsed() {
+        return manualThresholdUsed;
+    }
+
+    public List<String> getMatchedSkills() {
+        return matchedSkills.values();
+    }
+
+    public List<String> getMissingSkills() {
+        return missingSkills.values();
     }
 }

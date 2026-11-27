@@ -109,6 +109,12 @@ talentpipe:
     # Internal URL of the Python FastAPI AI sidecar on the Docker bridge network.
     base-url: ${AI_SERVICE_URL:http://ai-service:8000}
     timeout-seconds: ${AI_SERVICE_TIMEOUT:30}
+    # Who scores new applications: 'remote' (the AI service above), 'stub' (a
+    # deterministic stand-in for local development and demos — never in
+    # production; it refuses a prod profile) or 'off' (applications wait).
+    screening-mode: ${AI_SCREENING_MODE:remote}
+    # Local/demo only: on startup, screen every application never screened.
+    screening-backfill: ${AI_SCREENING_BACKFILL:false}
 
 # Health probes only. Liveness answers "restart me?" and checks nothing
 # external, so a database outage never causes a restart loop. Readiness also

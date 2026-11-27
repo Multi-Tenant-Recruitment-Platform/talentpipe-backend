@@ -205,6 +205,21 @@ public class CandidateCvService {
         return new CvDownloadPayload(cv.getFileName(), cv.getMimeType(), data);
     }
 
+    /**
+     * Loads one particular CV of a candidate — the one an application was made
+     * with, which may since have been replaced or archived.
+     *
+     * @throws ResourceNotFoundException when it does not exist or is not this candidate's
+     */
+    @Transactional(readOnly = true)
+    public CvDownloadPayload loadCvResource(UUID cvId, UUID candidateId) {
+        CandidateCv cv = cvRepository.findById(cvId)
+                .filter(found -> found.getCandidateId().equals(candidateId))
+                .orElseThrow(() -> new ResourceNotFoundException("CV not found"));
+        byte[] data = storageService.load(cv.getStorageKey());
+        return new CvDownloadPayload(cv.getFileName(), cv.getMimeType(), data);
+    }
+
     private String calculateSha256(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

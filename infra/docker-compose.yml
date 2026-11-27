@@ -53,6 +53,9 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       # Empty key = console email mode (links go to the backend log).
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # Who scores applications: remote (AI service), stub (local demos) or off.
+      AI_SCREENING_MODE: ${AI_SCREENING_MODE:-remote}
+      AI_SCREENING_BACKFILL: ${AI_SCREENING_BACKFILL:-false}
       MAIL_FROM: ${MAIL_FROM:-onboarding@resend.dev}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
       # Storage — 'local' for dev, 's3' for production.
