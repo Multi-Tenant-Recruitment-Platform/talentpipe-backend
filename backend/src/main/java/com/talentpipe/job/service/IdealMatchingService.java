@@ -115,6 +115,7 @@ public class IdealMatchingService {
                 weights,
                 namesWith(criteria, MatchingRequirement.MUST_HAVE),
                 namesWith(criteria, MatchingRequirement.PREFERRED),
+                content.toolsAndTechnologies(),
                 content.minimumExperienceYears(),
                 content.education(),
                 enabled ? vacancy.getMatchingDegreeTypes() : List.of(),

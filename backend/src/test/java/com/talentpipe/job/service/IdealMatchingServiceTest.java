@@ -249,6 +249,8 @@ class IdealMatchingServiceTest {
                 new ScreeningProfileResponse.CriterionWeight("Relevant experience", 0.25));
         assertThat(profile.mustHave()).containsExactly("Java");
         assertThat(profile.preferred()).containsExactly("Docker");
+        // Context, read from the vacancy's candidate requirements.
+        assertThat(profile.toolsAndTechnologies()).containsExactly("Docker", "Git");
         assertThat(profile.acceptedDegreeTypes()).containsExactly("Computer Science");
         assertThat(profile.niceToHaveCertifications()).containsExactly("AWS Solutions Architect");
         assertThat(profile.educationLevel()).isEqualTo("Bachelor’s degree");

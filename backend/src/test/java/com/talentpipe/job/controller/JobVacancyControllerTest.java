@@ -851,14 +851,16 @@ class JobVacancyControllerTest {
                 VACANCY, true, false, "Backend Engineer", "Summary", "Description",
                 List.of(new ScreeningProfileResponse.CriterionWeight("Java", 0.6),
                         new ScreeningProfileResponse.CriterionWeight("Docker", 0.4)),
-                List.of("Java"), List.of("Docker"), 3, "Bachelor’s degree", List.of("Computer Science"),
+                List.of("Java"), List.of("Docker"), List.of("Docker", "Git"), 3, "Bachelor’s degree",
+                List.of("Computer Science"),
                 List.of("AWS Solutions Architect")));
 
         mockMvc.perform(get("/api/v1/jobs/{id}/screening-profile", VACANCY).with(as("HR_MANAGER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.criteriaWeights[0].name").value("Java"))
                 .andExpect(jsonPath("$.criteriaWeights[0].weight").value(0.6))
-                .andExpect(jsonPath("$.mustHave[0]").value("Java"));
+                .andExpect(jsonPath("$.mustHave[0]").value("Java"))
+                .andExpect(jsonPath("$.toolsAndTechnologies[1]").value("Git"));
     }
 
     // ----------------------------------------------------------------- helpers

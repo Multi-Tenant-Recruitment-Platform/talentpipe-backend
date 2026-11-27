@@ -70,6 +70,7 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
         Map<String, Object> body = completeVacancy("Backend Engineer");
         body.put("pipelineTemplateId", matchingTemplate(acme));
         body.put("education", "Bachelor’s degree");
+        body.put("toolsAndTechnologies", List.of("Docker", "Git"));
         body.put("idealMatching", profileWith(List.of(
                 criterion("TECHNICAL_SKILL", "Java", 60, "MUST_HAVE"),
                 criterion("TOOL", "Docker", 40, "PREFERRED")),
@@ -85,6 +86,7 @@ class IdealMatchingIntegrationTest extends AbstractJobIntegrationTest {
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("Java", 0.6),
                         org.assertj.core.groups.Tuple.tuple("Docker", 0.4));
         assertThat(profile).containsEntry("mustHave", List.of("Java"))
+                .containsEntry("toolsAndTechnologies", List.of("Docker", "Git"))
                 .containsEntry("acceptedDegreeTypes", List.of("Computer Science"))
                 .containsEntry("niceToHaveCertifications", List.of("AWS Solutions Architect"));
     }
