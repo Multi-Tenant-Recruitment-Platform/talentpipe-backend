@@ -69,6 +69,6 @@ public class ApplicationController {
     public ApplicationResponse updateStatus(@AuthenticationPrincipal UserPrincipal principal,
                                              @PathVariable UUID applicationId,
                                              @Valid @RequestBody UpdateApplicationStatusRequest request) {
-        return applicationService.updateStatus(principal.tenantId(), applicationId, request);
+        return applicationService.updateStatus(principal.tenantId(), applicationId, request, principal.id());
     }
 }

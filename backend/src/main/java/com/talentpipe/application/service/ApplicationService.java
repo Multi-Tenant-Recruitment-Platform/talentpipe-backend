@@ -4,6 +4,9 @@ import com.talentpipe.application.dto.ApplicationResponse;
 import com.talentpipe.application.dto.UpdateApplicationStatusRequest;
 import com.talentpipe.application.entity.Application;
 import com.talentpipe.application.entity.ApplicationStatus;
+import com.talentpipe.application.entity.ReviewStatus;
+import com.talentpipe.application.event.ApplicationStatusChangedEvent;
+import com.talentpipe.application.event.ApplicationSubmittedEvent;
 import com.talentpipe.application.repository.ApplicationRepository;
 import com.talentpipe.auth.entity.RoleName;
 import com.talentpipe.auth.entity.User;
@@ -19,6 +22,7 @@ import com.talentpipe.job.repository.JobVacancyRepository;
 import com.talentpipe.job.service.VacancyApplicationGate;
 import com.talentpipe.notification.entity.NotificationType;
 import com.talentpipe.notification.event.NotificationRequestedEvent;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -68,6 +72,9 @@ public class ApplicationService {
         Application application = applicationRepository.save(new Application(
                 vacancy.vacancyId(), candidateId, vacancy.tenantId(),
                 candidateCvService.findActiveCvId(candidateId).orElse(null)));
+        // Starts its history and, once committed, its screening.
+        events.publishEvent(new ApplicationSubmittedEvent(application.getId(), application.getTenantId(),
+                application.getJobId()));
         return toResponse(application, vacancy.title());
     }
 
@@ -94,7 +101,7 @@ public class ApplicationService {
         if (application.getStatus() == ApplicationStatus.REJECTED) {
             throw new IllegalStateException("Rejected applications cannot be withdrawn");
         }
-        application.changeStatus(ApplicationStatus.WITHDRAWN);
+        changeStatus(application, ApplicationStatus.WITHDRAWN, null);
         Application saved = applicationRepository.save(application);
         notifyHiringTeam(saved);
         return toResponse(saved, vacancyTitle(saved.getJobId()));
@@ -109,6 +116,13 @@ public class ApplicationService {
 
     @Transactional
     public ApplicationResponse updateStatus(UUID tenantId, UUID applicationId, UpdateApplicationStatusRequest request) {
+        return updateStatus(tenantId, applicationId, request, null);
+    }
+
+    /** @param actorUserId the recruiter making the change, recorded in the application's history */
+    @Transactional
+    public ApplicationResponse updateStatus(UUID tenantId, UUID applicationId, UpdateApplicationStatusRequest request,
+                                            UUID actorUserId) {
         Application application = applicationRepository.findById(applicationId)
                 .filter(item -> item.getTenantId().equals(tenantId))
                 .orElseThrow(() -> new ResourceNotFoundException(APPLICATION_NOT_FOUND));
@@ -118,9 +132,19 @@ public class ApplicationService {
         if (application.getStatus() == ApplicationStatus.WITHDRAWN) {
             throw new IllegalStateException("Withdrawn applications cannot change status");
         }
-        application.changeStatus(request.status());
+        changeStatus(application, request.status(), actorUserId);
         Application saved = applicationRepository.save(application);
         return toResponse(saved, vacancyTitle(saved.getJobId()));
+    }
+
+    /** Changes the status and announces it, so the history records the change in this transaction. */
+    private void changeStatus(Application application, ApplicationStatus status, UUID actorUserId) {
+        UUID fromStageId = application.getCurrentStageId();
+        ReviewStatus fromReviewStatus = application.getReviewStatus();
+        Instant at = Instant.now();
+        application.changeStatus(status, actorUserId, at);
+        events.publishEvent(new ApplicationStatusChangedEvent(application.getId(), fromStageId, fromReviewStatus,
+                status, actorUserId, at));
     }
 
     private void notifyHiringTeam(Application application) {
