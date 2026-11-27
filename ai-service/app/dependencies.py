@@ -6,6 +6,9 @@ from app.extraction.extractor import DocumentExtractorFactory
 from app.extraction.pdf_extractor import PdfLayoutExtractor
 from app.extraction.text_normalizer import CvTextNormalizer
 from app.llm.gemini_provider import GeminiProvider
+from app.safety.injection_guard import PromptInjectionGuard
+from app.safety.pii_redactor import CvPiiRedactor
+from app.safety.screening_cache import ScreeningCache
 from app.services.screening_service import AiScreeningService
 
 
@@ -17,7 +20,12 @@ def get_screening_service() -> AiScreeningService:
         api_key=settings.gemini_api_key,
         model_name=settings.gemini_model_name,
     )
-    return AiScreeningService(provider)
+    return AiScreeningService(
+        llm_provider=provider,
+        pii_redactor=CvPiiRedactor(),
+        injection_guard=PromptInjectionGuard(),
+        cache=ScreeningCache(max_size=settings.cache_max_size),
+    )
 
 
 @lru_cache(maxsize=1)

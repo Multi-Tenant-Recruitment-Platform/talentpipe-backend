@@ -26,7 +26,17 @@ jobs:
 
       - name: Build and run all tests
         working-directory: backend
-        run: ./mvnw -B clean verify
+        run: |
+          for attempt in 1 2 3; do
+            if ./mvnw -B --version; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
+          ./mvnw -B clean verify
         env:
           JWT_SECRET: ci-only-secret-at-least-32-bytes-long-0123456789
 
